@@ -29,6 +29,10 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     } });
+    // preflight's benchmark API does not expose backend selection. Pin both
+    // benchmark executables and their CI object projections to audited LLVM.
+    var llvm_steps: std.AutoHashMapUnmanaged(*std.Build.Step, void) = .empty;
+    for (b.top_level_steps.values()) |step| choiceBenchmarkLlvm(b, &step.step, &llvm_steps);
     preflight.addConsumerCheck(b, .{ .package = "aegis", .program = b.path("ci/consumer.zig") });
     const negative = b.addExecutable(.{ .name = "aegis-negative", .root_module = b.createModule(.{
         .root_source_file = b.path("ci/negative.zig"),
@@ -108,4 +112,13 @@ fn benchImports(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.l
     const shake = b.dependencyLazy("shakedown", .{ .target = target, .optimize = optimize }) catch @panic("shakedown unavailable for A5 benchmark");
     const bytes = b.createModule(.{ .root_source_file = b.path("ci/bytes.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     return b.allocator.dupe(std.Build.Module.Import, &.{ .{ .name = "cases", .module = cases }, .{ .name = "numeric", .module = numeric }, .{ .name = "choices", .module = choices }, .{ .name = "shakedown", .module = shake.module("shakedown") }, .{ .name = "bytes", .module = bytes }, .{ .name = "material", .module = material } }) catch @panic("out of memory configuring benchmarks");
+}
+
+fn choiceBenchmarkLlvm(b: *std.Build, step: *std.Build.Step, seen: *std.AutoHashMapUnmanaged(*std.Build.Step, void)) void {
+    const entry = seen.getOrPut(b.allocator, step) catch @panic("OOM");
+    if (entry.found_existing) return;
+    if (step.cast(std.Build.Step.Compile)) |compile| {
+        if (std.mem.eql(u8, compile.name, "choices")) compile.use_llvm = true;
+    }
+    for (step.dependencies.items) |dependency| choiceBenchmarkLlvm(b, dependency, seen);
 }
