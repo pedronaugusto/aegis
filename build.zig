@@ -69,20 +69,6 @@ pub fn build(b: *std.Build) void {
         const release_tests = b.addTest(.{ .root_module = scalar_module, .filters = &.{"A3"} });
         scalar_tests.dependOn(&b.addRunArtifact(release_tests).step);
     }
-    const tools = b.dependencyLazy("preflight", .{}) catch return;
-    const host = b.graph.host;
-    const gantry = tools.builder.dependencyLazy("gantry", .{ .target = host, .optimize = .safe }) catch return;
-    const tool = b.addExecutable(.{ .name = "aegis-plan", .root_module = b.createModule(.{
-        .root_source_file = tools.path("src/main.zig"),
-        .target = host,
-        .optimize = .safe,
-        .imports = &.{.{ .name = "gantry", .module = gantry.module("gantry") }},
-    }) });
-    const run = b.addRunArtifact(tool);
-    run.addArg("plan");
-    run.setCwd(b.path("."));
-    run.addPassthruArgs();
-    b.step("plan", "Generate hosted matrices from repository facts").dependOn(&run.step);
 }
 
 fn benchImports(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize) []const std.Build.Module.Import {

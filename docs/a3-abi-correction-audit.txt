@@ -1,0 +1,26 @@
+mismatched pairs=0
+x86-linux-gnu: 606 raw-integer argument/return pairs + 606 record-field pairs: analyzed callers (cross codegen only)
+mismatched pairs=0
+x86_64-linux-gnu: 606 raw-integer argument/return pairs + 606 record-field pairs: analyzed callers (cross codegen only)
+mismatched pairs=0
+x86_64-linux-musl: 606 raw-integer argument/return pairs + 606 record-field pairs: analyzed callers (cross codegen only)
+mismatched pairs=0
+aarch64-linux-gnu: 606 raw-integer argument/return pairs + 606 record-field pairs: analyzed callers (cross codegen only)
+x86_64-windows-gnu: raw integer ABI mismatch: u128_0
+@typed_u128_0 = alias <2 x i64> (ptr, ptr), ptr @"abi.Fixture(id.Counter(abi.Tag,u128),u128).call"
+@baseline_u128_0 = alias <2 x i64> (ptr, ptr), ptr @"abi.Fixture(id.Counter(abi.Tag,u128),u128).baseline"
+mismatched pairs=202
+x86_64-windows-gnu: 606 raw-integer argument/return pairs + 606 record-field pairs: analyzed callers (cross codegen only)
+mismatched pairs=0
+aarch64-windows-gnu: 606 raw-integer argument/return pairs + 606 record-field pairs: analyzed callers (cross codegen only)
+mismatched pairs=0
+x86_64-macos: 606 raw-integer argument/return pairs + 606 record-field pairs: analyzed callers (cross codegen only)
+mismatched pairs=0
+aarch64-macos: 606 raw-integer argument/return pairs + 606 record-field pairs: analyzed callers (cross codegen only)
+mismatched pairs=0
+wasm32-freestanding: 606 raw-integer argument/return pairs + 606 record-field pairs: analyzed callers (cross codegen only)
+native aarch64-macos: separately linked raw integer calls and record fields passed
+error: RawIntegerAbiMismatch
+/Users/gusto/work/tycho/.wt/aegis-a4/ci/abi_check.zig:57:32: 0x102c29de7 in main (abi_check)
+    if (total_mismatches != 0) return error.RawIntegerAbiMismatch;
+                               ^

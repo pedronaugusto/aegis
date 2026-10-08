@@ -150,10 +150,10 @@ pub fn Saturating(comptime Repr: type) type {
 pub fn Ranged(comptime Repr: type, comptime min: Repr, comptime max: Repr) type {
     scalar.abiInteger(Repr);
     if (min > max) @compileError("aegis ranged integer requires min <= max");
-    return extern struct {
+    return enum(Repr) {
         const Self = @This();
         /// Private: use init/raw; foreign construction must validate again.
-        value: Repr,
+        _,
         pub const InitError = error{OutOfRange};
         pub const AddError = Checked(Repr).AddError || InitError;
         pub const SubError = Checked(Repr).SubError || InitError;
@@ -163,31 +163,31 @@ pub fn Ranged(comptime Repr: type, comptime min: Repr, comptime max: Repr) type 
         pub const ShlError = Checked(Repr).ShlError || InitError;
         pub fn init(value: Repr) InitError!Self {
             if (value < min or value > max) return error.OutOfRange;
-            return .{ .value = value };
+            return @fromBackingInt(value);
         }
         pub fn raw(self: Self) Repr {
-            return self.value;
+            return @backingInt(self);
         }
         pub fn add(self: Self, rhs: Repr) AddError!Self {
-            return init((try Checked(Repr).init(self.value).add(rhs)).raw());
+            return init((try Checked(Repr).init(@backingInt(self)).add(rhs)).raw());
         }
         pub fn sub(self: Self, rhs: Repr) SubError!Self {
-            return init((try Checked(Repr).init(self.value).sub(rhs)).raw());
+            return init((try Checked(Repr).init(@backingInt(self)).sub(rhs)).raw());
         }
         pub fn mul(self: Self, rhs: Repr) MulError!Self {
-            return init((try Checked(Repr).init(self.value).mul(rhs)).raw());
+            return init((try Checked(Repr).init(@backingInt(self)).mul(rhs)).raw());
         }
         pub fn div(self: Self, rhs: Repr) DivError!Self {
-            return init((try Checked(Repr).init(self.value).div(rhs)).raw());
+            return init((try Checked(Repr).init(@backingInt(self)).div(rhs)).raw());
         }
         pub fn rem(self: Self, rhs: Repr) RemError!Self {
-            return init((try Checked(Repr).init(self.value).rem(rhs)).raw());
+            return init((try Checked(Repr).init(@backingInt(self)).rem(rhs)).raw());
         }
         pub fn shl(self: Self, amount: anytype) ShlError!Self {
-            return init((try Checked(Repr).init(self.value).shl(amount)).raw());
+            return init((try Checked(Repr).init(@backingInt(self)).shl(amount)).raw());
         }
         pub fn toBytes(self: Self, endian: std.builtin.Endian) scalar.Bytes(Repr) {
-            return scalar.encode(Repr, self.value, endian);
+            return scalar.encode(Repr, @backingInt(self), endian);
         }
         pub fn fromBytes(data: scalar.Bytes(Repr), endian: std.builtin.Endian) InitError!Self {
             return init(scalar.decode(Repr, data, endian));

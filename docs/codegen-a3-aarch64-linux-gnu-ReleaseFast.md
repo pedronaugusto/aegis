@@ -575,8 +575,8 @@ Symbols → `parity.baselineBudget` / `parity.baselineBudget`; baseline/wrapper 
  ldp x29 x30 [sp #32]
  add sp sp #48
  ret
- adrp x0 .L__anon_16663
- add x0 x0 :lo12:.L__anon_16663
+ adrp x0 .L__anon_16658
+ add x0 x0 :lo12:.L__anon_16658
  mov w1 #36
  bl .Ldebug.defaultPanic
  bl ".Ldebug.FullPanic((function 'defaultPanic')).integerOverflow"
@@ -705,7 +705,7 @@ cases.lock__func_329.exit9.i:                     ; preds = %cmpxchg.trystore41,
   br i1 %32, label %.critedge.i.i, label %33
 
 .critedge.i.i:                                    ; preds = %30, %cases.lock__func_329.exit9.i
-  call fastcc void @debug.defaultPanic(ptr nonnull readonly align 1 @__anon_16663, i64 36)
+  call fastcc void @debug.defaultPanic(ptr nonnull readonly align 1 @__anon_16658, i64 36)
   unreachable
 
 33:                                               ; preds = %30
@@ -1463,8 +1463,8 @@ Symbols → `parity.baselineNumericInvariant` / `parity.baselineNumericInvariant
  ret
  stp x29 x30 [sp #-16]!
  mov x29 sp
- adrp x0 .L__anon_1899
- add x0 x0 :lo12:.L__anon_1899
+ adrp x0 .L__anon_1898
+ add x0 x0 :lo12:.L__anon_1898
  mov w1 #17
  bl .Ldebug.defaultPanic
 ```
@@ -1475,7 +1475,7 @@ define private i64 @parity.baselineNumericInvariant(i64 %0, i64 %1) unnamed_addr
   br i1 %3, label %4, label %numeric.operation__func_261.exit
 
 4:                                                ; preds = %2
-  tail call fastcc void @debug.defaultPanic(ptr nonnull readonly align 1 @__anon_1899, i64 17)
+  tail call fastcc void @debug.defaultPanic(ptr nonnull readonly align 1 @__anon_1898, i64 17)
   unreachable
 
 numeric.operation__func_261.exit:                 ; preds = %2

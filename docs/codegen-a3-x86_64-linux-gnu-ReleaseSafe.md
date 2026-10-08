@@ -24,7 +24,7 @@ Symbols → `parity.baselineSecretS32` / `parity.baselineSecretS32`; baseline/wr
 ```
 
 ```llvm
-define private zeroext i8 @parity.baselineSecretS32(ptr nonnull align 1 %0) unnamed_addr #6 {
+define private zeroext i8 @parity.baselineSecretS32(ptr nonnull align 1 %0) unnamed_addr #7 {
   %2 = alloca ptr, align 8
   call void @llvm.lifetime.start.p0(ptr nonnull %2)
   store ptr %0, ptr %2, align 8
@@ -79,7 +79,7 @@ Symbols → `parity.baselineTransferS32` / `parity.baselineTransferS32`; baselin
 ```
 
 ```llvm
-define private zeroext i8 @parity.baselineTransferS32(ptr nonnull align 1 %0, ptr nonnull align 1 %1) unnamed_addr #6 {
+define private zeroext i8 @parity.baselineTransferS32(ptr nonnull align 1 %0, ptr nonnull align 1 %1) unnamed_addr #7 {
   %3 = alloca ptr, align 8
   %4 = alloca ptr, align 8
   call void @llvm.lifetime.start.p0(ptr nonnull %3)
@@ -137,7 +137,7 @@ Symbols → `parity.baselineSecretS48` / `parity.baselineSecretS48`; baseline/wr
 ```
 
 ```llvm
-define private zeroext i8 @parity.baselineSecretS48(ptr nonnull align 1 %0) unnamed_addr #6 {
+define private zeroext i8 @parity.baselineSecretS48(ptr nonnull align 1 %0) unnamed_addr #7 {
   %2 = alloca ptr, align 8
   call void @llvm.lifetime.start.p0(ptr nonnull %2)
   store ptr %0, ptr %2, align 8
@@ -196,7 +196,7 @@ Symbols → `parity.baselineTransferS48` / `parity.baselineTransferS48`; baselin
 ```
 
 ```llvm
-define private zeroext i8 @parity.baselineTransferS48(ptr nonnull align 1 %0, ptr nonnull align 1 %1) unnamed_addr #6 {
+define private zeroext i8 @parity.baselineTransferS48(ptr nonnull align 1 %0, ptr nonnull align 1 %1) unnamed_addr #7 {
   %3 = alloca ptr, align 8
   %4 = alloca ptr, align 8
   call void @llvm.lifetime.start.p0(ptr nonnull %3)
@@ -261,7 +261,7 @@ Symbols → `parity.baselineSecretMaterial` / `parity.baselineSecretMaterial`; b
 ```
 
 ```llvm
-define private zeroext i8 @parity.baselineSecretMaterial(ptr nonnull align 8 %0) unnamed_addr #6 {
+define private zeroext i8 @parity.baselineSecretMaterial(ptr nonnull align 8 %0) unnamed_addr #7 {
   %2 = alloca ptr, align 8
   call void @llvm.lifetime.start.p0(ptr nonnull %2)
   store ptr %0, ptr %2, align 8
@@ -345,7 +345,7 @@ Symbols → `parity.baselineTransferMaterial` / `parity.baselineTransferMaterial
 ```
 
 ```llvm
-define private zeroext i8 @parity.baselineTransferMaterial(ptr nonnull align 8 %0, ptr nonnull align 8 %1) unnamed_addr #6 {
+define private zeroext i8 @parity.baselineTransferMaterial(ptr nonnull align 8 %0, ptr nonnull align 8 %1) unnamed_addr #7 {
   %3 = alloca ptr, align 8
   %4 = alloca ptr, align 8
   call void @llvm.lifetime.start.p0(ptr nonnull %3)
@@ -580,14 +580,14 @@ Symbols → `parity.baselineBudget` / `parity.baselineBudget`; baseline/wrapper 
  add rsp 32
  pop rbp
  ret
- mov edi offset .L__anon_17416
+ mov edi offset .L__anon_17411
  mov esi 36
  call .Ldebug.defaultPanic
  call ".Ldebug.FullPanic((function 'defaultPanic')).integerOverflow"
 ```
 
 ```llvm
-define private zeroext range(i8 0, 2) i8 @parity.baselineBudget(ptr nonnull align 8 %0, i64 %1) unnamed_addr #6 {
+define private zeroext range(i8 0, 2) i8 @parity.baselineBudget(ptr nonnull align 8 %0, i64 %1) unnamed_addr #7 {
   %3 = alloca ptr, align 8
   %4 = alloca ptr, align 8
   %5 = alloca ptr, align 8
@@ -663,7 +663,7 @@ cases.lock__func_360.exit9.i:                     ; preds = %.lr.ph.i8.i, %18
   br i1 %29, label %.critedge.i.i, label %30
 
 .critedge.i.i:                                    ; preds = %27, %cases.lock__func_360.exit9.i
-  call fastcc void @debug.defaultPanic(ptr nonnull readonly @__anon_17416, i64 36)
+  call fastcc void @debug.defaultPanic(ptr nonnull readonly @__anon_17411, i64 36)
   unreachable
 
 30:                                               ; preds = %27
@@ -743,7 +743,7 @@ Symbols → `parity.baselineJob` / `parity.baselineJob`; baseline/wrapper machin
 ```
 
 ```llvm
-define private i64 @parity.baselineJob(ptr nonnull align 8 %0, i64 %1) unnamed_addr #6 {
+define private i64 @parity.baselineJob(ptr nonnull align 8 %0, i64 %1) unnamed_addr #7 {
   %3 = alloca ptr, align 8
   %4 = alloca ptr, align 8
   %5 = getelementptr inbounds nuw i8, ptr %0, i64 24
@@ -835,7 +835,7 @@ Symbols → `parity.baselineIncrement` / `parity.baselineIncrement`; baseline/wr
 ```
 
 ```llvm
-define private void @parity.baselineIncrement(ptr nonnull align 8 captures(none) %0) unnamed_addr #6 {
+define private void @parity.baselineIncrement(ptr nonnull align 8 captures(none) %0) unnamed_addr #7 {
   %2 = getelementptr inbounds nuw i8, ptr %0, i64 8
   %3 = cmpxchg weak ptr %2, i8 0, i8 1 acquire monotonic, align 1
   %4 = extractvalue { i8, i1 } %3, 1
@@ -971,7 +971,7 @@ Symbols → `parity.baselineNumericDiv` / `parity.baselineNumericDiv`; baseline/
 ```
 
 ```llvm
-define private i64 @parity.baselineNumericDiv(i64 %0, i64 %1) unnamed_addr #6 {
+define private i64 @parity.baselineNumericDiv(i64 %0, i64 %1) unnamed_addr #7 {
   %3 = icmp eq i64 %1, 0
   br i1 %3, label %numeric.operation__func_335.exit, label %4
 
@@ -1427,7 +1427,7 @@ Symbols → `parity.baselineNumericInvariant` / `parity.baselineNumericInvariant
 ```
 
 ```llvm
-define private i64 @parity.baselineNumericInvariant(i64 %0, i64 %1) unnamed_addr #6 {
+define private i64 @parity.baselineNumericInvariant(i64 %0, i64 %1) unnamed_addr #7 {
   %3 = icmp ult i64 %1, %0
   br i1 %3, label %4, label %numeric.operation__func_305.exit
 

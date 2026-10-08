@@ -26,7 +26,7 @@ Symbols → `parity.baselineSecretS32` / `parity.baselineSecretS32`; baseline/wr
 ```
 
 ```llvm
-define private i8 @parity.baselineSecretS32(ptr nonnull align 1 %0) unnamed_addr #6 {
+define private i8 @parity.baselineSecretS32(ptr nonnull align 1 %0) unnamed_addr #7 {
   %2 = alloca ptr, align 8
   call void @llvm.lifetime.start.p0(ptr nonnull %2)
   store ptr %0, ptr %2, align 8
@@ -80,7 +80,7 @@ Symbols → `parity.baselineTransferS32` / `parity.baselineTransferS32`; baselin
 ```
 
 ```llvm
-define private i8 @parity.baselineTransferS32(ptr nonnull align 1 %0, ptr nonnull align 1 %1) unnamed_addr #6 {
+define private i8 @parity.baselineTransferS32(ptr nonnull align 1 %0, ptr nonnull align 1 %1) unnamed_addr #7 {
   %3 = alloca ptr, align 8
   %4 = alloca ptr, align 8
   call void @llvm.lifetime.start.p0(ptr nonnull %3)
@@ -140,7 +140,7 @@ Symbols → `parity.baselineSecretS48` / `parity.baselineSecretS48`; baseline/wr
 ```
 
 ```llvm
-define private i8 @parity.baselineSecretS48(ptr nonnull align 1 %0) unnamed_addr #6 {
+define private i8 @parity.baselineSecretS48(ptr nonnull align 1 %0) unnamed_addr #7 {
   %2 = alloca ptr, align 8
   call void @llvm.lifetime.start.p0(ptr nonnull %2)
   store ptr %0, ptr %2, align 8
@@ -198,7 +198,7 @@ Symbols → `parity.baselineTransferS48` / `parity.baselineTransferS48`; baselin
 ```
 
 ```llvm
-define private i8 @parity.baselineTransferS48(ptr nonnull align 1 %0, ptr nonnull align 1 %1) unnamed_addr #6 {
+define private i8 @parity.baselineTransferS48(ptr nonnull align 1 %0, ptr nonnull align 1 %1) unnamed_addr #7 {
   %3 = alloca ptr, align 8
   %4 = alloca ptr, align 8
   call void @llvm.lifetime.start.p0(ptr nonnull %3)
@@ -263,7 +263,7 @@ Symbols → `parity.baselineSecretMaterial` / `parity.baselineSecretMaterial`; b
 ```
 
 ```llvm
-define private i8 @parity.baselineSecretMaterial(ptr nonnull align 8 %0) unnamed_addr #6 {
+define private i8 @parity.baselineSecretMaterial(ptr nonnull align 8 %0) unnamed_addr #7 {
   %2 = alloca ptr, align 8
   call void @llvm.lifetime.start.p0(ptr nonnull %2)
   store ptr %0, ptr %2, align 8
@@ -345,7 +345,7 @@ Symbols → `parity.baselineTransferMaterial` / `parity.baselineTransferMaterial
 ```
 
 ```llvm
-define private i8 @parity.baselineTransferMaterial(ptr nonnull align 8 %0, ptr nonnull align 8 %1) unnamed_addr #6 {
+define private i8 @parity.baselineTransferMaterial(ptr nonnull align 8 %0, ptr nonnull align 8 %1) unnamed_addr #7 {
   %3 = alloca ptr, align 8
   %4 = alloca ptr, align 8
   call void @llvm.lifetime.start.p0(ptr nonnull %3)
@@ -607,8 +607,8 @@ Symbols → `parity.baselineBudget` / `parity.baselineBudget`; baseline/wrapper 
  ldp x29 x30 [sp #32]
  add sp sp #48
  ret
- adrp x0 .L__anon_17342
- add x0 x0 :lo12:.L__anon_17342
+ adrp x0 .L__anon_17337
+ add x0 x0 :lo12:.L__anon_17337
  mov w1 #36
  bl .Ldebug.defaultPanic
  bl ".Ldebug.FullPanic((function 'defaultPanic')).integerOverflow"
@@ -631,7 +631,7 @@ Symbols → `parity.baselineBudget` / `parity.baselineBudget`; baseline/wrapper 
 ```
 
 ```llvm
-define private noundef i1 @parity.baselineBudget(ptr nonnull align 8 %0, i64 %1) unnamed_addr #6 {
+define private noundef i1 @parity.baselineBudget(ptr nonnull align 8 %0, i64 %1) unnamed_addr #7 {
 cmpxchg.start:
   %2 = alloca ptr, align 8
   %3 = alloca ptr, align 8
@@ -640,12 +640,12 @@ cmpxchg.start:
   %6 = call i64 @llvm.aarch64.ldaxr.p0(ptr elementtype(i8) %5)
   %7 = trunc i64 %6 to i8
   %should_store = icmp eq i8 %7, 0
-  br i1 %should_store, label %cmpxchg.trystore, label %.lr.ph.i.i.sink.split, !prof !64
+  br i1 %should_store, label %cmpxchg.trystore, label %.lr.ph.i.i.sink.split, !prof !55
 
 cmpxchg.trystore:                                 ; preds = %cmpxchg.start
   %8 = call i32 @llvm.aarch64.stxr.p0(i64 1, ptr elementtype(i8) %5)
   %success = icmp eq i32 %8, 0
-  br i1 %success, label %cases.lock__func_362.exit.i, label %.lr.ph.i.i.preheader, !prof !64
+  br i1 %success, label %cases.lock__func_362.exit.i, label %.lr.ph.i.i.preheader, !prof !55
 
 .lr.ph.i.i.sink.split:                            ; preds = %.lr.ph.i.i, %cmpxchg.start
   call void @llvm.aarch64.clrex()
@@ -659,12 +659,12 @@ cmpxchg.trystore:                                 ; preds = %cmpxchg.start
   %9 = call i64 @llvm.aarch64.ldaxr.p0(ptr elementtype(i8) %5)
   %10 = trunc i64 %9 to i8
   %should_store14 = icmp eq i8 %10, 0
-  br i1 %should_store14, label %cmpxchg.trystore11, label %.lr.ph.i.i.sink.split, !prof !64
+  br i1 %should_store14, label %cmpxchg.trystore11, label %.lr.ph.i.i.sink.split, !prof !55
 
 cmpxchg.trystore11:                               ; preds = %.lr.ph.i.i
   %11 = call i32 @llvm.aarch64.stxr.p0(i64 1, ptr elementtype(i8) %5)
   %success16 = icmp eq i32 %11, 0
-  br i1 %success16, label %cases.lock__func_362.exit.i, label %.lr.ph.i.i, !prof !64
+  br i1 %success16, label %cases.lock__func_362.exit.i, label %.lr.ph.i.i, !prof !55
 
 cases.lock__func_362.exit.i:                      ; preds = %cmpxchg.trystore11, %cmpxchg.trystore
   call void @llvm.lifetime.start.p0(ptr nonnull %2)
@@ -699,12 +699,12 @@ cmpxchg.start28:                                  ; preds = %14
   %22 = call i64 @llvm.aarch64.ldaxr.p0(ptr elementtype(i8) %5)
   %23 = trunc i64 %22 to i8
   %should_store29 = icmp eq i8 %23, 0
-  br i1 %should_store29, label %cmpxchg.trystore26, label %.lr.ph.i8.i.sink.split, !prof !64
+  br i1 %should_store29, label %cmpxchg.trystore26, label %.lr.ph.i8.i.sink.split, !prof !55
 
 cmpxchg.trystore26:                               ; preds = %cmpxchg.start28
   %24 = call i32 @llvm.aarch64.stxr.p0(i64 1, ptr elementtype(i8) %5)
   %success31 = icmp eq i32 %24, 0
-  br i1 %success31, label %cases.lock__func_362.exit9.i, label %.lr.ph.i8.i.preheader, !prof !64
+  br i1 %success31, label %cases.lock__func_362.exit9.i, label %.lr.ph.i8.i.preheader, !prof !55
 
 .lr.ph.i8.i.sink.split:                           ; preds = %.lr.ph.i8.i, %cmpxchg.start28
   call void @llvm.aarch64.clrex()
@@ -718,12 +718,12 @@ cmpxchg.trystore26:                               ; preds = %cmpxchg.start28
   %25 = call i64 @llvm.aarch64.ldaxr.p0(ptr elementtype(i8) %5)
   %26 = trunc i64 %25 to i8
   %should_store44 = icmp eq i8 %26, 0
-  br i1 %should_store44, label %cmpxchg.trystore41, label %.lr.ph.i8.i.sink.split, !prof !64
+  br i1 %should_store44, label %cmpxchg.trystore41, label %.lr.ph.i8.i.sink.split, !prof !55
 
 cmpxchg.trystore41:                               ; preds = %.lr.ph.i8.i
   %27 = call i32 @llvm.aarch64.stxr.p0(i64 1, ptr elementtype(i8) %5)
   %success46 = icmp eq i32 %27, 0
-  br i1 %success46, label %cases.lock__func_362.exit9.i, label %.lr.ph.i8.i, !prof !64
+  br i1 %success46, label %cases.lock__func_362.exit9.i, label %.lr.ph.i8.i, !prof !55
 
 cases.lock__func_362.exit9.i:                     ; preds = %cmpxchg.trystore41, %cmpxchg.trystore26
   %sunkaddr54 = getelementptr inbounds i8, ptr %0, i64 8
@@ -737,7 +737,7 @@ cases.lock__func_362.exit9.i:                     ; preds = %cmpxchg.trystore41,
   br i1 %32, label %.critedge.i.i, label %33
 
 .critedge.i.i:                                    ; preds = %30, %cases.lock__func_362.exit9.i
-  call fastcc void @debug.defaultPanic(ptr nonnull readonly @__anon_17342, i64 36)
+  call fastcc void @debug.defaultPanic(ptr nonnull readonly @__anon_17337, i64 36)
   unreachable
 
 33:                                               ; preds = %30
@@ -834,7 +834,7 @@ Symbols → `parity.baselineJob` / `parity.baselineJob`; baseline/wrapper machin
 ```
 
 ```llvm
-define private i64 @parity.baselineJob(ptr nonnull align 8 %0, i64 %1) unnamed_addr #6 {
+define private i64 @parity.baselineJob(ptr nonnull align 8 %0, i64 %1) unnamed_addr #7 {
 cmpxchg.start:
   %2 = alloca ptr, align 8
   %3 = alloca ptr, align 8
@@ -842,12 +842,12 @@ cmpxchg.start:
   %5 = call i64 @llvm.aarch64.ldaxr.p0(ptr elementtype(i8) %4)
   %6 = trunc i64 %5 to i8
   %should_store = icmp eq i8 %6, 0
-  br i1 %should_store, label %cmpxchg.trystore, label %.lr.ph.i.i.sink.split, !prof !64
+  br i1 %should_store, label %cmpxchg.trystore, label %.lr.ph.i.i.sink.split, !prof !55
 
 cmpxchg.trystore:                                 ; preds = %cmpxchg.start
   %7 = call i32 @llvm.aarch64.stxr.p0(i64 1, ptr elementtype(i8) %4)
   %success = icmp eq i32 %7, 0
-  br i1 %success, label %cases.lock__func_360.exit.i, label %.lr.ph.i.i.preheader, !prof !64
+  br i1 %success, label %cases.lock__func_360.exit.i, label %.lr.ph.i.i.preheader, !prof !55
 
 .lr.ph.i.i.sink.split:                            ; preds = %.lr.ph.i.i, %cmpxchg.start
   call void @llvm.aarch64.clrex()
@@ -861,12 +861,12 @@ cmpxchg.trystore:                                 ; preds = %cmpxchg.start
   %8 = call i64 @llvm.aarch64.ldaxr.p0(ptr elementtype(i8) %4)
   %9 = trunc i64 %8 to i8
   %should_store10 = icmp eq i8 %9, 0
-  br i1 %should_store10, label %cmpxchg.trystore7, label %.lr.ph.i.i.sink.split, !prof !64
+  br i1 %should_store10, label %cmpxchg.trystore7, label %.lr.ph.i.i.sink.split, !prof !55
 
 cmpxchg.trystore7:                                ; preds = %.lr.ph.i.i
   %10 = call i32 @llvm.aarch64.stxr.p0(i64 1, ptr elementtype(i8) %4)
   %success12 = icmp eq i32 %10, 0
-  br i1 %success12, label %cases.lock__func_360.exit.i, label %.lr.ph.i.i, !prof !64
+  br i1 %success12, label %cases.lock__func_360.exit.i, label %.lr.ph.i.i, !prof !55
 
 cases.lock__func_360.exit.i:                      ; preds = %cmpxchg.trystore7, %cmpxchg.trystore
   store i64 %1, ptr %0, align 8
@@ -883,12 +883,12 @@ cases.lock__func_360.exit.i:                      ; preds = %cmpxchg.trystore7, 
   %12 = call i64 @llvm.aarch64.ldaxr.p0(ptr elementtype(i8) %4)
   %13 = trunc i64 %12 to i8
   %should_store25 = icmp eq i8 %13, 0
-  br i1 %should_store25, label %cmpxchg.trystore22, label %.lr.ph.i14.i.sink.split, !prof !64
+  br i1 %should_store25, label %cmpxchg.trystore22, label %.lr.ph.i14.i.sink.split, !prof !55
 
 cmpxchg.trystore22:                               ; preds = %cases.lock__func_360.exit.i
   %14 = call i32 @llvm.aarch64.stxr.p0(i64 1, ptr elementtype(i8) %4)
   %success27 = icmp eq i32 %14, 0
-  br i1 %success27, label %cases.lock__func_360.exit15.i, label %.lr.ph.i14.i.preheader, !prof !64
+  br i1 %success27, label %cases.lock__func_360.exit15.i, label %.lr.ph.i14.i.preheader, !prof !55
 
 .lr.ph.i14.i.sink.split:                          ; preds = %.lr.ph.i14.i, %cases.lock__func_360.exit.i
   call void @llvm.aarch64.clrex()
@@ -902,12 +902,12 @@ cmpxchg.trystore22:                               ; preds = %cases.lock__func_36
   %15 = call i64 @llvm.aarch64.ldaxr.p0(ptr elementtype(i8) %4)
   %16 = trunc i64 %15 to i8
   %should_store40 = icmp eq i8 %16, 0
-  br i1 %should_store40, label %cmpxchg.trystore37, label %.lr.ph.i14.i.sink.split, !prof !64
+  br i1 %should_store40, label %cmpxchg.trystore37, label %.lr.ph.i14.i.sink.split, !prof !55
 
 cmpxchg.trystore37:                               ; preds = %.lr.ph.i14.i
   %17 = call i32 @llvm.aarch64.stxr.p0(i64 1, ptr elementtype(i8) %4)
   %success42 = icmp eq i32 %17, 0
-  br i1 %success42, label %cases.lock__func_360.exit15.i, label %.lr.ph.i14.i, !prof !64
+  br i1 %success42, label %cases.lock__func_360.exit15.i, label %.lr.ph.i14.i, !prof !55
 
 cases.lock__func_360.exit15.i:                    ; preds = %cmpxchg.trystore37, %cmpxchg.trystore22
   %sunkaddr49 = getelementptr inbounds i8, ptr %0, i64 8
@@ -965,18 +965,18 @@ Symbols → `parity.baselineIncrement` / `parity.baselineIncrement`; baseline/wr
 ```
 
 ```llvm
-define private void @parity.baselineIncrement(ptr nonnull align 8 captures(none) %0) unnamed_addr #6 {
+define private void @parity.baselineIncrement(ptr nonnull align 8 captures(none) %0) unnamed_addr #7 {
 cmpxchg.start:
   %1 = getelementptr inbounds nuw i8, ptr %0, i64 8
   %2 = call i64 @llvm.aarch64.ldaxr.p0(ptr elementtype(i8) %1)
   %3 = trunc i64 %2 to i8
   %should_store = icmp eq i8 %3, 0
-  br i1 %should_store, label %cmpxchg.trystore, label %.lr.ph.i.i.sink.split, !prof !64
+  br i1 %should_store, label %cmpxchg.trystore, label %.lr.ph.i.i.sink.split, !prof !55
 
 cmpxchg.trystore:                                 ; preds = %cmpxchg.start
   %4 = call i32 @llvm.aarch64.stxr.p0(i64 1, ptr elementtype(i8) %1)
   %success = icmp eq i32 %4, 0
-  br i1 %success, label %cases.increment__func_357.exit, label %.lr.ph.i.i.preheader, !prof !64
+  br i1 %success, label %cases.increment__func_357.exit, label %.lr.ph.i.i.preheader, !prof !55
 
 .lr.ph.i.i.sink.split:                            ; preds = %.lr.ph.i.i, %cmpxchg.start
   call void @llvm.aarch64.clrex()
@@ -990,12 +990,12 @@ cmpxchg.trystore:                                 ; preds = %cmpxchg.start
   %5 = call i64 @llvm.aarch64.ldaxr.p0(ptr elementtype(i8) %1)
   %6 = trunc i64 %5 to i8
   %should_store10 = icmp eq i8 %6, 0
-  br i1 %should_store10, label %cmpxchg.trystore7, label %.lr.ph.i.i.sink.split, !prof !64
+  br i1 %should_store10, label %cmpxchg.trystore7, label %.lr.ph.i.i.sink.split, !prof !55
 
 cmpxchg.trystore7:                                ; preds = %.lr.ph.i.i
   %7 = call i32 @llvm.aarch64.stxr.p0(i64 1, ptr elementtype(i8) %1)
   %success12 = icmp eq i32 %7, 0
-  br i1 %success12, label %cases.increment__func_357.exit, label %.lr.ph.i.i, !prof !64
+  br i1 %success12, label %cases.increment__func_357.exit, label %.lr.ph.i.i, !prof !55
 
 cases.increment__func_357.exit:                   ; preds = %cmpxchg.trystore7, %cmpxchg.trystore
   %8 = load i64, ptr %0, align 8
@@ -1104,7 +1104,7 @@ Symbols → `parity.baselineNumericDiv` / `parity.baselineNumericDiv`; baseline/
 ```
 
 ```llvm
-define private i64 @parity.baselineNumericDiv(i64 %0, i64 %1) unnamed_addr #6 {
+define private i64 @parity.baselineNumericDiv(i64 %0, i64 %1) unnamed_addr #7 {
   %3 = icmp eq i64 %1, 0
   br i1 %3, label %numeric.operation__func_337.exit, label %4
 
@@ -1515,7 +1515,7 @@ Symbols → `parity.baselineNumericInvariant` / `parity.baselineNumericInvariant
 ```
 
 ```llvm
-define private i64 @parity.baselineNumericInvariant(i64 %0, i64 %1) unnamed_addr #6 {
+define private i64 @parity.baselineNumericInvariant(i64 %0, i64 %1) unnamed_addr #7 {
   %3 = icmp ult i64 %1, %0
   br i1 %3, label %4, label %numeric.operation__func_307.exit
 

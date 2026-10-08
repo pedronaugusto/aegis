@@ -72,35 +72,35 @@ inline fn scaled(comptime Target: type, comptime numerator: u64, comptime denomi
 /// Count domains are distinct; multiplying by a scalar retains that domain.
 pub fn Count(comptime Tag: type, comptime Repr: type) type {
     scalar.abiInteger(Repr);
-    return extern struct {
+    return enum(Repr) {
         const Self = @This();
         pub const Domain = Tag;
         /// Private: use fromRaw/raw.
-        value: Repr,
+        _,
         pub const AddError = ints.Checked(Repr).AddError;
         pub const SubError = ints.Checked(Repr).SubError;
         pub const MulError = ints.Checked(Repr).MulError;
         pub const ConvertError = ints.CastError;
         pub inline fn fromRaw(value: Repr) Self {
-            return .{ .value = value };
+            return @fromBackingInt(value);
         }
         pub inline fn raw(self: Self) Repr {
-            return self.value;
+            return @backingInt(self);
         }
         pub inline fn add(self: Self, rhs: Self) AddError!Self {
-            return fromRaw((try ints.Checked(Repr).init(self.value).add(rhs.value)).raw());
+            return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).add(@backingInt(rhs))).raw());
         }
         pub inline fn sub(self: Self, rhs: Self) SubError!Self {
-            return fromRaw((try ints.Checked(Repr).init(self.value).sub(rhs.value)).raw());
+            return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).sub(@backingInt(rhs))).raw());
         }
         pub inline fn mul(self: Self, rhs: Repr) MulError!Self {
-            return fromRaw((try ints.Checked(Repr).init(self.value).mul(rhs)).raw());
+            return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).mul(rhs)).raw());
         }
         pub inline fn convert(self: Self, comptime Target: type) ConvertError!Count(Tag, Target) {
-            return Count(Tag, Target).fromRaw(try ints.cast(Target, self.value));
+            return Count(Tag, Target).fromRaw(try ints.cast(Target, @backingInt(self)));
         }
         pub inline fn encode(self: Self, endian: std.builtin.Endian) scalar.Bytes(Repr) {
-            return scalar.encode(Repr, self.value, endian);
+            return scalar.encode(Repr, @backingInt(self), endian);
         }
         pub inline fn decode(data: scalar.Bytes(Repr), endian: std.builtin.Endian) Self {
             return fromRaw(scalar.decode(Repr, data, endian));
@@ -111,38 +111,38 @@ pub fn Count(comptime Tag: type, comptime Repr: type) type {
 /// Distinct bytes count, never an implicit unit conversion.
 pub fn Bytes(comptime Repr: type) type {
     scalar.abiInteger(Repr);
-    return extern struct {
+    return enum(Repr) {
         const Self = @This();
         /// Private: use fromRaw/raw.
-        value: Repr,
+        _,
         pub const AddError = ints.Checked(Repr).AddError;
         pub const SubError = ints.Checked(Repr).SubError;
         pub const MulError = ints.Checked(Repr).MulError;
         pub const ConvertError = error{ Overflow, Inexact };
         pub inline fn fromRaw(value: Repr) Self {
-            return .{ .value = value };
+            return @fromBackingInt(value);
         }
         pub inline fn raw(self: Self) Repr {
-            return self.value;
+            return @backingInt(self);
         }
         pub inline fn add(self: Self, rhs: Self) AddError!Self {
-            return fromRaw((try ints.Checked(Repr).init(self.value).add(rhs.value)).raw());
+            return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).add(@backingInt(rhs))).raw());
         }
         pub inline fn sub(self: Self, rhs: Self) SubError!Self {
-            return fromRaw((try ints.Checked(Repr).init(self.value).sub(rhs.value)).raw());
+            return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).sub(@backingInt(rhs))).raw());
         }
         pub inline fn mul(self: Self, rhs: Repr) MulError!Self {
-            return fromRaw((try ints.Checked(Repr).init(self.value).mul(rhs)).raw());
+            return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).mul(rhs)).raw());
         }
         pub inline fn convert(self: Self, comptime Target: type) ConvertError!Bytes(Target) {
-            return Bytes(Target).fromRaw(try ints.cast(Target, self.value));
+            return Bytes(Target).fromRaw(try ints.cast(Target, @backingInt(self)));
         }
         pub const ToBitsError = ConvertError;
         pub inline fn toBits(self: Self) ToBitsError!Bits(Repr) {
-            return Bits(Repr).fromRaw(try scaled(Repr, 8, 1, self.value, .exact));
+            return Bits(Repr).fromRaw(try scaled(Repr, 8, 1, @backingInt(self), .exact));
         }
         pub inline fn encode(self: Self, endian: std.builtin.Endian) scalar.Bytes(Repr) {
-            return scalar.encode(Repr, self.value, endian);
+            return scalar.encode(Repr, @backingInt(self), endian);
         }
         pub inline fn decode(data: scalar.Bytes(Repr), endian: std.builtin.Endian) Self {
             return fromRaw(scalar.decode(Repr, data, endian));
@@ -153,42 +153,42 @@ pub fn Bytes(comptime Repr: type) type {
 /// Distinct bits count, never an implicit unit conversion.
 pub fn Bits(comptime Repr: type) type {
     scalar.abiInteger(Repr);
-    return extern struct {
+    return enum(Repr) {
         const Self = @This();
         /// Private: use fromRaw/raw.
-        value: Repr,
+        _,
         pub const AddError = ints.Checked(Repr).AddError;
         pub const SubError = ints.Checked(Repr).SubError;
         pub const MulError = ints.Checked(Repr).MulError;
         pub const ConvertError = error{ Overflow, Inexact };
         pub inline fn fromRaw(value: Repr) Self {
-            return .{ .value = value };
+            return @fromBackingInt(value);
         }
         pub inline fn raw(self: Self) Repr {
-            return self.value;
+            return @backingInt(self);
         }
         pub inline fn add(self: Self, rhs: Self) AddError!Self {
-            return fromRaw((try ints.Checked(Repr).init(self.value).add(rhs.value)).raw());
+            return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).add(@backingInt(rhs))).raw());
         }
         pub inline fn sub(self: Self, rhs: Self) SubError!Self {
-            return fromRaw((try ints.Checked(Repr).init(self.value).sub(rhs.value)).raw());
+            return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).sub(@backingInt(rhs))).raw());
         }
         pub inline fn mul(self: Self, rhs: Repr) MulError!Self {
-            return fromRaw((try ints.Checked(Repr).init(self.value).mul(rhs)).raw());
+            return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).mul(rhs)).raw());
         }
         pub inline fn convert(self: Self, comptime Target: type) ConvertError!Bits(Target) {
-            return Bits(Target).fromRaw(try ints.cast(Target, self.value));
+            return Bits(Target).fromRaw(try ints.cast(Target, @backingInt(self)));
         }
         pub const ToBytesError = ConvertError;
         pub const ToBytesRoundedError = ConvertError;
         pub inline fn toBytes(self: Self) ToBytesError!Bytes(Repr) {
-            return Bytes(Repr).fromRaw(try scaled(Repr, 1, 8, self.value, .exact));
+            return Bytes(Repr).fromRaw(try scaled(Repr, 1, 8, @backingInt(self), .exact));
         }
         pub inline fn toBytesRounded(self: Self, rounding: Rounding) ToBytesRoundedError!Bytes(Repr) {
-            return Bytes(Repr).fromRaw(try scaled(Repr, 1, 8, self.value, rounding));
+            return Bytes(Repr).fromRaw(try scaled(Repr, 1, 8, @backingInt(self), rounding));
         }
         pub inline fn encode(self: Self, endian: std.builtin.Endian) scalar.Bytes(Repr) {
-            return scalar.encode(Repr, self.value, endian);
+            return scalar.encode(Repr, @backingInt(self), endian);
         }
         pub inline fn decode(data: scalar.Bytes(Repr), endian: std.builtin.Endian) Self {
             return fromRaw(scalar.decode(Repr, data, endian));
@@ -199,10 +199,10 @@ pub fn Bits(comptime Repr: type) type {
 /// Signed representations permit negative spans; unsigned conversion rejects negative input.
 pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
     scalar.abiInteger(Repr);
-    return extern struct {
+    return enum(Repr) {
         const Self = @This();
         /// Private: use fromRaw/raw.
-        value: Repr,
+        _,
         pub const AddError = ints.Checked(Repr).AddError;
         pub const SubError = ints.Checked(Repr).SubError;
         pub const MulError = ints.Checked(Repr).MulError;
@@ -210,31 +210,31 @@ pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
         pub const ToIoDurationError = ConvertError;
         pub const FromIoDurationError = ConvertError;
         pub inline fn fromRaw(value: Repr) Self {
-            return .{ .value = value };
+            return @fromBackingInt(value);
         }
         pub inline fn raw(self: Self) Repr {
-            return self.value;
+            return @backingInt(self);
         }
         pub inline fn add(self: Self, rhs: Self) AddError!Self {
-            return fromRaw((try ints.Checked(Repr).init(self.value).add(rhs.value)).raw());
+            return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).add(@backingInt(rhs))).raw());
         }
         pub inline fn sub(self: Self, rhs: Self) SubError!Self {
-            return fromRaw((try ints.Checked(Repr).init(self.value).sub(rhs.value)).raw());
+            return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).sub(@backingInt(rhs))).raw());
         }
         pub inline fn mul(self: Self, rhs: Repr) MulError!Self {
-            return fromRaw((try ints.Checked(Repr).init(self.value).mul(rhs)).raw());
+            return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).mul(rhs)).raw());
         }
         pub inline fn convert(self: Self, comptime target: Unit, comptime Target: type, rounding: Rounding) ConvertError!Duration(target, Target) {
-            return Duration(target, Target).fromRaw(try scaled(Target, unit.nanoseconds(), target.nanoseconds(), self.value, rounding));
+            return Duration(target, Target).fromRaw(try scaled(Target, unit.nanoseconds(), target.nanoseconds(), @backingInt(self), rounding));
         }
         pub inline fn toIoDuration(self: Self) ToIoDurationError!std.Io.Duration {
-            return .fromNanoseconds(try scaled(i96, unit.nanoseconds(), 1, self.value, .exact));
+            return .fromNanoseconds(try scaled(i96, unit.nanoseconds(), 1, @backingInt(self), .exact));
         }
         pub inline fn fromIoDuration(value: std.Io.Duration, rounding: Rounding) FromIoDurationError!Self {
             return fromRaw(try scaled(Repr, 1, unit.nanoseconds(), value.nanoseconds, rounding));
         }
         pub inline fn encode(self: Self, endian: std.builtin.Endian) scalar.Bytes(Repr) {
-            return scalar.encode(Repr, self.value, endian);
+            return scalar.encode(Repr, @backingInt(self), endian);
         }
         pub inline fn decode(data: scalar.Bytes(Repr), endian: std.builtin.Endian) Self {
             return fromRaw(scalar.decode(Repr, data, endian));
@@ -247,13 +247,13 @@ pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
 // ziglint-ignore: Z023 clock/unit/repr is the consumer contract, matching Duration(unit, repr)
 pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: type) type {
     scalar.abiInteger(Repr);
-    return extern struct {
+    return enum(Repr) {
         const Self = @This();
         pub const Clock = ClockTag;
         pub const Scale = unit;
         pub const Representation = Repr;
         /// Private: use fromRaw/raw.
-        value: Repr,
+        _,
         pub const AddError = ints.Checked(Repr).AddError;
         pub const SubError = ints.Checked(Repr).SubError;
         pub const DurationToError = ints.Checked(Repr).SubError;
@@ -262,22 +262,22 @@ pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: t
         pub const ToIoTimestampError = ConvertError;
         pub const FromIoTimestampError = ConvertError || error{ClockMismatch};
         pub inline fn fromRaw(value: Repr) Self {
-            return .{ .value = value };
+            return @fromBackingInt(value);
         }
         pub inline fn raw(self: Self) Repr {
-            return self.value;
+            return @backingInt(self);
         }
         pub inline fn add(self: Self, span: Duration(unit, Repr)) AddError!Self {
-            return fromRaw((try ints.Checked(Repr).init(self.value).add(span.raw())).raw());
+            return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).add(span.raw())).raw());
         }
         pub inline fn sub(self: Self, span: Duration(unit, Repr)) SubError!Self {
-            return fromRaw((try ints.Checked(Repr).init(self.value).sub(span.raw())).raw());
+            return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).sub(span.raw())).raw());
         }
         pub inline fn durationTo(self: Self, other: Self) DurationToError!Duration(unit, Repr) {
-            return Duration(unit, Repr).fromRaw((try ints.Checked(Repr).init(other.value).sub(self.value)).raw());
+            return Duration(unit, Repr).fromRaw((try ints.Checked(Repr).init(@backingInt(other)).sub(@backingInt(self))).raw());
         }
         pub inline fn convert(self: Self, comptime target: Unit, comptime Target: type, rounding: Rounding) ConvertError!Instant(ClockTag, target, Target) {
-            return Instant(ClockTag, target, Target).fromRaw(try scaled(Target, unit.nanoseconds(), target.nanoseconds(), self.value, rounding));
+            return Instant(ClockTag, target, Target).fromRaw(try scaled(Target, unit.nanoseconds(), target.nanoseconds(), @backingInt(self), rounding));
         }
         /// Caller supplies simultaneous samples; trust/uncertainty of sampling remains theirs.
         /// Convert scale/representation explicitly before providing the correspondence.
@@ -289,7 +289,7 @@ pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: t
         }
         pub inline fn toIoTimestamp(self: Self) ToIoTimestampError!std.Io.Clock.Timestamp {
             const clock: std.Io.Clock = ClockTag;
-            return .{ .clock = clock, .raw = .fromNanoseconds(try scaled(i96, unit.nanoseconds(), 1, self.value, .exact)) };
+            return .{ .clock = clock, .raw = .fromNanoseconds(try scaled(i96, unit.nanoseconds(), 1, @backingInt(self), .exact)) };
         }
         pub inline fn fromIoTimestamp(value: std.Io.Clock.Timestamp, rounding: Rounding) FromIoTimestampError!Self {
             const clock: std.Io.Clock = ClockTag;
@@ -297,7 +297,7 @@ pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: t
             return fromRaw(try scaled(Repr, 1, unit.nanoseconds(), value.raw.nanoseconds, rounding));
         }
         pub inline fn encode(self: Self, endian: std.builtin.Endian) scalar.Bytes(Repr) {
-            return scalar.encode(Repr, self.value, endian);
+            return scalar.encode(Repr, @backingInt(self), endian);
         }
         pub inline fn decode(data: scalar.Bytes(Repr), endian: std.builtin.Endian) Self {
             return fromRaw(scalar.decode(Repr, data, endian));
