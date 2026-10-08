@@ -1,4 +1,4 @@
-//! Audited byte-mask kernels. Support is pinned in docs/constant-time.md.
+//! Audited byte-mask kernels. Support is pinned in docs/design.md.
 const std = @import("std");
 const builtin = @import("builtin");
 
