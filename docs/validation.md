@@ -1,6 +1,6 @@
 # v0 validation and hosted status
 
-Local evidence, 2026-10-08, Zig 0.17.0 / Apple M3 Max / Darwin 25.2.0. This candidate has not passed hosted acceptance and must not replace the bootstrap main until its exact commit passes fast and merge, including Linux TSan.
+Local evidence, 2026-10-08, Zig 0.17.0 / Apple M3 Max / Darwin 25.2.0. The retained local results below precede the resume. Hosted acceptance requires fast and merge on the exact final candidate commit, including Linux TSan and native macOS/Windows execution; earlier-commit runs are not acceptance.
 
 ## Focused checks
 
@@ -26,4 +26,12 @@ The workflow's fast/merge/release matrices come from pinned preflight `zig build
 
 The floor's automatic [run 37773839032](https://github.com/pedronaugusto/aegis/actions/runs/37773839032), commit `7e3962fc4e221734ba55ff43792483181ec3eac5`, did not start its main-status job. [Check 113299684373](https://github.com/pedronaugusto/aegis/actions/runs/37773839032/job/113299684373) has no steps; its failure annotation says account payments failed or the spending limit must be increased. That is an owner/nav billing blocker, not test execution or permission to bypass CI. The explicit v0 fast dispatch [run 37781886548](https://github.com/pedronaugusto/aegis/actions/runs/37781886548), source candidate `1a82a5030aa0771031475dff476e92c9266f9c42`, failed before any steps: [check 113326792651](https://github.com/pedronaugusto/aegis/actions/runs/37781886548/job/113326792651) has an empty step list and the same billing annotation. The gate and TSan jobs were skipped. Merge was not dispatched because fast never passed. This documentation follow-up changes no implementation, tests, benchmark or parity fixture; the final branch head still needs exact-commit hosted acceptance.
 
-Until the owner resolves that blocker and exact-commit fast/merge finish green, Linux TSan and hosted macOS/Windows execution are unproven and main stays the floor. Preserve the floor ancestry, never force/rewrite, dispatch fast then merge per the package brief, fast-forward only after acceptance, then cancel the automatic main push/status run. Default branch main and PRIVATE visibility are retained. No cloak adoption or pin change is authorized; its separate [open gates](extraction.md) remain open.
+## Resume and exact-head acceptance
+
+The owner cleared hosted billing and authorized resuming v0 from `5386bf0dde3da330105b81c8729eb01284141e57`. Remote main/default main were verified at the existing `7e3962fc4e221734ba55ff43792483181ec3eac5` floor. The repository is now PUBLIC by owner action; the resume changes no visibility or settings. The billing failures above remain historical failures, not current test evidence.
+
+The fresh standalone resume preserves published ancestry and the two-type scope. Before dispatch, it rechecks targeted Secret/Guarded/Consumer cases in Debug, ReleaseSafe and ReleaseFast, lint (including nine compile-negative fixtures and four strict parity objects), and check. Retained codegen and raw timing artifacts remain unchanged. No library hot path changed, so historical timing is reported as retained evidence rather than a new measurement.
+
+For hosted evidence, inspect this commit's workflow-dispatch runs in the [CI history](https://github.com/pedronaugusto/aegis/actions/workflows/ci.yml): fast first, then merge, both with `headSha` equal to the final v0 head. Merge must execute native macOS/Windows artifacts and the separate Linux targeted TSan job successfully. No skipped job or billing failure substitutes for those gates. Run IDs and the actual remote branch/main SHA are reported by the landing operation after inspection. This candidate document does not predeclare their outcomes.
+
+Fast-forward main only after both gates pass; re-read remote heads and preserve concurrent upstream work without force or history rewriting. Cancel the automatic main push/status run after landing. No cloak adoption or pin change is included; its separate [open gates](extraction.md) remain open. The wider package remains work in progress.

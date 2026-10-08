@@ -2,9 +2,11 @@
 
 Explicit inline secret ownership and short spin-guarded data for Zig. Only `Secret(T)` and `Guarded(T)` are exported. Both are allocation-free; wiping and locking remain enabled in every build.
 
+Work in progress. V0 acceptance requires hosted fast and merge on the exact candidate commit, including native macOS/Windows and Linux TSan; the wider safety catalogue and consumer adoption follow in separate batches.
+
 ## Install
 
-Requires Zig 0.17.0. After main lands:
+Requires Zig 0.17.0. Main publishes the accepted v0 after its hosted gates pass:
 
 ```sh
 zig fetch --save=aegis git+https://github.com/pedronaugusto/aegis#main
