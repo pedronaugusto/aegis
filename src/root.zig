@@ -11,3 +11,6 @@ pub const id = @import("id.zig");
 pub const units = @import("units.zig");
 /// Always-on programmer contracts and explicitly optional diagnostics.
 pub const assert = @import("assert.zig");
+
+/// Copyable choices and audited byte comparison/select kernels.
+pub const secret = @import("constant_time.zig");

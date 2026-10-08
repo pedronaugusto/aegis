@@ -2,7 +2,8 @@
 
 Explicit safety types for any Zig project: inline secrets, spin-guarded data, checked scalar arithmetic, distinct IDs and units, and executable contracts. Runtime code depends only on std; required wiping, locking, arithmetic, range and conversion checks remain enabled in every build.
 
-Work in progress. Implemented scope is v0 (`Secret(T)` and spin `Guarded(T)`) plus the A3 numeric/domain foundations. Changes land after exact-commit fast and merge gates pass. The full safety catalogue and consumer adoption remain later work.
+Work in progress. Implemented scope is v0 (`Secret(T)` and spin `Guarded(T)`) plus the A3 numeric/domain foundations. The separate A5 branch adds Choice kernels and
+remains work in progress pending A4-first integration. Changes land after exact-commit fast and merge gates pass. The full safety catalogue and consumer adoption remain later work.
 
 ## Install
 
@@ -44,7 +45,8 @@ _ = timeout;
 
 `Guarded(T)` keeps data beside cloak's acquire/release atomic spin lock. `acquire`, immediate `defer held.deinit()`, and `held.value()` replace a separate lock/data pair. Published owners have stable addresses. Sections are bounded: no blocking, yielding, recursive acquisition or arbitrary callbacks. Acquisition is noncancelable with no fairness guarantee. The consumer owns data cleanup, reclamation and any escaped-pointer lifetime.
 
-Zig permits struct copies, field access and escaped pointers. These contracts do not provide a borrow checker, linear types, automatic destructors or universal copied-guard detection. Cleanup is explicit on normal/error returns; abort/process death has no cleanup guarantee. Wipes cover only the specified storage, not old copies, registers, spills, paging, core dumps or hardware side channels. No constant-time cryptographic guarantee is supplied.
+Zig permits struct copies, field access and escaped pointers. These contracts do not provide a borrow checker, linear types, automatic destructors or universal copied-guard detection. Cleanup is explicit on normal/error returns; abort/process death has no cleanup guarantee. Wipes cover only the specified storage, not old copies, registers, spills, paging, core dumps or hardware side channels. The inline ownership types make no constant-time cryptographic claim;
+A5 value-kernel claims are limited to the [audited compiler boundary](docs/constant-time.md).
 
 ## API
 
@@ -66,8 +68,22 @@ No allocated secret buffers, reference counting, blocking locks, pools, handles,
 
 ## Testing
 
-Run targeted cases with `zig build test -Dtest-filter=A3`, `-Dtest-filter=Secret`, `-Dtest-filter=Guarded` or `-Dtest-filter=Consumer`. `zig build lint` checks source/docs/structure, negative compilation, consumer isolation and strict codegen parity. `zig build check` compiles the suite; `zig build bench` runs own-operation A/B manually. The `test-scalars` and `check-contracts` gates retain release-mode failures; `check-negative` rejects cross-domain use. CI smoke-checks benchmark programs without timing gates. The hosted merge includes targeted Linux TSan; [validation status](docs/validation.md) records execution evidence.
+Run targeted cases with `zig build test -Dtest-filter=A3`, `-Dtest-filter=Secret`, `-Dtest-filter=Guarded` or `-Dtest-filter=Consumer` / `-Dtest-filter=A5`. `zig build lint` checks source/docs/structure, negative compilation, consumer isolation and strict codegen parity. `zig build check` compiles the suite; `zig build bench` runs own-operation A/B manually. The `test-scalars` and `check-contracts` gates retain release-mode failures; `check-negative` rejects cross-domain use. CI smoke-checks benchmark programs without timing gates. The hosted merge includes targeted Linux TSan; [validation status](docs/validation.md) records execution evidence.
 
 ## Licence
 
 MIT; see [LICENSE](LICENSE).
+
+## Choice and byte kernels (A5 work in progress)
+
+`aegis.secret` has a copyable one-bit `Choice`, logical operations, fixed/dynamic
+byte equality, unsigned endian ordering, and integer/byte selection. Decisions
+stay choices until an explicit `declassify("completed public verdict")`.
+Dynamic lengths are public and mismatch is an error; byte selection rejects
+partial overlap before writing. Formatting a choice is rejected.
+
+The audited compiler boundary is Zig 0.17.0 LLVM with the listed baseline CPU,
+OS/ABI, mode and mitigation profiles. Unsupported profiles fail explicitly.
+See [contracts and limits](docs/constant-time.md); these kernels do not prove
+arbitrary caller arithmetic or whole-program constant time. A5 has not adopted
+any consumer and awaits A4's genuine main landing before final integration.

@@ -37,6 +37,16 @@
       "zig",
       "build",
       "test-scalars"
+    ],
+    [
+      "zig",
+      "build",
+      "check-choices"
+    ],
+    [
+      "zig",
+      "build",
+      "check-choices-negative"
     ]
   ],
   "docs": {
