@@ -60,7 +60,7 @@ Zig permits struct copies, field access and escaped pointers. These contracts do
 
 ## Scope
 
-No reference counting, blocking locks, pools, handles, generic deleters or code analysis. Runtime closure is std only. Tags, checks and explicit raw boundaries are API discipline; Zig fields/reflection can bypass them. [Future glint rule specs](docs/a3-enforcement.md) record the raw patterns and permitted written-reason exceptions; those rules are not yet built or enforced. [A3 evidence](docs/a3-report.md) records checks and limits. [Extraction provenance](docs/extraction.md) distinguishes published cloak evidence from open consumer adoption gates. [Performance evidence](docs/performance.md) compares identical wipe/locking semantics: zero abstraction overhead does not mean those operations have zero cost.
+No reference counting, blocking locks, pools, handles, generic deleters or code analysis. Runtime closure is std only. Tags, checks and explicit raw boundaries are API discipline; Zig fields/reflection can bypass them. [Design](docs/design.md) records the ownership and foreign-boundary contracts. [Results](docs/a4-status.md) cite immutable private evidence and open performance/adoption rows. Glint admission and consumer adoption remain later work. Equal handwritten wipe/locking cost does not mean those operations have zero cost.
 
 ## Built with
 
@@ -68,7 +68,7 @@ No reference counting, blocking locks, pools, handles, generic deleters or code 
 
 ## Testing
 
-Run targeted cases with `zig build test -Dtest-filter=A3`, `-Dtest-filter=Secret`, `-Dtest-filter=A4`, `-Dtest-filter=Guarded` or `-Dtest-filter=Consumer`. `zig build lint` checks source/docs/structure, negative compilation, consumer isolation and strict codegen parity. `zig build check` compiles the suite; `zig build bench` runs own-operation A/B manually. The `test-secret-bytes` and `check-secret-bytes` gates exercise release cleanup and portable byte-owner contracts. The `test-scalars` and `check-contracts` gates retain release-mode failures; `check-negative` rejects cross-domain use. CI smoke-checks benchmark programs without timing gates. The hosted merge includes targeted Linux TSan; [validation status](docs/validation.md) records execution evidence.
+Run targeted cases with `zig build test -Dtest-filter=A3`, `-Dtest-filter=Secret`, `-Dtest-filter=A4`, `-Dtest-filter=Guarded` or `-Dtest-filter=Consumer`. `zig build lint` checks source/docs/structure, negative compilation, consumer isolation and strict codegen parity. `zig build check` compiles the suite; `zig build bench` runs own-operation A/B manually. The `test-secret-bytes` and `check-secret-bytes` gates exercise release cleanup and portable byte-owner contracts. The `test-scalars` and `check-contracts` gates retain release-mode failures; `check-negative` rejects cross-domain use. CI smoke-checks benchmark programs without timing gates. The hosted merge includes targeted Linux TSan; [results](docs/a4-status.md) record acceptance status.
 
 ## Licence
 

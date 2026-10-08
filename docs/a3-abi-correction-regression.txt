@@ -1,7 +1,0 @@
-x86-linux-gnu: raw integer ABI mismatch: u8_0
-@typed_u8_0 = alias i8 (i8, i8), ptr @"abi.Fixture(id.Counter(abi.Tag,u8),u8).call"
-@baseline_u8_0 = alias i8 (i8, i8), ptr @"abi.Fixture(id.Counter(abi.Tag,u8),u8).baseline"
-error: RawIntegerAbiMismatch
-/Users/gusto/work/tycho/.wt/aegis-a4/ci/abi_check.zig:31:29: 0x1050fc8cf in main (abi_check)
-                if (!audit) return error.RawIntegerAbiMismatch;
-                            ^
