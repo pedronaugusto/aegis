@@ -105,8 +105,8 @@ listed profile and root mitigation option. The integer caller catalogue includes
 every signed and unsigned supported width. Release modes require identical
 normalized emitted instructions to the equivalent baseline. Debug retains
 runtime safety and runs a stack-aware SSA regression detector. The detector
-checks secret-derived branches, select conditions and address indices; two
-deliberately unsafe compiled controls must be caught in each profile. It is a
+checks secret-derived branches, select conditions and address indices; three
+deliberately unsafe compiled controls (branch, index and unresolved helper call) must be caught in each profile. It is a
 regression check for these fixtures, not a sound whole-program analyzer.
 `zig build check-choices-negative` verifies unsupported profiles/types and
 explicit disclosure/format contracts. Native correctness tests live beside

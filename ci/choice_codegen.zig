@@ -28,11 +28,11 @@ pub fn main(init: std.process.Init) !void {
                 const scratch = profile_arena.allocator();
                 const ir = try dir.readFileAlloc(init.io, try a.print("{s}.ll", .{stem}), scratch, .limited(64 * 1024 * 1024));
                 const assembly = try dir.readFileAlloc(init.io, try a.print("{s}.s", .{stem}), scratch, .limited(64 * 1024 * 1024));
-                inline for (.{ "leakBranch", "leakIndex" }) |unsafe_name| {
+                inline for (.{ "leakBranch", "leakIndex", "leakCall" }) |unsafe_name| {
                     const unsafe_body = try function(scratch, ir, try alias(a, ir, unsafe_name));
                     var diagnosed = false;
                     audit(scratch, unsafe_body) catch |err| {
-                        if (err != error.SecretDependentControlOrAddress) return err;
+                        if (err != error.SecretDependentControlOrAddress and err != error.UninlinedSecretHelper) return err;
                         diagnosed = true;
                     };
                     if (!diagnosed) return error.UnsafeCallerNotDetected;
@@ -243,6 +243,14 @@ fn audit(a: std.mem.Allocator, body: []const u8) !void {
         const line = std.mem.trim(u8, raw, " \t");
         const eq = std.mem.find(u8, line, " = ");
         const rhs = if (eq) |i| line[i + 3 ..] else line;
+        // These fixtures must inline the value kernels. A pointer argument to
+        // an unresolved helper is not modeled by this intraprocedural detector.
+        // Refuse that gap rather than crediting an empty caller body as audited.
+        if (std.mem.find(u8, rhs, "call ") != null) {
+            inline for (.{ "@choice_callers.", "@choice_parity.", "@constant_time.", "@choice_baseline." }) |prefix| {
+                if (std.mem.find(u8, rhs, prefix) != null) return error.UninlinedSecretHelper;
+            }
+        }
         const branch = std.mem.startsWith(u8, rhs, "br i1 ") or std.mem.startsWith(u8, rhs, "switch ");
         const selected = std.mem.startsWith(u8, rhs, "select ");
         const indexed = std.mem.startsWith(u8, rhs, "getelementptr ");

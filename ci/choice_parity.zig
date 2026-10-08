@@ -167,3 +167,14 @@ export fn leakIndex(a: *const [512]u8, b: *const [512]u8, out: *[512]u8) u64 {
     out[0] = value;
     return value;
 }
+
+// Negative control: the detector must refuse unaudited secret helper calls.
+noinline fn secretHelper(a: *const [512]u8, b: *const [512]u8) u64 {
+    return if (a[0] == b[0]) 1 else 2;
+}
+export fn leakCall(out: *[512]u8, a: *const [512]u8, b: *const [512]u8, len: usize, endian: u8) u64 {
+    _ = out;
+    _ = len;
+    _ = endian;
+    return secretHelper(a, b);
+}
