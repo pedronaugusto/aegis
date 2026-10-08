@@ -173,6 +173,46 @@ fn report(gpa: std.mem.Allocator, out: *Io.Writer, name: []const u8, pairs: []co
     try out.print("summary,{s},{d:.6},{d:.6},{d:.6},{d:.6},{d:.6},{d:.6},{d:.6},{d:.6},{d:.6},{d:.6},{d:.6},{d:.6},{d:.6}\n", .{ name, bm, wm, rm, bootstrap[250], bootstrap[9749], base[0], wrap[0], base[15], wrap[15], base[0], base[15], wrap[0], wrap[15] });
     for (pairs, 0..) |pair, i| try out.print("pair,{s},{d},{d:.6},{d:.6}\n", .{ name, i, pair.base, pair.wrap });
 }
+fn Contended(comptime wrapped: bool, comptime rw: bool) type {
+    const Owner = if (rw) (if (wrapped) a.RwGuarded(u64) else c.DirectRw) else (if (wrapped) a.BlockingGuarded(u64) else c.DirectMutex);
+    return struct {
+        const Self = @This();
+        owner: Owner,
+        io: Io,
+        start: Io.Event = .unset,
+        results: [8]u64 = @splat(0),
+        count: usize,
+        fn worker(self: *Self, index: usize) void {
+            self.start.waitUncancelable(self.io);
+            var sum: u64 = 0;
+            for (0..self.count) |_| {
+                const value = if (rw) (if (index == 0) c.rw(wrapped, true, self.io, &self.owner) else c.rw(wrapped, false, self.io, &self.owner)) else c.mutex(wrapped, self.io, &self.owner);
+                sum +%= value catch @panic("benchmark acquisition failed");
+            }
+            self.results[index] = sum;
+        }
+    };
+}
+fn contention(comptime wrapped: bool, comptime rw: bool, io: Io, workers: usize, count: usize) !f64 {
+    const C = Contended(wrapped, rw);
+    var context: C = .{ .owner = if (wrapped) .init(0) else .{ .data = 0 }, .io = io, .count = count };
+    var threads: [8]std.Thread = undefined;
+    var spawned: usize = 0;
+    errdefer {
+        context.start.set(io);
+        for (threads[0..spawned]) |thread| thread.join();
+    }
+    for (threads[0..workers], 0..) |*thread, index| {
+        thread.* = try .spawn(.{}, C.worker, .{ &context, index });
+        spawned += 1;
+    }
+    const start = Io.Clock.awake.now(io);
+    context.start.set(io);
+    for (threads[0..workers]) |thread| thread.join();
+    const elapsed = start.durationTo(Io.Clock.awake.now(io)).nanoseconds;
+    std.mem.doNotOptimizeAway(context.results);
+    return @as(f64, @floatFromInt(elapsed)) / @as(f64, @floatFromInt(count * workers));
+}
 pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
     const smoke = args.len > 1 and std.mem.eql(u8, args[1], "--smoke");
@@ -209,6 +249,32 @@ pub fn main(init: std.process.Init) !void {
                 }
             }
             try report(init.gpa, &out.interface, name, &pairs);
+        }
+    }
+    if (!smoke) {
+        inline for (.{ false, true }) |rw| {
+            for ([_]usize{ 2, 8 }) |workers| {
+                _ = try contention(false, rw, init.io, workers, 256);
+                _ = try contention(true, rw, init.io, workers, 256);
+                var pairs: [samples]Pair = undefined;
+                for (&pairs, 0..) |*pair, index| {
+                    if (index % 2 == 0) {
+                        const b1 = try contention(false, rw, init.io, workers, 4096);
+                        const w1 = try contention(true, rw, init.io, workers, 4096);
+                        const w2 = try contention(true, rw, init.io, workers, 4096);
+                        const b2 = try contention(false, rw, init.io, workers, 4096);
+                        pair.* = .{ .base = (b1 + b2) / 2, .wrap = (w1 + w2) / 2 };
+                    } else {
+                        const w1 = try contention(true, rw, init.io, workers, 4096);
+                        const b1 = try contention(false, rw, init.io, workers, 4096);
+                        const b2 = try contention(false, rw, init.io, workers, 4096);
+                        const w2 = try contention(true, rw, init.io, workers, 4096);
+                        pair.* = .{ .base = (b1 + b2) / 2, .wrap = (w1 + w2) / 2 };
+                    }
+                }
+                const name = if (rw) (if (workers == 2) "rw_mixed_2" else "rw_mixed_8") else (if (workers == 2) "mutex_2" else "mutex_8");
+                try report(init.gpa, &out.interface, name, &pairs);
+            }
         }
     }
     try out.interface.flush();

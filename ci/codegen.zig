@@ -38,6 +38,10 @@ pub fn main(init: std.process.Init) !void {
                     try failure.interface.print("{s} {s} {s}: code size {d}/{d}\n", .{ target, mode, name, baseline_bytes, wrapper_bytes });
                     return error.AbstractionCodeSizeMismatch;
                 }
+                if (std.mem.startsWith(u8, name, "a67_")) {
+                    var numbers = std.Io.File.stdout().writerStreaming(init.io, &.{});
+                    try numbers.interface.print("code,{s},{s},{s},{d},{d}\n", .{ name, target, mode, baseline_bytes, wrapper_bytes });
+                }
                 const emitted_base = try assemblyAlias(a, assembly, try exportName(a, "baseline", name));
                 const emitted_wrap = try assemblyAlias(a, assembly, try exportName(a, "wrapper", name));
                 const emitted = try instructions(a, assembly, emitted_base, target);

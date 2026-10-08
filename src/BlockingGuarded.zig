@@ -33,7 +33,7 @@ pub fn BlockingGuarded(comptime T: type) type {
                 return &self.owner.data;
             }
             /// Exactly once, using the same Io execution domain. Does not clean T.
-            pub fn deinit(self: *Guard, io: std.Io) void {
+            pub inline fn deinit(self: *Guard, io: std.Io) void {
                 self.owner.mutex.unlock(io);
             }
         };
