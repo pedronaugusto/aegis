@@ -196,3 +196,51 @@ export fn baselineNumericEncoding(x: u64, y: u64) u64 {
 export fn wrapperNumericEncoding(x: u64, y: u64) u64 {
     return numeric.operation("encoding", true, x, y);
 }
+
+const bytes = @import("bytes.zig");
+comptime {
+    std.debug.assert(@sizeOf(aegis.SecretBytes) == @sizeOf(bytes.Direct));
+    std.debug.assert(@alignOf(aegis.SecretBytes) == @alignOf(bytes.Direct));
+}
+export fn baselineBytesDead(gpa: *const std.mem.Allocator, input: [*]const u8, n: usize, capacity: usize, requested: usize, fail: bool) usize {
+    return bytes.consumer("dead", false, gpa.*, input[0..n], capacity, requested, fail) catch 0;
+}
+export fn wrapperBytesDead(gpa: *const std.mem.Allocator, input: [*]const u8, n: usize, capacity: usize, requested: usize, fail: bool) usize {
+    return bytes.consumer("dead", true, gpa.*, input[0..n], capacity, requested, fail) catch 0;
+}
+export fn baselineBytesCleanup(gpa: *const std.mem.Allocator, input: [*]const u8, n: usize, capacity: usize, requested: usize, fail: bool) usize {
+    return bytes.consumer("cleanup", false, gpa.*, input[0..n], capacity, requested, fail) catch 0;
+}
+export fn wrapperBytesCleanup(gpa: *const std.mem.Allocator, input: [*]const u8, n: usize, capacity: usize, requested: usize, fail: bool) usize {
+    return bytes.consumer("cleanup", true, gpa.*, input[0..n], capacity, requested, fail) catch 0;
+}
+export fn baselineBytesResize(gpa: *const std.mem.Allocator, input: [*]const u8, n: usize, capacity: usize, requested: usize, fail: bool) usize {
+    return bytes.consumer("resize", false, gpa.*, input[0..n], capacity, requested, fail) catch 0;
+}
+export fn wrapperBytesResize(gpa: *const std.mem.Allocator, input: [*]const u8, n: usize, capacity: usize, requested: usize, fail: bool) usize {
+    return bytes.consumer("resize", true, gpa.*, input[0..n], capacity, requested, fail) catch 0;
+}
+export fn baselineBytesReserve(gpa: *const std.mem.Allocator, input: [*]const u8, n: usize, capacity: usize, requested: usize, fail: bool) usize {
+    return bytes.consumer("reserve", false, gpa.*, input[0..n], capacity, requested, fail) catch 0;
+}
+export fn wrapperBytesReserve(gpa: *const std.mem.Allocator, input: [*]const u8, n: usize, capacity: usize, requested: usize, fail: bool) usize {
+    return bytes.consumer("reserve", true, gpa.*, input[0..n], capacity, requested, fail) catch 0;
+}
+export fn baselineBytesMove(gpa: *const std.mem.Allocator, input: [*]const u8, n: usize, capacity: usize, fail: bool) usize {
+    return bytes.moveConsumer(false, gpa.*, input[0..n], capacity, fail) catch 0;
+}
+export fn wrapperBytesMove(gpa: *const std.mem.Allocator, input: [*]const u8, n: usize, capacity: usize, fail: bool) usize {
+    return bytes.moveConsumer(true, gpa.*, input[0..n], capacity, fail) catch 0;
+}
+export fn baselineBytesAdoptDead(gpa: *const std.mem.Allocator, allocation: [*]u8, capacity: usize, live_len: usize) void {
+    bytes.adoptDead(false, gpa.*, allocation[0..capacity], live_len);
+}
+export fn baselineBytesReplace(gpa: *const std.mem.Allocator, allocation: [*]u8, capacity: usize, live_len: usize, input: [*]const u8, n: usize) usize {
+    return bytes.replaceConsumer(false, gpa.*, allocation[0..capacity], live_len, input[0..n]) catch 0;
+}
+export fn wrapperBytesAdoptDead(gpa: *const std.mem.Allocator, allocation: [*]u8, capacity: usize, live_len: usize) void {
+    bytes.adoptDead(true, gpa.*, allocation[0..capacity], live_len);
+}
+export fn wrapperBytesReplace(gpa: *const std.mem.Allocator, allocation: [*]u8, capacity: usize, live_len: usize, input: [*]const u8, n: usize) usize {
+    return bytes.replaceConsumer(true, gpa.*, allocation[0..capacity], live_len, input[0..n]) catch 0;
+}

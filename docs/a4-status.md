@@ -1,0 +1,45 @@
+# A4 SecretBytes candidate — 2026-10-08
+
+Resumes a4 at c50dfa2 after the ABI correction 7b62798. Both commits and all predecessor notes are retained. This is an unlanded candidate, not a release or cloak adoption. The predecessor [ABI handoff](a3-abi-correction.md) predates the owner's instruction to continue independent A4 implementation while the compiler boundary is unresolved. A1 production code and the enum(Repr) correction remain intact. No A5 work is included.
+
+SecretBytes owns exactly allocator + full allocation slice + live length, with the same size/alignment as the handwritten owner in ci/bytes.zig. Initialization zeros full capacity; adoption validates live length before transfer and accepts undefined slack without reading it. A genuine exclusive full byte allocation with allocator-compatible u8 alignment is a caller obligation. Exposure borrows only the live prefix. Shrink securely erases removed bytes; grow zeros newly live bytes. Replacement rejects over-capacity input and overlap with any backing bytes before mutation, wipes displaced live material and copies only disjoint input. Empty input occupies no bytes.
+
+Reserve grows explicitly: allocate, initialize, copy live prefix, securely erase ENTIRE old capacity, free, then publish the replacement. There is no allocator resize/remap, implicit growth or bare-slice ownership escape. Failure leaves ownership, content and existing borrows intact; successful reserve ends old borrows. Move transfers into uninitialized disjoint descriptor storage without copying backing bytes or allocating; the source descriptor is erased and consumed. Both descriptors must sit outside owned backing storage. Deinit securely erases full capacity before rawFree, then invalidates the consumed descriptor without reading it again. rawFree uses the exact byte extent/alignment so std's Debug poison cannot precede the allocator's inspection.
+
+One semantic owner is a caller contract. Zig still permits descriptor copies, field reflection and escaped borrows: no compiler linearity, universal copy detection or no-spills guarantee is claimed. There is no automatic cleanup on abort/panic/process death. Normal errors use defers/errdefers. Caller inputs remain borrowed and require their own authorized wipes. Format fails before writing. No raw secret content is included in diagnostics or test failure messages.
+
+## Independent proof obligations
+
+- SecretBytes_test.zig observes each full allocation while still valid BEFORE forwarding free. It checks nonzero/undefined slack, zero capacity, shrink/regrow, adoption failure, live/slack/both-direction overlap, adjacency, two successive reserve failures, ownership/borrow preservation, no resize/remap calls, explicit move and normal/error consumer cleanup. It never reads freed memory.
+- NoResize under checkAllAllocationFailures exercises initial and both reserve allocations. A shrinking shakedown property uses a separate per-index live-set oracle over 128 generated traces of 48 operations. Cloak-like Key/PEM/DER/KDF fixtures stay inside aegis and do not establish adoption or TLS conformance.
+- ci/bytes_check.zig requires self-move rejection in Debug, ReleaseSafe and ReleaseFast and compiles the byte-owner surface for x86 32-bit, wasm32 and aarch64 freestanding. A cache-only deliberately broken wipe is rejected by the pre-free observer in all three modes; this validates the regression without modifying production. The std formatter compile-negative fixture must fail specifically for SecretNotFormattable.
+- ci/parity.zig pairs seven enclosing A4 consumers with an equivalent handwritten full-wipe owner: dead final use, error cleanup, resize, reserve, move, adopted dead storage and live replacement. check-parity includes the original 30 pairs, checks equal object symbol sizes and normalized instructions on baseline x86_64/aarch64 Linux in both release modes, and requires volatile dynamic allocation erasure. The adopted dead-use fixture retains the full-capacity argument as the wipe extent, rather than the live length or descriptor size.
+- The missing A4 surface was rejected before implementation. This proves absence of the feature, not a preexisting SecretBytes behavioral bug. The original failing-before raw ABI regression remains the real A3 repair regression.
+
+## Current measured cost and limits
+
+Analytic cost: O(capacity) initialization/cleanup, O(removed tail) shrink, O(new live bytes) grow, O(old live + new live) replacement, O(new capacity + live + old capacity) reserve, and constant-size descriptor transfer. Reserve allocates once and frees the old full extent; failed allocation does neither. There are no extra release fields, atomics or hidden backing copies.
+
+ReleaseFast synthetic paired consumer measurements use Zig 0.17.0 LLVM, stripped objects, native Apple M3 Max macOS 26.2 (25C56), the same bounded allocator and full wipe extent on both sides. Sixty-four exactly balanced, reproducibly randomized ABBA/BAAB pairs of 500,000 operations per timing follow warmup; best/median/p95/p99/spread and a 10,000-draw paired 95% bootstrap median-ratio interval are produced by bench/bytes.zig. These are owner costs, not cloak workload results or an OS allocation benchmark. All nine final intervals include 1.00; statistical overlap does not itself prove parity. The compiler merges both callbacks to the same address in each row. Earlier short, deterministically alternating campaigns produced two intervals above 1.00 despite those shared callbacks; those observations were retained and triggered randomized balanced ordering, longer timings and more samples. Host scheduling noise and outliers remain visible; no samples were discarded. The initial expanded campaign's spread display retained an obsolete 32-sample index; it was corrected to the last sample and the final output was verified against all retained pairs.
+
+| Workload | Baseline/wrapper median ns/op | Paired ratio 95% interval |
+|---|---:|---:|
+| 32-byte full owner | 13.125 / 13.130 | 0.99865318–1.00169999 |
+| 48-byte full owner | 14.507 / 14.505 | 0.99808017–1.00095433 |
+| 1056-byte Material extent | 35.079 / 35.075 | 0.99837658–1.00078288 |
+| 32 live / 256 capacity | 12.627 / 12.678 | 0.99751874–1.00227611 |
+| shrink 48→8 / 256 capacity | 17.274 / 17.275 | 0.99843849–1.00000243 |
+| reserve 64→256 / 48 live | 24.549 / 24.573 | 0.99825434–1.00054136 |
+| reserve allocation failure | 12.500 / 12.531 | 0.99997657–1.00354736 |
+| parser error cleanup | 13.073 / 13.056 | 0.99888565–1.00039737 |
+| explicit move + cleanup | 14.134 / 14.138 | 0.99960216–1.00081463 |
+
+## Landing blockers and continuation
+
+The fresh raw-integer audit still passes eight of nine cross-codegen profiles and native aarch64-macos separately linked execution. x86_64-windows-gnu still has 202 mismatched signed/unsigned 128-bit scalar/record caller pairs. The standalone no-aegis control reproduces the hidden return pointer. Upstream's x86_64 Windows classifier selects win_i128 for integers, but memory for enums larger than eight bytes. Preserving the enum API and all required profiles therefore needs a compiler-level correction and an owner-approved compiler input; no library shim, width exclusion, gate suppression or compiler patch was introduced.
+
+The latest published green dependencies verified for this candidate are preflight b28046cc22055fcd32640117fc0e6965283a8ae5 and shakedown 0ebf97bba845a93833f90be6befc49cdc51084f6 (successful CI run 37836509861). The canonical preflight plan regenerates the workflow; the inherited custom merge-tier Linux TSan job is preserved. Required checks remain enabled, including the new A4 release and move/portable gates. The README states WIP. Current targeted local results: 19/19 Debug Secret/SecretBytes tests, 15/15 A4 tests in each release mode, 6/6 Debug Guarded tests and 16/16 A3 tests in each release mode. Test compilation, negative compilation, all-mode move/portable checks, benchmark smoke and 37-pair release parity pass. The full default lint gate passes source quality, ziglint, namespace/layers, cast reasons, documentation, test imports and package paths, then fails the required raw ABI contract. No overall green gate is claimed.
+
+The assigned retained private trials checkout is unavailable. New raw evidence remains retained locally but has not been committed/pushed to private trials; no private evidence commit or outside comparison is claimed. That destination needs restoration or owner clarification. Prior public notes are preserved as instructed.
+
+No hosted FAST/MERGE or main fast-forward is justified by a red required ABI gate. Once the compiler input is legitimately corrected, rerun all required checks on the actual final head, publish evidence to private trials, then FAST, MERGE and genuine FFmain in that order. Cancel the resulting automatic main run only after a genuine fast-forward. A5 integrates the landed main in its own lane; this batch does not edit that tree or start later batches. Book drift remains the predecessor's stale floor/implementation/evidence tables; no book was edited.

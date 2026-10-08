@@ -1,8 +1,8 @@
 # aegis
 
-Explicit safety types for any Zig project: inline secrets, spin-guarded data, checked scalar arithmetic, distinct IDs and units, and executable contracts. Runtime code depends only on std; required wiping, locking, arithmetic, range and conversion checks remain enabled in every build.
+Explicit safety types for any Zig project: inline and allocated secrets, spin-guarded data, checked scalar arithmetic, distinct IDs and units, and executable contracts. Runtime code depends only on std; required wiping, locking, arithmetic, range and conversion checks remain enabled in every build.
 
-Work in progress. Implemented scope is v0 (`Secret(T)` and spin `Guarded(T)`) plus the A3 numeric/domain foundations. Changes land after exact-commit fast and merge gates pass. The full safety catalogue and consumer adoption remain later work.
+Work in progress. This branch contains v0 (`Secret(T)` and spin `Guarded(T)`), A3 numeric/domain foundations and the A4 `SecretBytes` candidate. The ABI correction and A4 are unlanded while the Windows 128-bit enum-return gate is red. Changes land after exact-commit fast and merge gates pass. The full safety catalogue and consumer adoption remain later work.
 
 ## Install
 
@@ -42,6 +42,8 @@ _ = timeout;
 
 `Secret(T)` accepts fixed pointer-free representations and rejects aggregates declaring `deinit`. This checks representation, not the semantic meaning of numeric values; callers must use inline material that owns no external resource. `expose`/`exposeMut` borrow; `moveInto` transfers into uninitialized disjoint storage and securely wipes the source. `deinit` erases the whole representation, including padding, using volatile std erasure. The consumed storage need not be a valid `T`; never read it as `T` afterward. Parser/caller temporaries and displaced values need their own wipes. The direct formatting hook returns `SecretNotFormattable` without writing; std's `{f}` rejects that error set at compile time. Reflection, `{any}`, field access and deliberate exposure can bypass the hook.
 
+`SecretBytes` owns a full byte allocation with explicit live length and capacity. `init(gpa, capacity)` zeros the full region; `adopt(gpa, allocation, len)` consumes a genuine full allocator-owned byte slice only on success. `expose`/`exposeMut` borrow the live prefix. `resizeWithinCapacity` wipes a removed tail and zeros newly live bytes; `replace` rejects overlap with any backing bytes before mutation. `reserve` explicitly allocates, zeros, copies the live prefix and securely wipes the entire old capacity before freeing it; it never resizes or remaps. OOM preserves ownership and borrows. `moveInto` transfers into uninitialized disjoint descriptor storage; cleanup erases full capacity before free. Formatting fails closed. There is no implicit growth, clone, copy-out or bare-slice ownership escape API; ordinary Zig descriptor copies and reflection remain caller bypasses. [A4 status and ownership contract](docs/a4-status.md) records the candidate's checks and limits.
+
 `Guarded(T)` keeps data beside cloak's acquire/release atomic spin lock. `acquire`, immediate `defer held.deinit()`, and `held.value()` replace a separate lock/data pair. Published owners have stable addresses. Sections are bounded: no blocking, yielding, recursive acquisition or arbitrary callbacks. Acquisition is noncancelable with no fairness guarantee. The consumer owns data cleanup, reclamation and any escaped-pointer lifetime.
 
 Zig permits struct copies, field access and escaped pointers. These contracts do not provide a borrow checker, linear types, automatic destructors or universal copied-guard detection. Cleanup is explicit on normal/error returns; abort/process death has no cleanup guarantee. Wipes cover only the specified storage, not old copies, registers, spills, paging, core dumps or hardware side channels. No constant-time cryptographic guarantee is supplied.
@@ -58,7 +60,7 @@ Zig permits struct copies, field access and escaped pointers. These contracts do
 
 ## Scope
 
-No allocated secret buffers, reference counting, blocking locks, pools, handles, generic deleters or code analysis. Runtime closure is std only. Tags, checks and explicit raw boundaries are API discipline; Zig fields/reflection can bypass them. [Future glint rule specs](docs/a3-enforcement.md) record the raw patterns and permitted written-reason exceptions; those rules are not yet built or enforced. [A3 evidence](docs/a3-report.md) records checks and limits. [Extraction provenance](docs/extraction.md) distinguishes published cloak evidence from open consumer adoption gates. [Performance evidence](docs/performance.md) compares identical wipe/locking semantics: zero abstraction overhead does not mean those operations have zero cost.
+No reference counting, blocking locks, pools, handles, generic deleters or code analysis. Runtime closure is std only. Tags, checks and explicit raw boundaries are API discipline; Zig fields/reflection can bypass them. [Future glint rule specs](docs/a3-enforcement.md) record the raw patterns and permitted written-reason exceptions; those rules are not yet built or enforced. [A3 evidence](docs/a3-report.md) records checks and limits. [Extraction provenance](docs/extraction.md) distinguishes published cloak evidence from open consumer adoption gates. [Performance evidence](docs/performance.md) compares identical wipe/locking semantics: zero abstraction overhead does not mean those operations have zero cost.
 
 ## Built with
 
@@ -66,7 +68,7 @@ No allocated secret buffers, reference counting, blocking locks, pools, handles,
 
 ## Testing
 
-Run targeted cases with `zig build test -Dtest-filter=A3`, `-Dtest-filter=Secret`, `-Dtest-filter=Guarded` or `-Dtest-filter=Consumer`. `zig build lint` checks source/docs/structure, negative compilation, consumer isolation and strict codegen parity. `zig build check` compiles the suite; `zig build bench` runs own-operation A/B manually. The `test-scalars` and `check-contracts` gates retain release-mode failures; `check-negative` rejects cross-domain use. CI smoke-checks benchmark programs without timing gates. The hosted merge includes targeted Linux TSan; [validation status](docs/validation.md) records execution evidence.
+Run targeted cases with `zig build test -Dtest-filter=A3`, `-Dtest-filter=Secret`, `-Dtest-filter=A4`, `-Dtest-filter=Guarded` or `-Dtest-filter=Consumer`. `zig build lint` checks source/docs/structure, negative compilation, consumer isolation and strict codegen parity. `zig build check` compiles the suite; `zig build bench` runs own-operation A/B manually. The `test-secret-bytes` and `check-secret-bytes` gates exercise release cleanup and portable byte-owner contracts. The `test-scalars` and `check-contracts` gates retain release-mode failures; `check-negative` rejects cross-domain use. CI smoke-checks benchmark programs without timing gates. The hosted merge includes targeted Linux TSan; [validation status](docs/validation.md) records execution evidence.
 
 ## Licence
 

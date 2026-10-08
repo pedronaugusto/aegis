@@ -37,6 +37,16 @@
       "zig",
       "build",
       "test-scalars"
+    ],
+    [
+      "zig",
+      "build",
+      "check-secret-bytes"
+    ],
+    [
+      "zig",
+      "build",
+      "test-secret-bytes"
     ]
   ],
   "docs": {

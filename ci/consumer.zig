@@ -1,7 +1,12 @@
+const std = @import("std");
 const aegis = @import("aegis");
 pub fn main() !void {
     var secret = aegis.Secret([32]u8).init(@splat(0));
     defer secret.deinit();
+    var allocated = try aegis.SecretBytes.init(std.heap.page_allocator, 64);
+    defer allocated.deinit();
+    try allocated.replace("consumer fixture");
+    try allocated.reserve(96);
     var shared = aegis.Guarded(u64).init(0);
     var held = shared.acquire();
     defer held.deinit();
