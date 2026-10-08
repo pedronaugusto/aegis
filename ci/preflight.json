@@ -41,6 +41,16 @@
     [
       "zig",
       "build",
+      "check-secret-bytes"
+    ],
+    [
+      "zig",
+      "build",
+      "test-secret-bytes"
+    ],
+    [
+      "zig",
+      "build",
       "check-choices"
     ],
     [

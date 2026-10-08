@@ -11,7 +11,7 @@ pub fn main(init: std.process.Init) !void {
         defer init.gpa.free(result.stdout);
         defer init.gpa.free(result.stderr);
         if (result.term != .exited or result.term.exited != 0) {
-            var out = std.Io.File.stderr().writer(init.io, &.{});
+            var out = std.Io.File.stderr().writerStreaming(init.io, &.{});
             try out.interface.writeAll(result.stderr);
             return error.ContractCompilationFailed;
         }
@@ -28,19 +28,15 @@ pub fn main(init: std.process.Init) !void {
         defer init.gpa.free(result.stdout);
         defer init.gpa.free(result.stderr);
         if (result.term != .exited or result.term.exited != 0) {
-            var out = std.Io.File.stderr().writer(init.io, &.{});
+            var out = std.Io.File.stderr().writerStreaming(init.io, &.{});
             try out.interface.writeAll(result.stderr);
             return error.PortableScalarCompilationFailed;
         }
     }
-    for ([_][]const u8{ "x86_64-linux-gnu", "aarch64-linux-gnu", "x86-linux-gnu", "x86_64-windows-gnu", "aarch64-windows-gnu", "x86_64-macos", "aarch64-macos", "wasm32-freestanding" }) |target| {
-        const result = try std.process.run(init.gpa, init.io, .{ .argv = &.{ args[1], "build-obj", "-OReleaseFast", "-target", target, "--dep", "aegis", "-Mroot=ci/abi.zig", "-Maegis=src/root.zig", try a.print("-femit-bin=.zig-cache/abi-{s}.o", .{target}) }, .stderr_limit = .limited(16384) });
-        defer init.gpa.free(result.stdout);
-        defer init.gpa.free(result.stderr);
-        if (result.term != .exited or result.term.exited != 0) {
-            var out = std.Io.File.stderr().writer(init.io, &.{});
-            try out.interface.writeAll(result.stderr);
-            return error.DirectScalarAbiRejected;
-        }
-    }
+    const abi = try std.process.run(init.gpa, init.io, .{ .argv = &.{ args[1], "run", "ci/abi_check.zig", "--", args[1] }, .stderr_limit = .limited(16384) });
+    defer init.gpa.free(abi.stdout);
+    defer init.gpa.free(abi.stderr);
+    var out = std.Io.File.stderr().writerStreaming(init.io, &.{});
+    try out.interface.writeAll(abi.stderr);
+    if (abi.term != .exited or abi.term.exited != 0) return error.RawIntegerAbiRejected;
 }

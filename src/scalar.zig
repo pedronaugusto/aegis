@@ -4,6 +4,7 @@ pub fn integer(comptime T: type) void {
     if (@typeInfo(T) != .int or @typeInfo(T).int.bits == 0)
         @compileError("aegis requires a nonzero-width integer representation");
 }
+/// Enum representation widths; 128-bit values are supported in Zig, not promised C ABI types.
 pub fn abiInteger(comptime T: type) void {
     integer(T);
     switch (@bitSizeOf(T)) {

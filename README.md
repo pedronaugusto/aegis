@@ -1,9 +1,8 @@
 # aegis
 
-Explicit safety types for any Zig project: inline secrets, spin-guarded data, checked scalar arithmetic, distinct IDs and units, and executable contracts. Runtime code depends only on std; required wiping, locking, arithmetic, range and conversion checks remain enabled in every build.
+Explicit safety types for any Zig project: inline and allocated secrets, spin-guarded data, checked scalar arithmetic, audited value kernels, distinct IDs and units, and executable contracts. Runtime code depends only on std; required wiping, locking, arithmetic, range and conversion checks remain enabled in every build.
 
-Work in progress. Implemented scope is v0 (`Secret(T)` and spin `Guarded(T)`) plus the A3 numeric/domain foundations. The separate A5 branch adds Choice kernels and
-remains work in progress pending A4-first integration. Changes land after exact-commit fast and merge gates pass. The full safety catalogue and consumer adoption remain later work.
+Work in progress. Implemented: v0 (`Secret(T)` and spin `Guarded(T)`), A3 numeric/domain foundations, A4 `SecretBytes` and A5 Choice/compare/select value kernels. The full safety catalogue and consumer adoption remain later work.
 
 ## Install
 
@@ -43,10 +42,11 @@ _ = timeout;
 
 `Secret(T)` accepts fixed pointer-free representations and rejects aggregates declaring `deinit`. This checks representation, not the semantic meaning of numeric values; callers must use inline material that owns no external resource. `expose`/`exposeMut` borrow; `moveInto` transfers into uninitialized disjoint storage and securely wipes the source. `deinit` erases the whole representation, including padding, using volatile std erasure. The consumed storage need not be a valid `T`; never read it as `T` afterward. Parser/caller temporaries and displaced values need their own wipes. The direct formatting hook returns `SecretNotFormattable` without writing; std's `{f}` rejects that error set at compile time. Reflection, `{any}`, field access and deliberate exposure can bypass the hook.
 
+`SecretBytes` owns a full byte allocation with explicit live length and capacity. `init(gpa, capacity)` zeros the full region; `adopt(gpa, allocation, len)` consumes a genuine full allocator-owned byte slice only on success. `expose`/`exposeMut` borrow the live prefix. `resizeWithinCapacity` wipes a removed tail and zeros newly live bytes; `replace` rejects overlap with any backing bytes before mutation. `reserve` explicitly allocates, zeros, copies the live prefix and securely wipes the entire old capacity before freeing it; it never resizes or remaps. OOM preserves ownership and borrows. `moveInto` transfers into uninitialized disjoint descriptor storage; cleanup erases full capacity before free. Formatting fails closed. There is no implicit growth, clone, copy-out or bare-slice ownership escape API; ordinary Zig descriptor copies and reflection remain caller bypasses. [Design](docs/design.md) records the ownership contract.
+
 `Guarded(T)` keeps data beside cloak's acquire/release atomic spin lock. `acquire`, immediate `defer held.deinit()`, and `held.value()` replace a separate lock/data pair. Published owners have stable addresses. Sections are bounded: no blocking, yielding, recursive acquisition or arbitrary callbacks. Acquisition is noncancelable with no fairness guarantee. The consumer owns data cleanup, reclamation and any escaped-pointer lifetime.
 
-Zig permits struct copies, field access and escaped pointers. These contracts do not provide a borrow checker, linear types, automatic destructors or universal copied-guard detection. Cleanup is explicit on normal/error returns; abort/process death has no cleanup guarantee. Wipes cover only the specified storage, not old copies, registers, spills, paging, core dumps or hardware side channels. The inline ownership types make no constant-time cryptographic claim;
-A5 value-kernel claims are limited to the [audited compiler boundary](docs/constant-time.md).
+Zig permits struct copies, field access and escaped pointers. These contracts do not provide a borrow checker, linear types, automatic destructors or universal copied-guard detection. Cleanup is explicit on normal/error returns; abort/process death has no cleanup guarantee. Wipes cover only the specified storage, not old copies, registers, spills, paging, core dumps or hardware side channels. A5 supports only its checked compiler/target boundary; hardware and whole-program constant-time assurance remain unestablished. [Design](docs/design.md) defines support, explicit declassification and limits.
 
 ## API
 
@@ -54,13 +54,15 @@ A5 value-kernel claims are limited to the [audited compiler boundary](docs/const
 
 `id.Id(Tag, Repr)` and `NonZero` brand identities; `Counter` externally serializes an unsigned nonwrapping issuer. IDs have eql/compare/hash and explicit endian import/export, with no arithmetic or cross-domain cast. Raw imports do not establish authenticity or uniqueness.
 
-`units.Count(Tag, Repr)`, `Bytes`, `Bits`, `Duration(Unit, Repr)` and `Instant(ClockTag, Unit, Repr)` retain scalar size/alignment. Counts and durations support typed add/sub and scalar mul. Units/representation conversions are checked; `.down` rounds toward negative infinity and `.up` toward positive infinity. Negative input never converts to unsigned. Instants add/subtract durations and compute same-clock differences; changing clock requires sampled correspondence. `.real`, `.awake`, `.boot` and the other std.Io clock tags support checked timestamp adapters. Custom clock types own their epoch interpretation. Wait APIs keep std.Io.Timeout. IDs, units and ranged integers use a one-field extern struct and can appear directly in C function signatures and structs. Their repr must be a signed/unsigned 8, 16, 32, 64 or 128-bit integer (including usize/isize); other widths are rejected explicitly. Encoding writes the exact repr width/endian rather than copying ABI storage. Checked/Saturating retain arbitrary nonzero integer widths; non-byte widths reject byte encoding. Foreign callers must honor nonzero/range contracts or checked import must validate their return at the boundary.
+`units.Count(Tag, Repr)`, `Bytes`, `Bits`, `Duration(Unit, Repr)` and `Instant(ClockTag, Unit, Repr)` retain scalar size/alignment. Counts and durations support typed add/sub and scalar mul. Units/representation conversions are checked; `.down` rounds toward negative infinity and `.up` toward positive infinity. Negative input never converts to unsigned. Instants add/subtract durations and compute same-clock differences; changing clock requires sampled correspondence. `.real`, `.awake`, `.boot` and the other std.Io clock tags support checked timestamp adapters. Custom clock types own their epoch interpretation. Wait APIs keep std.Io.Timeout. IDs, units and ranged integers use non-exhaustive enum(Repr) storage. The raw-integer ABI regression validates actual typed calls against separately compiled raw-integer exports, including record fields. The C ABI guarantee covers signed/unsigned 8–64-bit integers and usize/isize on every configured target, including 32-bit x86 and Windows. 128-bit repr values remain usable Zig types but are NOT promised C ABI types and are excluded from the raw-integer ABI fixture/audit; MSVC has no 128-bit integer, and Zig 0.17 lowers enum(u128)/enum(i128) returns differently from raw integers on x86-64 Windows. Equal layout alone never proves call interoperability. Their repr must be a signed/unsigned 8, 16, 32, 64 or 128-bit integer (including usize/isize); other widths are rejected explicitly. Encoding writes the exact repr width/endian rather than copying ABI storage. Checked/Saturating retain arbitrary nonzero integer widths; non-byte widths reject byte encoding. Foreign callers must honor nonzero/range contracts or checked import must validate their return at the boundary.
 
 `assert.invariant`, `pre` and `post` fail-stop in every build with a static public message. Peer failures return errors. `debug` is optional and still evaluates its argument; `debugCheck` removes the predicate call in both release modes. `maybe` accepts a side-effect-free possibility without asserting truth; `maybeCount` instruments caller-owned storage only in test builds. Contracts do not unwind cleanup on panic.
 
 ## Scope
 
-No allocated secret buffers, reference counting, blocking locks, pools, handles, generic deleters or code analysis. Runtime closure is std only. Tags, checks and explicit raw boundaries are API discipline; Zig fields/reflection can bypass them. [Future glint rule specs](docs/a3-enforcement.md) record the raw patterns and permitted written-reason exceptions; those rules are not yet built or enforced. [A3 evidence](docs/a3-report.md) records checks and limits. [Extraction provenance](docs/extraction.md) distinguishes published cloak evidence from open consumer adoption gates. [Performance evidence](docs/performance.md) compares identical wipe/locking semantics: zero abstraction overhead does not mean those operations have zero cost.
+`aegis.secret` exposes `Choice`, `equal`, `equalBytes`, `compareUnsigned` and `OrderChoices`; choices offer logic, integer/byte selection and explicit `declassify(comptime reason)`. Public length and overlap validation remain enabled.
+
+No reference counting, blocking locks, pools, handles, generic deleters or code analysis. Runtime closure is std only. Tags, checks and explicit raw boundaries are API discipline; Zig fields/reflection can bypass them. [Design](docs/design.md) records the ownership and foreign-boundary contracts. Glint admission and consumer adoption remain later work. Equal handwritten wipe/locking cost does not mean those operations have zero cost.
 
 ## Built with
 
@@ -68,22 +70,8 @@ No allocated secret buffers, reference counting, blocking locks, pools, handles,
 
 ## Testing
 
-Run targeted cases with `zig build test -Dtest-filter=A3`, `-Dtest-filter=Secret`, `-Dtest-filter=Guarded` or `-Dtest-filter=Consumer` / `-Dtest-filter=A5`. `zig build lint` checks source/docs/structure, negative compilation, consumer isolation and strict codegen parity. `zig build check` compiles the suite; `zig build bench` runs own-operation A/B manually. The `test-scalars` and `check-contracts` gates retain release-mode failures; `check-negative` rejects cross-domain use. CI smoke-checks benchmark programs without timing gates. The hosted merge includes targeted Linux TSan; [validation status](docs/validation.md) records execution evidence.
+Run targeted cases with `zig build test -Dtest-filter=A3`, `-Dtest-filter=Secret`, `-Dtest-filter=A4`, `-Dtest-filter=A5`, `-Dtest-filter=Guarded` or `-Dtest-filter=Consumer`. `zig build lint` checks source/docs/structure, negative compilation, consumer isolation and strict codegen parity. `zig build check` compiles the suite; `zig build bench` runs own-operation A/B manually. The `test-secret-bytes` and `check-secret-bytes` gates exercise release cleanup and portable byte-owner contracts. The `check-choices` and `check-choices-negative` gates audit enclosing callers and disclosure/support contracts. The `test-scalars` and `check-contracts` gates retain release-mode failures; `check-negative` rejects cross-domain use. CI smoke-checks benchmark programs without timing gates. The hosted merge includes targeted Linux TSan.
 
 ## Licence
 
 MIT; see [LICENSE](LICENSE).
-
-## Choice and byte kernels (A5 work in progress)
-
-`aegis.secret` has a copyable one-bit `Choice`, logical operations, fixed/dynamic
-byte equality, unsigned endian ordering, and integer/byte selection. Decisions
-stay choices until an explicit `declassify("completed public verdict")`.
-Dynamic lengths are public and mismatch is an error; byte selection rejects
-partial overlap before writing. Formatting a choice is rejected.
-
-The audited compiler boundary is Zig 0.17.0 LLVM with the listed baseline CPU,
-OS/ABI, mode and mitigation profiles. Unsupported profiles fail explicitly.
-See [contracts and limits](docs/constant-time.md); these kernels do not prove
-arbitrary caller arithmetic or whole-program constant time. A5 has not adopted
-any consumer and awaits A4's genuine main landing before final integration.

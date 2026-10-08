@@ -2,7 +2,8 @@
 const std = @import("std");
 const owner_names = [_][]const u8{ "secret_s32", "transfer_s32", "secret_s48", "transfer_s48", "secret_material", "transfer_material", "cleanup", "cleanup_material", "budget", "job", "increment" };
 const numeric_names = [_][]const u8{ "numeric_add", "numeric_sub", "numeric_mul", "numeric_div", "numeric_rem", "numeric_shift", "numeric_saturating", "numeric_ranged", "numeric_cast", "numeric_identity", "numeric_counter", "numeric_count", "numeric_bits", "numeric_duration", "numeric_rounding", "numeric_instant", "numeric_invariant", "numeric_diagnostics", "numeric_encoding" };
-const names = owner_names ++ numeric_names;
+const bytes_names = [_][]const u8{ "bytes_dead", "bytes_cleanup", "bytes_resize", "bytes_reserve", "bytes_move", "bytes_adopt_dead", "bytes_replace" };
+const names = owner_names ++ numeric_names ++ bytes_names;
 pub fn main(init: std.process.Init) !void {
     const a = init.arena.allocator();
     const args = try init.minimal.args.toSlice(a);
@@ -25,7 +26,7 @@ pub fn main(init: std.process.Init) !void {
             const ir = try dir.readFileAlloc(init.io, try a.print("{s}.ll", .{stem}), a, .limited(32 * 1024 * 1024));
             const object = try dir.readFileAlloc(init.io, try a.print("{s}.o", .{stem}), a, .limited(32 * 1024 * 1024));
             var evidence: std.Io.Writer.Allocating = .init(a);
-            try evidence.writer.print("# {s} {s} parity\n\nZig 0.17.0, LLVM, baseline CPU, stripped object. All owner and A3 scalar pairs have identical emitted instructions (shared aliases or normalized assembly); storage/alignment assertions compile.\n\n", .{ target, mode });
+            try evidence.writer.print("# {s} {s} parity\n\nZig 0.17.0, LLVM, baseline CPU, stripped object. All owner, A3 scalar and A4 byte-owner pairs have identical emitted instructions (shared aliases or normalized assembly); storage/alignment assertions compile.\n\n", .{ target, mode });
             for (names) |name| {
                 const base = try alias(a, ir, try exportName(a, "baseline", name));
                 const wrap = try alias(a, ir, try exportName(a, "wrapper", name));
@@ -48,16 +49,27 @@ pub fn main(init: std.process.Init) !void {
                     }
                 }
                 const body = try function(a, ir, base);
-                const secret = std.mem.find(u8, name, "secret") != null or std.mem.startsWith(u8, name, "transfer") or std.mem.startsWith(u8, name, "cleanup");
+                const secret = std.mem.startsWith(u8, name, "bytes_") or std.mem.find(u8, name, "secret") != null or std.mem.startsWith(u8, name, "transfer") or std.mem.startsWith(u8, name, "cleanup");
                 if (secret) {
                     if (std.mem.find(u8, body, "store volatile") == null and std.mem.find(u8, body, "i1 true)") == null) return error.MissingVolatileErasure;
+                    if (std.mem.startsWith(u8, name, "bytes_")) {
+                        // Descriptor-only erasure is insufficient: require a
+                        // volatile allocation memset with a runtime extent.
+                        var allocation_wipe = false;
+                        var body_lines = std.mem.splitScalar(u8, body, '\n');
+                        while (body_lines.next()) |line| {
+                            if (std.mem.find(u8, line, "@llvm.memset.") != null and std.mem.find(u8, line, "i64 %") != null and std.mem.find(u8, line, "i1 true)") != null) allocation_wipe = true;
+                        }
+                        if (!allocation_wipe) return error.MissingFullCapacityErasure;
+                        if (std.mem.eql(u8, name, "bytes_adopt_dead") and std.mem.find(u8, body, "i64 %2, i1 true)") == null) return error.MissingAdoptedCapacityErasure;
+                    }
                 } else if (!std.mem.startsWith(u8, name, "numeric_")) {
                     const acquire = if (std.mem.startsWith(u8, target, "x86")) std.mem.find(u8, body, "acquire monotonic") != null else std.mem.find(u8, body, "@llvm.aarch64.ldaxr") != null and std.mem.find(u8, body, "@llvm.aarch64.stxr") != null;
                     if (!acquire or std.mem.find(u8, body, "release") == null) return error.MissingLockOrdering;
                 }
                 try evidence.writer.print("## {s}\n\nSymbols → `{s}` / `{s}`; baseline/wrapper machine code {d}/{d} bytes.\n\n```asm\n{s}```\n\n```llvm\n{s}\n```\n\n", .{ name, base, wrap, baseline_bytes, wrapper_bytes, emitted, body });
             }
-            if (record) try dir.writeFile(init.io, .{ .sub_path = try a.print("docs/codegen-a3-{s}-{s}.md", .{ target, mode }), .data = try a.print("{s}\n", .{std.mem.trimEnd(u8, evidence.written(), "\n")}) });
+            if (record) try dir.writeFile(init.io, .{ .sub_path = try a.print(".zig-cache/parity/codegen-{s}-{s}.md", .{ target, mode }), .data = try a.print("{s}\n", .{std.mem.trimEnd(u8, evidence.written(), "\n")}) });
         }
     }
 }
