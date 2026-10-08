@@ -1,0 +1,1 @@
+{"sources":["src"],"test_roots":["src/tests.zig"],"test_dependencies":["shakedown"]}

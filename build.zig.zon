@@ -1,0 +1,11 @@
+.{
+    .name = .aegis,
+    .fingerprint = 0x5e23831cba68ccae,
+    .version = "0.0.0",
+    .minimum_zig_version = "0.17.0",
+    .paths = .{ "build.zig", "build.zig.zon", "LICENSE", "README.md" },
+    .dependencies = .{
+        .preflight = .{ .url = "https://github.com/pedronaugusto/preflight/archive/9af905ed85cab6dbb19d9431c65ee3f41fbaa74d.tar.gz", .hash = "preflight-0.1.0-LX1ZwsWpBgALd07i_vgcbSkkKQ71JAHcV3xcZN8SyG3r", .lazy = true },
+        .shakedown = .{ .url = "https://github.com/pedronaugusto/shakedown/archive/d5d19d39bc60cec59456aca947a3a7b484b87318.tar.gz", .hash = "shakedown-0.1.0-BR8U4wgEDgAy2m7lSRtXgIZd_M19hPZ256UdmaPT_9Nj", .lazy = true },
+    },
+}
