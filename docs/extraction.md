@@ -1,6 +1,6 @@
 # C1 extraction and report reconciliation
 
-Inspected 2026-10-08. This is aegis v0 extraction evidence, not independent security review or permission to adopt it in cloak. The book design snapshot is `33495f5d324b904c6e8ebe33f6c54a970bb11303`, `workspaces/tycho/missions/packages-released/designs/aegis.md`; safety §3/§6 remain binding. Book and active cloak were read only.
+Inspected 2026-10-08. This is aegis v0 extraction evidence, not independent security review or permission to adopt it in cloak. The original book design snapshot is `33495f5d324b904c6e8ebe33f6c54a970bb11303`. The complete refreshed catalogue was read at `f5cc108aa101a2065a27c252bab6426ea0d0537a`, `workspaces/tycho/missions/packages-released/designs/aegis.md`; its §3.1.1 Secret and §3.2.1 spin Guarded preserve v0, §4 retains the wiping/locking parity gate, and §5 preserves A0–A2 before future A3–A11. Safety §3/§6 remain binding. Book and active cloak were read only.
 
 ## Immutable inputs
 
@@ -33,7 +33,7 @@ The original source links below identify the extraction input; current remediati
 
 [Guarded](https://github.com/pedronaugusto/cloak/blob/d3d790f14211924ef974918cdfe2203b8e90ab62/src/services/Guarded.zig) is one atomic bool beside T, weak CAS acquire/monotonic failure with spin hints, pointer guard, and release store. [Budget](https://github.com/pedronaugusto/cloak/blob/d3d790f14211924ef974918cdfe2203b8e90ab62/src/services/Budget.zig) reserves/releases bounded counts under that guard. [Job](https://github.com/pedronaugusto/cloak/blob/d3d790f14211924ef974918cdfe2203b8e90ab62/src/services/Job.zig) retains completion state independently of a connection, drops the lock for native evaluation, and keeps abandoned work charged until executor reaping. The aegis consumer fixture models only these charge/phase/result boundaries, including run/abandon/take races; it does not execute native trust or prove OS policy.
 
-Job's abandon, discarded-result and final teardown paths can call Path.deinit while held; take computes the request digest while held. Allocator cleanup and input-scaled digest work have not been established as bounded nonblocking spin sections. Cloak adoption must detach cleanup outside the section or establish the required bounds in its own authorized batch. Aegis adds no alternative lock backend and changes no Job source. Lookout callback/overflow migration and its TSan remain a separate second-consumer gate.
+Job's abandon, discarded-result and final teardown paths can call Path.deinit while held; take computes the request digest while held. Allocator cleanup and input-scaled digest work have not been established as bounded nonblocking spin sections. Cloak adoption must detach cleanup outside the section or establish the required bounds in its own authorized batch. Aegis adds no alternative lock backend and changes no Job source. Lookout callback/overflow migration and its TSan remain later W1 adoption work, not a v0 admission requirement.
 
 ## Reports reconciled, limits retained
 
@@ -53,4 +53,4 @@ The named SecretNotFormattable error is preserved. Zig 0.17 Writer `{f}` accepts
 
 The current C1 ledger adds catalogue regressions and updated smoke counts; their duration/security/resource limits remain explicit. Its 12-target checks are compile evidence, and the Windows test early returns on macOS are not native Windows execution. The later source does not turn the original reports into aegis acceptance proof.
 
-The book's §9 questions are resolved by owner instructions: equivalent hand-written locking/wiping is the release baseline; the repo remains PRIVATE. §10's report access issue is reconciled above, but its C1 security/adoption gates remain open. The implementation/test/performance sections are no longer merely future work. No book change was made.
+The original design's baseline and visibility questions are resolved by owner instructions: equivalent hand-written locking/wiping is the release baseline; the repo remains PRIVATE. The refreshed §6 original-report gap is reconciled above for A0 extraction, while C1 security and spin-site adoption gates remain open. V0 branch implementation, local tests and measured parity/timing now have evidence in this repository; later catalogue API/cost/constant-time/ownership claims remain proposed gates, not measured evidence. Main remains the floor until hosted acceptance. No book change was made and no A3–A11 work or cloak adoption is included.
