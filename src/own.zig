@@ -11,6 +11,13 @@ fn bind(state: *State, address: *const anyopaque) void {
         state.address = address;
     }
 }
+fn transfer(comptime T: type, source: *T, destination: *T) void {
+    const has_move = switch (@typeInfo(T)) {
+        .@"struct", .@"union", .@"enum" => @hasDecl(T, "moveInto"),
+        else => false,
+    };
+    if (has_move) source.moveInto(destination) else destination.* = source.*;
+}
 fn consume(state: *State) void {
     if (diagnostics) state.live = false;
 }
@@ -40,13 +47,14 @@ pub fn Owned(comptime T: type, comptime cleanup: fn (*T) void) type {
         pub fn moveInto(self: *Self, destination: *Self) void {
             bind(&self.state, self);
             std.debug.assert(self != destination);
-            destination.* = .init(self.data);
+            destination.* = .{ .data = undefined };
+            transfer(T, &self.data, &destination.data);
             consume(&self.state);
         }
         /// Transfers payload into uninitialized disjoint storage; deinit is no longer owed.
         pub fn take(self: *Self, destination: *T) void {
             bind(&self.state, self);
-            destination.* = self.data;
+            transfer(T, &self.data, destination);
             consume(&self.state);
         }
         /// Runs exactly once, without implicit waiting, allocation or unwind on abort.

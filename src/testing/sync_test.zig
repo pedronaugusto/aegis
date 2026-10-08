@@ -25,6 +25,7 @@ test "A6 blocking acquisition cancel grants nothing and preserves immediate sema
 test "A6 rw all-build reader writer admission and cancel rollback" {
     const fio = try shake.FaultIo.init(t.allocator, t.io, .{ .plan = &.{
         .{ .at = .{ .nth = .{ .call = .futexWait, .n = 1 } }, .fault = .cancel },
+        .{ .at = .{ .nth = .{ .call = .futexWait, .n = 2 } }, .fault = .cancel },
     } });
     defer fio.deinit();
     const io = fio.io();
@@ -43,6 +44,8 @@ test "A6 rw all-build reader writer admission and cancel rollback" {
     var write = try owner.writeUncancelable(io);
     write.value().* = 43;
     try t.expect((try owner.tryRead(io)) == null);
+    try t.expectError(error.Canceled, owner.read(io));
+    try t.expectEqual(@as(usize, 1), owner.admitted.load(.monotonic));
     write.deinit(io);
     var read3 = try owner.readUncancelable(io);
     try t.expectEqual(@as(u32, 43), read3.value().*);
@@ -380,4 +383,25 @@ test "A6 Once finite waiting ceiling does not disturb initializer" {
     var state: OnceLimit = .{};
     defer state.race.once.deinit(cleanupValue);
     try t.expectEqual(shake.Sim.Outcome.finished, sim.run(OnceLimit.main, .{ &state, sim.io() }));
+}
+
+fn canceledWinner(state: *OnceRace, io: Io) !void {
+    var winner = try io.concurrent(OnceRace.get, .{ state, io });
+    try state.started.wait(io);
+    var waiter = try io.concurrent(OnceRace.get, .{ state, io });
+    try io.sleep(.fromNanoseconds(1), .awake);
+    try t.expectError(error.Canceled, winner.cancel(io));
+    state.finish.set(io);
+    try t.expectEqual(@as(u64, 456), (try waiter.await(io)).b);
+    try t.expectEqual(@as(usize, 2), state.calls);
+    try t.expectEqual(@as(usize, 0), state.once.changed.count);
+}
+test "A6 canceled initializer wakes existing waiters to retry publication" {
+    for (0..4) |seed| {
+        const sim = try shake.Sim.init(t.allocator, .{ .seed = seed });
+        defer sim.deinit();
+        var state: OnceRace = .{};
+        defer state.once.deinit(cleanupValue);
+        try t.expectEqual(shake.Sim.Outcome.finished, sim.run(canceledWinner, .{ &state, sim.io() }));
+    }
 }

@@ -235,3 +235,30 @@ test "A7 dynamic FIFO wrap growth ownership and every allocation failure" {
     try queue.pop(&x);
     try t.expectEqual(@as(u32, 3), x);
 }
+
+const aegis = @import("../root.zig");
+fn secretCleanup(value: *aegis.Secret([32]u8)) void {
+    value.deinit();
+}
+fn bytesCleanup(value: *aegis.SecretBytes) void {
+    value.deinit();
+}
+test "A7 Owned preserves nested secret transfer erasure and full-capacity cleanup" {
+    const S = own.Owned(aegis.Secret([32]u8), secretCleanup);
+    var secret = S.init(.init(@splat(42)));
+    var moved: S = undefined;
+    secret.moveInto(&moved);
+    for (std.mem.asBytes(&secret.data)) |byte| try t.expectEqual(@as(u8, 0), byte);
+    var raw: aegis.Secret([32]u8) = undefined;
+    moved.take(&raw);
+    for (std.mem.asBytes(&moved.data)) |byte| try t.expectEqual(@as(u8, 0), byte);
+    raw.deinit();
+    const B = own.Owned(aegis.SecretBytes, bytesCleanup);
+    var bytes = B.init(try aegis.SecretBytes.init(t.allocator, 64));
+    try bytes.borrowMut().replace("key");
+    var final: B = undefined;
+    bytes.moveInto(&final);
+    for (std.mem.asBytes(&bytes.data)) |byte| try t.expectEqual(@as(u8, 0), byte);
+    try t.expectEqual(@as(usize, 64), final.borrow().capacity());
+    final.deinit();
+}
