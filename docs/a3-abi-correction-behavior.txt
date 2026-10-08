@@ -26,4 +26,3 @@ test success
 +- run exe numeric success 277ms
    +- compile exe numeric debug native cached 112ms MaxRSS:31M
    +- WriteFile success
-

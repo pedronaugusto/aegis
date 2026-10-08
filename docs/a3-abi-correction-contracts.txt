@@ -23,4 +23,3 @@ Build Summary: 1/3 steps succeeded (1 failed)
 check-contracts transitive failure
 +- run exe aegis-contracts failure
    +- compile exe aegis-contracts safe native success 5s MaxRSS:358M
-
