@@ -3,7 +3,7 @@
 const std = @import("std");
 const s = @import("aegis").secret;
 const base = @import("choice_baseline.zig");
-pub const names = .{ "equal0", "equal1", "equal32", "equal48", "equal512", "dynamic", "order_big", "order_little", "order_runtime", "int8", "int16", "int32", "int64", "logic", "bytes", "alias", "montgomery", "curve", "offline", "finished", "dead" };
+pub const names = .{ "equal0", "equal1", "equal32", "equal48", "equal512", "dynamic", "order_big", "order_little", "order_runtime", "int8", "int16", "int32", "int64", "signed8", "signed16", "signed32", "signed64", "logic", "bytes", "alias", "montgomery", "curve", "offline", "finished", "dead" };
 fn chosen(comptime wrapped: bool, a: *const [1]u8, b: *const [1]u8) if (wrapped) s.Choice else base.Bit {
     return if (wrapped) s.equal(1, a, b) else base.equal(a, b) catch unreachable; // unreachable: both fixed arrays have identical public lengths
 }
@@ -27,12 +27,21 @@ pub inline fn run(comptime name: []const u8, comptime wrapped: bool, out: *[512]
         const o = if (wrapped) s.compareUnsigned(32, e, a[0..32], b[0..32]) else base.order(32, e, a[0..32], b[0..32]);
         return if (wrapped) @as(u64, @intFromBool(o.lt.declassify("fixture order lt"))) | (@as(u64, @intFromBool(o.eq.declassify("fixture order eq"))) << 1) | (@as(u64, @intFromBool(o.gt.declassify("fixture order gt"))) << 2) else @as(u64, o.lt.value) | (@as(u64, o.eq.value) << 1) | (@as(u64, o.gt.value) << 2);
     }
-    const c = chosen(wrapped, a[0..1], b[0..1]);
+    // These consumers form their own decisions; avoid a harness-only comparison.
+    const c = if (comptime std.mem.eql(u8, name, "curve") or std.mem.eql(u8, name, "offline") or std.mem.eql(u8, name, "finished")) {} else chosen(wrapped, a[0..1], b[0..1]);
     inline for (.{ u8, u16, u32, u64 }) |T| {
         if (comptime std.mem.eql(u8, name, std.fmt.comptimePrint("int{d}", .{@bitSizeOf(T)}))) {
             const x = std.mem.readInt(T, a[0..@sizeOf(T)], .little);
             const y = std.mem.readInt(T, b[0..@sizeOf(T)], .little);
             return if (wrapped) c.selectInt(T, x, y) else base.selectInt(T, c, x, y);
+        }
+    }
+    inline for (.{ i8, i16, i32, i64 }) |T| {
+        if (comptime std.mem.eql(u8, name, std.fmt.comptimePrint("signed{d}", .{@bitSizeOf(T)}))) {
+            const av = std.mem.readInt(T, a[0..@sizeOf(T)], .little);
+            const bv = std.mem.readInt(T, b[0..@sizeOf(T)], .little);
+            const value = if (wrapped) c.selectInt(T, av, bv) else base.selectInt(T, c, av, bv);
+            return @as(@Int(.unsigned, @bitSizeOf(T)), @bitCast(value)); // safe: retain selected signed representation without a checked sign conversion
         }
     }
     if (comptime std.mem.eql(u8, name, "logic")) {

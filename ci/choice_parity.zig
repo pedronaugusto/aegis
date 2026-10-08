@@ -128,6 +128,30 @@ export fn baselineDead(out: *[512]u8, a: *const [512]u8, b: *const [512]u8, len:
 export fn wrapperDead(out: *[512]u8, a: *const [512]u8, b: *const [512]u8, len: usize, endian: u8) u64 {
     return cases.run("dead", true, out, a, b, len, if (endian == 0) .big else .little);
 }
+export fn baselineSigned8(out: *[512]u8, a: *const [512]u8, b: *const [512]u8, len: usize, endian: u8) u64 {
+    return cases.run("signed8", false, out, a, b, len, if (endian == 0) .big else .little);
+}
+export fn wrapperSigned8(out: *[512]u8, a: *const [512]u8, b: *const [512]u8, len: usize, endian: u8) u64 {
+    return cases.run("signed8", true, out, a, b, len, if (endian == 0) .big else .little);
+}
+export fn baselineSigned16(out: *[512]u8, a: *const [512]u8, b: *const [512]u8, len: usize, endian: u8) u64 {
+    return cases.run("signed16", false, out, a, b, len, if (endian == 0) .big else .little);
+}
+export fn wrapperSigned16(out: *[512]u8, a: *const [512]u8, b: *const [512]u8, len: usize, endian: u8) u64 {
+    return cases.run("signed16", true, out, a, b, len, if (endian == 0) .big else .little);
+}
+export fn baselineSigned32(out: *[512]u8, a: *const [512]u8, b: *const [512]u8, len: usize, endian: u8) u64 {
+    return cases.run("signed32", false, out, a, b, len, if (endian == 0) .big else .little);
+}
+export fn wrapperSigned32(out: *[512]u8, a: *const [512]u8, b: *const [512]u8, len: usize, endian: u8) u64 {
+    return cases.run("signed32", true, out, a, b, len, if (endian == 0) .big else .little);
+}
+export fn baselineSigned64(out: *[512]u8, a: *const [512]u8, b: *const [512]u8, len: usize, endian: u8) u64 {
+    return cases.run("signed64", false, out, a, b, len, if (endian == 0) .big else .little);
+}
+export fn wrapperSigned64(out: *[512]u8, a: *const [512]u8, b: *const [512]u8, len: usize, endian: u8) u64 {
+    return cases.run("signed64", true, out, a, b, len, if (endian == 0) .big else .little);
+}
 // Deliberately unsafe test-only controls: the A5 detector must reject them.
 export fn leakBranch(a: *const [512]u8, b: *const [512]u8, out: *[512]u8) u64 {
     const av: *const volatile [512]u8 = a;

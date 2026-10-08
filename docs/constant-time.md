@@ -63,7 +63,8 @@ constant-time guarantee. The equivalent handwritten baseline retains the same
 barriers, volatile loads, checks and decision representation.
 
 `zig build check-choices` inspects enclosing optimized callers across every
-listed profile and root mitigation option. Release modes require identical
+listed profile and root mitigation option. The integer caller catalogue includes
+every signed and unsigned supported width. Release modes require identical
 normalized emitted instructions to the equivalent baseline. Debug retains
 runtime safety and runs a stack-aware SSA regression detector. The detector
 checks secret-derived branches, select conditions and address indices; two
@@ -88,5 +89,7 @@ secret classes and paired ABBA/BAAB blocks. Raw compiler/timing evidence is
 kept privately in trials. A separate native CPU Counters capture exports process-level cycle/bottleneck
 metrics, without per-class cache-miss attribution. Native x86-64 timing,
 class-resolved cache misses, power, EM, cross-thread leakage, and arbitrary
-whole-program behavior are outside this evidence. Failure to resolve a timing difference is not proof of constant
-time. A5 remains work in progress pending ordered integration and final gates.
+whole-program behavior are outside this evidence. Resolved input-class timing
+differences remain under investigation. Failure to resolve a timing difference
+is not proof of constant time. A5 remains work in progress pending ordered
+integration and final gates.
