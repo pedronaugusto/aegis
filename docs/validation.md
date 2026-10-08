@@ -1,0 +1,29 @@
+# v0 validation and hosted status
+
+Local evidence, 2026-10-08, Zig 0.17.0 / Apple M3 Max / Darwin 25.2.0. This candidate has not passed hosted acceptance and must not replace the bootstrap main until its exact commit passes fast and merge, including Linux TSan.
+
+## Focused checks
+
+| Selection | Debug | ReleaseSafe | ReleaseFast |
+|---|---:|---:|---:|
+| `zig build test -Dtest-filter=Secret` | 7/7 | 7/7 | 7/7 |
+| `zig build test -Dtest-filter=Guarded` | 5/5 | 5/5 | 5/5 |
+| `zig build test -Dtest-filter=Consumer` | 7/7 | 7/7 | 7/7 |
+
+Commands additionally select `-Doptimize=safe` / `fast`, and `-Dci-lint=false` after the separate mandatory lint. Each row includes the three anonymous import/root test blocks, so the counts must not be summed as unique tests. The ten substantive cases cover full-region/padding wipes, representation transfer, explicit exposure, zero-output formatting, guard error/early release and reacquisition, native 2/8-worker exclusion/publication, shakedown Material transfer (512 cases, seed 0xae615), Budget conservation/caps (256, seed 0xb0d6e7), every construction allocation failure plus post-publication error, and 32 native Job run/abandon/take races with late-reap charge conservation. This is a model of the named consumer boundaries, not cloak native/security acceptance.
+
+Final Consumer runner seeds: Debug 3229692198, ReleaseSafe 960450737, ReleaseFast 1765974378. Allocation observation is before destruction: the slice uses rawFree because std Allocator.free poisons before invoking its vtable in Debug. Every free observes all-zero bytes and each successful allocation has exactly one free. Lexical acquisition scopes end error defers at publication; later errors run only the final live owner's defer.
+
+`zig build lint` passes format, gantry production layers/entries and std-only closure, source quality/ziglint, namespace/cast/function/docs/test-import/package-path rules, isolated consumer compilation with fetching off, eight unsupported-shape fixtures plus rejected std formatting, and the four-way strict parity gate. The public module has only Secret/Guarded and std; preflight/shakedown remain lazy and outside the runtime graph. By-path consumers return before own-tree tooling and fetch neither.
+
+`zig build check` passes Debug; `zig build check -Doptimize=small` passes ReleaseSmall compilation. The generated Windows Debug portable path `zig build ci-build -Dtarget=x86_64-windows-gnu -Dci-lint=false` compiled tests, usage example and benchmark smoke binary, and exported their three-command manifest; this is compilation, not Windows execution. Native macOS targeted tests executed. No manual unfiltered whole-suite run was used.
+
+[Performance evidence](performance.md) records four strict codegen objects, dead-storage consumer cleanup, actual Material representation comparison and both final 32-pair timing replicates. All erasure/locking operations remain in both release modes; no timing gate is placed on shared CI.
+
+## Hosted gate
+
+The workflow's fast/merge/release matrices come from pinned preflight `zig build plan`; merge uses Linux Debug plus Linux-produced portable macOS/Windows artifacts. A separate merge/release job runs the targeted native Guarded/Job cases under Linux TSan. The generated release tier also has preflight's full sanitizer and cross-compile rows. None has been waived.
+
+The floor's automatic [run 37773839032](https://github.com/pedronaugusto/aegis/actions/runs/37773839032), commit `7e3962fc4e221734ba55ff43792483181ec3eac5`, did not start its main-status job. [Check 113299684373](https://github.com/pedronaugusto/aegis/actions/runs/37773839032/job/113299684373) has no steps; its failure annotation says account payments failed or the spending limit must be increased. That is an owner/nav billing blocker, not test execution or permission to bypass CI. Current candidate runs are available on [Actions](https://github.com/pedronaugusto/aegis/actions/workflows/ci.yml).
+
+Until the owner resolves that blocker and exact-commit fast/merge finish green, Linux TSan and hosted macOS/Windows execution are unproven and main stays the floor. Preserve the floor ancestry, never force/rewrite, dispatch fast then merge per the package brief, fast-forward only after acceptance, then cancel the automatic main push/status run. Default branch main and PRIVATE visibility are retained. No cloak adoption or pin change is authorized; its separate [open gates](extraction.md) remain open.

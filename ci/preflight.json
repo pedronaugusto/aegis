@@ -1,1 +1,41 @@
-{"sources":["src"],"test_roots":["src/tests.zig"],"test_dependencies":["shakedown"]}
+{
+  "sources": [
+    "src"
+  ],
+  "test_roots": [
+    "src/tests.zig"
+  ],
+  "test_support": [
+    "src/testing/**"
+  ],
+  "test_dependencies": [
+    "shakedown",
+    "material"
+  ],
+  "extra_checks": [
+    [
+      "zig",
+      "build",
+      "check-consumer"
+    ],
+    [
+      "zig",
+      "build",
+      "check-negative"
+    ],
+    [
+      "zig",
+      "build",
+      "check-parity"
+    ]
+  ],
+  "docs": {
+    "zig build docs -- usage": {
+      "source": "examples/usage.zig",
+      "region": "usage",
+      "imports": [
+        "aegis"
+      ]
+    }
+  }
+}
