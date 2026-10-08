@@ -13,3 +13,7 @@ pub const id = @import("id.zig");
 pub const units = @import("units.zig");
 /// Always-on programmer contracts and explicitly optional diagnostics.
 pub const assert = @import("assert.zig");
+/// Bounded single-owner storage and explicit finite admission.
+pub const bounded = @import("bounded.zig");
+/// Static nonblocking cleanup owners and explicit result obligations.
+pub const own = @import("own.zig");

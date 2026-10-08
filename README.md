@@ -2,7 +2,7 @@
 
 Explicit safety types for any Zig project: inline and allocated secrets, spin-guarded data, checked scalar arithmetic, distinct IDs and units, and executable contracts. Runtime code depends only on std; required wiping, locking, arithmetic, range and conversion checks remain enabled in every build.
 
-Work in progress. Implemented: v0 (`Secret(T)` and spin `Guarded(T)`), A3 numeric/domain foundations and A4 `SecretBytes`. The full safety catalogue and consumer adoption remain later work.
+Work in progress. Implemented: v0 (`Secret(T)` and spin `Guarded(T)`), A3 numeric/domain foundations , A4 `SecretBytes` and A7 bounded storage/admission and static nonblocking owners. The full safety catalogue and consumer adoption remain later work.
 
 ## Install
 
