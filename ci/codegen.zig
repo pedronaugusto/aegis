@@ -1,6 +1,8 @@
 //! Strict optimizer-equivalence gate: aliases or exact normalized instruction equality.
 const std = @import("std");
-const names = [_][]const u8{ "secret_s32", "transfer_s32", "secret_s48", "transfer_s48", "secret_material", "transfer_material", "cleanup", "cleanup_material", "budget", "job", "increment" };
+const owner_names = [_][]const u8{ "secret_s32", "transfer_s32", "secret_s48", "transfer_s48", "secret_material", "transfer_material", "cleanup", "cleanup_material", "budget", "job", "increment" };
+const numeric_names = [_][]const u8{ "numeric_add", "numeric_sub", "numeric_mul", "numeric_div", "numeric_rem", "numeric_shift", "numeric_saturating", "numeric_ranged", "numeric_cast", "numeric_identity", "numeric_counter", "numeric_count", "numeric_bits", "numeric_duration", "numeric_rounding", "numeric_instant", "numeric_invariant", "numeric_diagnostics", "numeric_encoding" };
+const names = owner_names ++ numeric_names;
 pub fn main(init: std.process.Init) !void {
     const a = init.arena.allocator();
     const args = try init.minimal.args.toSlice(a);
@@ -23,7 +25,7 @@ pub fn main(init: std.process.Init) !void {
             const ir = try dir.readFileAlloc(init.io, try a.print("{s}.ll", .{stem}), a, .limited(32 * 1024 * 1024));
             const object = try dir.readFileAlloc(init.io, try a.print("{s}.o", .{stem}), a, .limited(32 * 1024 * 1024));
             var evidence: std.Io.Writer.Allocating = .init(a);
-            try evidence.writer.print("# {s} {s} parity\n\nZig 0.17.0, LLVM, baseline CPU, stripped object. All eleven pairs have identical emitted instructions (shared aliases or normalized assembly); storage/alignment assertions compile.\n\n", .{ target, mode });
+            try evidence.writer.print("# {s} {s} parity\n\nZig 0.17.0, LLVM, baseline CPU, stripped object. All owner and A3 scalar pairs have identical emitted instructions (shared aliases or normalized assembly); storage/alignment assertions compile.\n\n", .{ target, mode });
             for (names) |name| {
                 const base = try alias(a, ir, try exportName(a, "baseline", name));
                 const wrap = try alias(a, ir, try exportName(a, "wrapper", name));
@@ -34,9 +36,11 @@ pub fn main(init: std.process.Init) !void {
                     try failure.interface.print("{s} {s} {s}: code size {d}/{d}\n", .{ target, mode, name, baseline_bytes, wrapper_bytes });
                     return error.AbstractionCodeSizeMismatch;
                 }
-                const emitted = try instructions(a, assembly, base, target);
-                if (!std.mem.eql(u8, base, wrap)) {
-                    const other = try instructions(a, assembly, wrap, target);
+                const emitted_base = try assemblyAlias(a, assembly, try exportName(a, "baseline", name));
+                const emitted_wrap = try assemblyAlias(a, assembly, try exportName(a, "wrapper", name));
+                const emitted = try instructions(a, assembly, emitted_base, target);
+                if (!std.mem.eql(u8, emitted_base, emitted_wrap)) {
+                    const other = try instructions(a, assembly, emitted_wrap, target);
                     if (!std.mem.eql(u8, emitted, other)) {
                         var failure = std.Io.File.stderr().writer(init.io, &.{});
                         try failure.interface.print("{s} {s} {s}: instruction mismatch\n", .{ target, mode, name });
@@ -47,19 +51,22 @@ pub fn main(init: std.process.Init) !void {
                 const secret = std.mem.find(u8, name, "secret") != null or std.mem.startsWith(u8, name, "transfer") or std.mem.startsWith(u8, name, "cleanup");
                 if (secret) {
                     if (std.mem.find(u8, body, "store volatile") == null and std.mem.find(u8, body, "i1 true)") == null) return error.MissingVolatileErasure;
-                } else {
+                } else if (!std.mem.startsWith(u8, name, "numeric_")) {
                     const acquire = if (std.mem.startsWith(u8, target, "x86")) std.mem.find(u8, body, "acquire monotonic") != null else std.mem.find(u8, body, "@llvm.aarch64.ldaxr") != null and std.mem.find(u8, body, "@llvm.aarch64.stxr") != null;
                     if (!acquire or std.mem.find(u8, body, "release") == null) return error.MissingLockOrdering;
                 }
                 try evidence.writer.print("## {s}\n\nSymbols → `{s}` / `{s}`; baseline/wrapper machine code {d}/{d} bytes.\n\n```asm\n{s}```\n\n```llvm\n{s}\n```\n\n", .{ name, base, wrap, baseline_bytes, wrapper_bytes, emitted, body });
             }
-            if (record) try dir.writeFile(init.io, .{ .sub_path = try a.print("docs/codegen-{s}-{s}.md", .{ target, mode }), .data = try a.print("{s}\n", .{std.mem.trimEnd(u8, evidence.written(), "\n")}) });
+            if (record) try dir.writeFile(init.io, .{ .sub_path = try a.print("docs/codegen-a3-{s}-{s}.md", .{ target, mode }), .data = try a.print("{s}\n", .{std.mem.trimEnd(u8, evidence.written(), "\n")}) });
         }
     }
 }
 fn alias(a: std.mem.Allocator, ir: []const u8, name: []const u8) ![]const u8 {
     const marker = try a.print("@{s} = alias ", .{name});
-    const start = std.mem.find(u8, ir, marker) orelse return error.PairNotAliased;
+    const start = std.mem.find(u8, ir, marker) orelse {
+        _ = try function(a, ir, name);
+        return name;
+    };
     const end = std.mem.findScalarPos(u8, ir, start, '\n') orelse return error.MalformedIr;
     const line = ir[start..end];
     const at = std.mem.find(u8, line, ", ptr @") orelse return error.MalformedAlias;
@@ -83,7 +90,7 @@ fn function(a: std.mem.Allocator, ir: []const u8, name: []const u8) ![]const u8 
 
 fn instructions(a: std.mem.Allocator, text: []const u8, name: []const u8, target: []const u8) ![]const u8 {
     const marker = try a.print(".L{s}:", .{name});
-    const start = std.mem.find(u8, text, marker) orelse return error.MissingAssemblyFunction;
+    const start = std.mem.find(u8, text, marker) orelse std.mem.find(u8, text, try a.print("\n{s}:", .{name})) orelse return error.MissingAssemblyFunction;
     const end = std.mem.findPos(u8, text, start, ".size") orelse return error.MissingAssemblySize;
     const body = text[start..end];
     var labels: std.ArrayList([]const u8) = .empty;
@@ -152,4 +159,14 @@ fn exportName(a: std.mem.Allocator, prefix: []const u8, name: []const u8) ![]con
         try out.writer.writeAll(part[1..]);
     }
     return out.written();
+}
+
+// LLVM's machine-function merger can create assembly aliases absent from LLVM IR.
+fn assemblyAlias(a: std.mem.Allocator, assembly: []const u8, name: []const u8) ![]const u8 {
+    const marker = try a.print("\n{s} = ", .{name});
+    const start = std.mem.find(u8, assembly, marker) orelse return name;
+    const begin = start + marker.len;
+    const end = std.mem.findScalarPos(u8, assembly, begin, '\n') orelse return error.MalformedAlias;
+    const value = assembly[begin..end];
+    return if (std.mem.startsWith(u8, value, ".L")) value[2..] else value;
 }

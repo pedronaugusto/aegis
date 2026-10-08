@@ -1,12 +1,12 @@
 # aegis
 
-Explicit inline secret ownership and short spin-guarded data for Zig. Only `Secret(T)` and `Guarded(T)` are exported. Both are allocation-free; wiping and locking remain enabled in every build.
+Explicit safety types for any Zig project: inline secrets, spin-guarded data, checked scalar arithmetic, distinct IDs and units, and executable contracts. Runtime code depends only on std; required wiping, locking, arithmetic, range and conversion checks remain enabled in every build.
 
-Work in progress. V0 acceptance requires hosted fast and merge on the exact candidate commit, including native macOS/Windows and Linux TSan; the wider safety catalogue and consumer adoption follow in separate batches.
+Work in progress. Implemented scope is v0 (`Secret(T)` and spin `Guarded(T)`) plus the A3 numeric/domain foundations. Changes land after exact-commit fast and merge gates pass. The full safety catalogue and consumer adoption remain later work.
 
 ## Install
 
-Requires Zig 0.17.0. Main publishes the accepted v0 after its hosted gates pass:
+Requires Zig 0.17.0:
 
 ```sh
 zig fetch --save=aegis git+https://github.com/pedronaugusto/aegis#main
@@ -27,6 +27,14 @@ var counts = aegis.Guarded(usize).init(0);
 var held = counts.acquire();
 defer held.deinit();
 held.value().* += bytes[0];
+const Request = aegis.id.NonZero(struct {}, u64);
+const request = try Request.fromRaw(1);
+const size = try aegis.int.Checked(usize).init(4).mul(8);
+const payload = aegis.units.Bytes(usize).fromRaw(size.raw());
+const timeout = try aegis.units.Duration(.millisecond, i64).fromRaw(250).toIoDuration();
+aegis.assert.post(payload.raw() == 32, "payload fits the record");
+_ = request;
+_ = timeout;
 ```
 <!-- END GENERATED -->
 
@@ -38,9 +46,19 @@ held.value().* += bytes[0];
 
 Zig permits struct copies, field access and escaped pointers. These contracts do not provide a borrow checker, linear types, automatic destructors or universal copied-guard detection. Cleanup is explicit on normal/error returns; abort/process death has no cleanup guarantee. Wipes cover only the specified storage, not old copies, registers, spills, paging, core dumps or hardware side channels. No constant-time cryptographic guarantee is supplied.
 
+## API
+
+`int.Checked(Repr).init(raw)` provides fallible add/sub/mul/div/rem/shl with raw operands. `Saturating` explicitly clamps arithmetic; div0 and invalid shift counts still fail. Signed division truncates toward zero, remainder uses that quotient, and min/-1 remainder is zero. `Ranged(Repr, min, max)` checks inclusive bounds on construction and operations. `int.cast(Target, source)` fails on sign or narrowing loss; floating-point conversion is outside this API.
+
+`id.Id(Tag, Repr)` and `NonZero` brand identities; `Counter` externally serializes an unsigned nonwrapping issuer. IDs have eql/compare/hash and explicit endian import/export, with no arithmetic or cross-domain cast. Raw imports do not establish authenticity or uniqueness.
+
+`units.Count(Tag, Repr)`, `Bytes`, `Bits`, `Duration(Unit, Repr)` and `Instant(ClockTag, Unit, Repr)` retain scalar size/alignment. Counts and durations support typed add/sub and scalar mul. Units/representation conversions are checked; `.down` rounds toward negative infinity and `.up` toward positive infinity. Negative input never converts to unsigned. Instants add/subtract durations and compute same-clock differences; changing clock requires sampled correspondence. `.real`, `.awake`, `.boot` and the other std.Io clock tags support checked timestamp adapters. Custom clock types own their epoch interpretation. Wait APIs keep std.Io.Timeout. IDs, units and ranged integers use a one-field extern struct and can appear directly in C function signatures and structs. Their repr must be a signed/unsigned 8, 16, 32, 64 or 128-bit integer (including usize/isize); other widths are rejected explicitly. Encoding writes the exact repr width/endian rather than copying ABI storage. Checked/Saturating retain arbitrary nonzero integer widths; non-byte widths reject byte encoding. Foreign callers must honor nonzero/range contracts or checked import must validate their return at the boundary.
+
+`assert.invariant`, `pre` and `post` fail-stop in every build with a static public message. Peer failures return errors. `debug` is optional and still evaluates its argument; `debugCheck` removes the predicate call in both release modes. `maybe` accepts a side-effect-free possibility without asserting truth; `maybeCount` instruments caller-owned storage only in test builds. Contracts do not unwind cleanup on panic.
+
 ## Scope
 
-No allocated secret buffers, reference counting, blocking locks, pools, handles, generic deleters or code analysis. Runtime closure is std only. [Extraction provenance](docs/extraction.md) distinguishes published cloak evidence from open consumer adoption gates. [Performance evidence](docs/performance.md) compares identical wipe/locking semantics: zero abstraction overhead does not mean those operations have zero cost.
+No allocated secret buffers, reference counting, blocking locks, pools, handles, generic deleters or code analysis. Runtime closure is std only. Tags, checks and explicit raw boundaries are API discipline; Zig fields/reflection can bypass them. [Future glint rule specs](docs/a3-enforcement.md) record the raw patterns and permitted written-reason exceptions; those rules are not yet built or enforced. [A3 evidence](docs/a3-report.md) records checks and limits. [Extraction provenance](docs/extraction.md) distinguishes published cloak evidence from open consumer adoption gates. [Performance evidence](docs/performance.md) compares identical wipe/locking semantics: zero abstraction overhead does not mean those operations have zero cost.
 
 ## Built with
 
@@ -48,7 +66,7 @@ No allocated secret buffers, reference counting, blocking locks, pools, handles,
 
 ## Testing
 
-Run targeted cases with `zig build test -Dtest-filter=Secret`, `-Dtest-filter=Guarded` or `-Dtest-filter=Consumer`. `zig build lint` checks source/docs/structure, negative compilation, consumer isolation and strict codegen parity. `zig build check` compiles the suite; `zig build bench` runs own-operation A/B manually. CI smoke-checks benchmark programs without timing gates. The hosted merge includes targeted Linux TSan; [validation status](docs/validation.md) records execution evidence.
+Run targeted cases with `zig build test -Dtest-filter=A3`, `-Dtest-filter=Secret`, `-Dtest-filter=Guarded` or `-Dtest-filter=Consumer`. `zig build lint` checks source/docs/structure, negative compilation, consumer isolation and strict codegen parity. `zig build check` compiles the suite; `zig build bench` runs own-operation A/B manually. The `test-scalars` and `check-contracts` gates retain release-mode failures; `check-negative` rejects cross-domain use. CI smoke-checks benchmark programs without timing gates. The hosted merge includes targeted Linux TSan; [validation status](docs/validation.md) records execution evidence.
 
 ## Licence
 

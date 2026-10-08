@@ -1,0 +1,19 @@
+test
++- run test w
+preflight: test seed 3930705920 (reproduce with PREFLIGHT_TEST_SEED=3930705920)
+failed command: ./.zig-cache/o/e65ba7ebbeb56f1f43e92e07ab6fd46f/test --cache-dir=./.zig-cache --seed=0xea49d000 --listen=-
+
+Build Summary: 12/12 steps succeeded; 14/14 tests passed
+test success
++- run test 14 pass (14 total) 49ms MaxRSS:5M
+|  +- compile test debug native cached 76ms MaxRSS:31M
+|     +- options cached
++- run exe aegis-example success 4ms
+|  +- compile exe aegis-example debug native cached 78ms MaxRSS:31M
++- run exe owners success 17ms
+|  +- compile exe owners debug native cached 78ms MaxRSS:31M
+|  +- WriteFile success
++- run exe numeric success 311ms
+   +- compile exe numeric debug native success 2s MaxRSS:279M
+   +- WriteFile success
+

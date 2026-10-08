@@ -27,6 +27,16 @@
       "zig",
       "build",
       "check-parity"
+    ],
+    [
+      "zig",
+      "build",
+      "check-contracts"
+    ],
+    [
+      "zig",
+      "build",
+      "test-scalars"
     ]
   ],
   "docs": {

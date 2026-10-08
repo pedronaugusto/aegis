@@ -1,0 +1,8 @@
+1/5 shift_repro.test.A3 isolated u8 release shift error channel...OK
+2/5 shift_repro.test.A3 exhaustive isolated checked shift...OK
+3/5 shift_repro.test.A3 loop with saturating shift...OK
+4/5 shift_repro.test.A3 signed loop checked shift only...OK
+5/5 shift_repro.test.A3 plain raw checked shift same loop...FAIL (AcceptedOverflow)
+4 passed; 0 skipped; 1 failed.
+error: the following test command failed with exit code 1:
+.zig-cache/o/6e4460d5b34b16d9b277e0b67e90d820/root --seed=0xb3c27d78

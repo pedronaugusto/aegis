@@ -1,0 +1,48 @@
+
+.zig-cache/numeric-bench:	file format mach-o arm64
+
+Disassembly of section __TEXT,__text:
+
+00000001000409a0 <_numeric.operation__func_38__struct_842.run>:
+1000409a0: a9bf7bfd    	stp	x29, x30, [sp, #-0x10]!
+1000409a4: 910003fd    	mov	x29, sp
+1000409a8: d1000428    	sub	x8, x1, #0x1
+1000409ac: b1000d1f    	cmn	x8, #0x3
+1000409b0: 54000088    	b.hi	0x1000409c0 <_numeric.operation__func_38__struct_842.run+0x20>
+1000409b4: 9ac10c08    	sdiv	x8, x0, x1
+1000409b8: 9b018100    	msub	x0, x8, x1, x0
+1000409bc: 14000002    	b	0x1000409c4 <_numeric.operation__func_38__struct_842.run+0x24>
+1000409c0: d2800000    	mov	x0, #0x0                ; =0
+1000409c4: a8c17bfd    	ldp	x29, x30, [sp], #0x10
+1000409c8: d65f03c0    	ret
+
+00000001000409cc <_numeric.operation__func_35__struct_845.run>:
+1000409cc: a9bf7bfd    	stp	x29, x30, [sp, #-0x10]!
+1000409d0: 910003fd    	mov	x29, sp
+1000409d4: b40000c1    	cbz	x1, 0x1000409ec <_numeric.operation__func_35__struct_845.run+0x20>
+1000409d8: d2f00008    	mov	x8, #-0x8000000000000000 ; =-9223372036854775808
+1000409dc: eb08001f    	cmp	x0, x8
+1000409e0: 540000a1    	b.ne	0x1000409f4 <_numeric.operation__func_35__struct_845.run+0x28>
+1000409e4: b100043f    	cmn	x1, #0x1
+1000409e8: 54000061    	b.ne	0x1000409f4 <_numeric.operation__func_35__struct_845.run+0x28>
+1000409ec: d2800000    	mov	x0, #0x0                ; =0
+1000409f0: 14000002    	b	0x1000409f8 <_numeric.operation__func_35__struct_845.run+0x2c>
+1000409f4: 9ac10c00    	sdiv	x0, x0, x1
+1000409f8: a8c17bfd    	ldp	x29, x30, [sp], #0x10
+1000409fc: d65f03c0    	ret
+
+0000000100046070 <_numeric.operation__func_22__struct_897.run>:
+100046070: a9bf7bfd    	stp	x29, x30, [sp, #-0x10]!
+100046074: 910003fd    	mov	x29, sp
+100046078: ab010008    	adds	x8, x0, x1
+10004607c: 9a8823e0    	csel	x0, xzr, x8, hs
+100046080: a8c17bfd    	ldp	x29, x30, [sp], #0x10
+100046084: d65f03c0    	ret
+
+0000000100046088 <_numeric.operation__func_21__struct_899.run>:
+100046088: a9bf7bfd    	stp	x29, x30, [sp, #-0x10]!
+10004608c: 910003fd    	mov	x29, sp
+100046090: ab010008    	adds	x8, x0, x1
+100046094: 9a8823e0    	csel	x0, xzr, x8, hs
+100046098: a8c17bfd    	ldp	x29, x30, [sp], #0x10
+10004609c: d65f03c0    	ret

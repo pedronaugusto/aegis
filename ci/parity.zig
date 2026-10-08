@@ -80,3 +80,119 @@ export fn baselineCleanupMaterial(fail: bool, seed: u8) u8 {
 export fn wrapperCleanupMaterial(fail: bool, seed: u8) u8 {
     return cases.cleanupMaterial(true, fail, seed);
 }
+
+const numeric = @import("numeric.zig");
+export fn baselineNumericAdd(x: u64, y: u64) u64 {
+    return numeric.operation("add", false, x, y);
+}
+export fn wrapperNumericAdd(x: u64, y: u64) u64 {
+    return numeric.operation("add", true, x, y);
+}
+export fn baselineNumericSub(x: u64, y: u64) u64 {
+    return numeric.operation("sub", false, x, y);
+}
+export fn wrapperNumericSub(x: u64, y: u64) u64 {
+    return numeric.operation("sub", true, x, y);
+}
+export fn baselineNumericMul(x: u64, y: u64) u64 {
+    return numeric.operation("mul", false, x, y);
+}
+export fn wrapperNumericMul(x: u64, y: u64) u64 {
+    return numeric.operation("mul", true, x, y);
+}
+export fn baselineNumericDiv(x: u64, y: u64) u64 {
+    return numeric.operation("div", false, x, y);
+}
+export fn wrapperNumericDiv(x: u64, y: u64) u64 {
+    return numeric.operation("div", true, x, y);
+}
+export fn baselineNumericRem(x: u64, y: u64) u64 {
+    return numeric.operation("rem", false, x, y);
+}
+export fn wrapperNumericRem(x: u64, y: u64) u64 {
+    return numeric.operation("rem", true, x, y);
+}
+export fn baselineNumericShift(x: u64, y: u64) u64 {
+    return numeric.operation("shift", false, x, y);
+}
+export fn wrapperNumericShift(x: u64, y: u64) u64 {
+    return numeric.operation("shift", true, x, y);
+}
+export fn baselineNumericSaturating(x: u64, y: u64) u64 {
+    return numeric.operation("saturating", false, x, y);
+}
+export fn wrapperNumericSaturating(x: u64, y: u64) u64 {
+    return numeric.operation("saturating", true, x, y);
+}
+export fn baselineNumericRanged(x: u64, y: u64) u64 {
+    return numeric.operation("ranged", false, x, y);
+}
+export fn wrapperNumericRanged(x: u64, y: u64) u64 {
+    return numeric.operation("ranged", true, x, y);
+}
+export fn baselineNumericCast(x: u64, y: u64) u64 {
+    return numeric.operation("cast", false, x, y);
+}
+export fn wrapperNumericCast(x: u64, y: u64) u64 {
+    return numeric.operation("cast", true, x, y);
+}
+export fn baselineNumericIdentity(x: u64, y: u64) u64 {
+    return numeric.operation("identity", false, x, y);
+}
+export fn wrapperNumericIdentity(x: u64, y: u64) u64 {
+    return numeric.operation("identity", true, x, y);
+}
+export fn baselineNumericCounter(x: u64, y: u64) u64 {
+    return numeric.operation("counter", false, x, y);
+}
+export fn wrapperNumericCounter(x: u64, y: u64) u64 {
+    return numeric.operation("counter", true, x, y);
+}
+export fn baselineNumericCount(x: u64, y: u64) u64 {
+    return numeric.operation("count", false, x, y);
+}
+export fn wrapperNumericCount(x: u64, y: u64) u64 {
+    return numeric.operation("count", true, x, y);
+}
+export fn baselineNumericBits(x: u64, y: u64) u64 {
+    return numeric.operation("bits", false, x, y);
+}
+export fn wrapperNumericBits(x: u64, y: u64) u64 {
+    return numeric.operation("bits", true, x, y);
+}
+export fn baselineNumericDuration(x: u64, y: u64) u64 {
+    return numeric.operation("duration", false, x, y);
+}
+export fn wrapperNumericDuration(x: u64, y: u64) u64 {
+    return numeric.operation("duration", true, x, y);
+}
+export fn baselineNumericRounding(x: u64, y: u64) u64 {
+    return numeric.operation("rounding", false, x, y);
+}
+export fn wrapperNumericRounding(x: u64, y: u64) u64 {
+    return numeric.operation("rounding", true, x, y);
+}
+export fn baselineNumericInstant(x: u64, y: u64) u64 {
+    return numeric.operation("instant", false, x, y);
+}
+export fn wrapperNumericInstant(x: u64, y: u64) u64 {
+    return numeric.operation("instant", true, x, y);
+}
+export fn baselineNumericInvariant(x: u64, y: u64) u64 {
+    return numeric.operation("invariant", false, x, y);
+}
+export fn wrapperNumericInvariant(x: u64, y: u64) u64 {
+    return numeric.operation("invariant", true, x, y);
+}
+export fn baselineNumericDiagnostics(x: u64, y: u64) u64 {
+    return numeric.operation("diagnostics", false, x, y);
+}
+export fn wrapperNumericDiagnostics(x: u64, y: u64) u64 {
+    return numeric.operation("diagnostics", true, x, y);
+}
+export fn baselineNumericEncoding(x: u64, y: u64) u64 {
+    return numeric.operation("encoding", false, x, y);
+}
+export fn wrapperNumericEncoding(x: u64, y: u64) u64 {
+    return numeric.operation("encoding", true, x, y);
+}
