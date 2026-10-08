@@ -50,4 +50,3 @@ failed command: /Users/gusto/.local/zig/0.17.0/zig test -fno-sanitize-thread -Od
 Build Summary: 1/3 steps succeeded (1 failed)
 check transitive failure
 +- compile test debug native 7 errors
-

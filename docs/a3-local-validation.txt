@@ -19,4 +19,3 @@ lint success
    +- run exe preflight-structure success 16ms
       +- compile exe preflight-structure debug aarch64-macos-none cached 49ms MaxRSS:31M
       +- zig fmt --check success
-
