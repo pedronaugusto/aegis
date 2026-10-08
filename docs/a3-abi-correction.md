@@ -1,3 +1,5 @@
+> Historical full-width audit at 7b62798: the 606/202 counts and red result below are unchanged historical evidence. Owner db221e5 subsequently narrowed the C ABI guarantee to 8–64-bit and usize/isize; 128-bit reprs remain Zig types only. The current profile and continuation are recorded in [A4 status](a4-status.md). No compiler change is needed for that approved profile.
+
 # A3 ABI repair candidate — blocked on one compiler profile
 
 Owner correction: tychobook commit c8d2b481d27df0a73d0e89971cc0577b037babdf, aegis design §3.4. Starting published aegis main is fcff07ba18628efc639f527c579d4138fc9cebda. This candidate implements the representation correction before any A4 code. Secret(T), Guarded(T), A1 behavior and original evidence are unchanged. SecretBytes has not started. No consumer repository or book was edited.

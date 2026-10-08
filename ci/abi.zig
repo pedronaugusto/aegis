@@ -2,7 +2,8 @@
 const std = @import("std");
 const a = @import("aegis");
 const Tag = struct {};
-const representations = .{ u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, usize, isize };
+// C ABI profile: 8–64-bit and pointer-width integers. 128-bit reprs remain Zig types only.
+const representations = .{ u8, i8, u16, i16, u32, i32, u64, i64, usize, isize };
 // Deliberate unchecked foreign representation fixtures also run against old A3.
 fn importRepresentation(comptime T: type, value: anytype) T {
     if (comptime @typeInfo(T) == .@"enum") return @fromBackingInt(value);

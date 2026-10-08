@@ -44,10 +44,10 @@ pub fn main(init: std.process.Init) !void {
             }
             count += 1;
         }
-        if (count != 1212) return error.MissingAbiFactories;
+        if (count != 1010) return error.MissingAbiFactories;
         total_mismatches += mismatches;
         try out.interface.print("mismatched pairs={d}\n", .{mismatches});
-        try out.interface.print("{s}: 606 raw-integer argument/return pairs + 606 record-field pairs: analyzed callers (cross codegen only)\n", .{target});
+        try out.interface.print("{s}: 505 raw-integer argument/return pairs + 505 record-field pairs: analyzed callers (cross codegen only)\n", .{target});
     }
     try run(init, &.{ args[1], "build-obj", "-OReleaseFast", "-fllvm", "ci/abi_raw.zig", "-femit-bin=.zig-cache/abi/native-raw.o" });
     const binary = try a.print(".zig-cache/abi/native{s}", .{if (builtin.os.tag == .windows) ".exe" else ""});
