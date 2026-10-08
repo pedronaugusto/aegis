@@ -13,6 +13,8 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 - Replace matching typed ABI prototypes with calls to separately compiled raw-integer exports. Retain the failing x86 hidden-return-pointer regression. The C ABI guarantee covers 8–64-bit and usize/isize representations on every configured target. 128-bit representations remain usable Zig types but are not promised C ABI types and are excluded from this ABI fixture/audit.
 
 ### Added
+
+- A6 std.Io blocking and bounded read/write guards, bounded condition registration, stable Once publication/retry, explicit logical-task ordering and checked Confined handoff.
 - A7 fixed arrays, queues/rings, explicit bounded buffers, finite limits/reservations and static nonblocking Owned/MustUse contracts.
 
 - A4 SecretBytes: full-capacity byte ownership, explicit adoption/exposure/reserve/transfer, overlap-rejecting replacement, shrink erasure, zeroed growth and fail-closed formatting. All cleanup wipes full capacity before free, including slack; errors retain promised ownership and borrows. No remap, implicit growth or slice ownership escape API.

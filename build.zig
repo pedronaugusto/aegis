@@ -24,7 +24,7 @@ pub fn build(b: *std.Build) void {
     }) });
     test_step.dependOn(&b.addRunArtifact(example).step);
     preflight.addCi(b, .{ .tests = test_step, .portable_tests = true, .bench = .{
-        .programs = &.{ .{ .name = "owners", .source = "bench/owners.zig" }, .{ .name = "numeric", .source = "bench/numeric.zig" }, .{ .name = "bytes", .source = "bench/bytes.zig" } },
+        .programs = &.{ .{ .name = "owners", .source = "bench/owners.zig" }, .{ .name = "numeric", .source = "bench/numeric.zig" }, .{ .name = "bytes", .source = "bench/bytes.zig" }, .{ .name = "guarded-bounded", .source = "bench/a67.zig" } },
         .imports = benchImports,
         .target = target,
         .optimize = optimize,
@@ -67,6 +67,12 @@ pub fn build(b: *std.Build) void {
     run_bytes_contracts.addArg(b.graph.zig_exe);
     run_bytes_contracts.setCwd(b.path("."));
     b.step("check-secret-bytes", "Require all-mode move rejection and portable byte owner compilation").dependOn(&run_bytes_contracts.step);
+    const a67 = b.addExecutable(.{ .name = "aegis-a67-contracts", .root_module = b.createModule(.{ .root_source_file = b.path("ci/a67_check.zig"), .target = b.graph.host, .optimize = .safe }) });
+    const run_a67 = b.addRunArtifact(a67);
+    run_a67.addArg(b.graph.zig_exe);
+    run_a67.setCwd(b.path("."));
+    b.step("check-a67", "Require mode-matrix safety/diagnostics and portable value layouts").dependOn(&run_a67.step);
+    const a67_tests = b.step("test-a67", "Run A6/A7 synchronization, ownership and bounds in both release modes");
     const bytes_tests = b.step("test-secret-bytes", "Run A4 ownership contracts in both release modes");
     const scalar_tests = b.step("test-scalars", "Run A3 contracts in both release modes");
     for ([_]std.lang.Optimize{ .safe, .fast }) |mode| {
@@ -78,6 +84,8 @@ pub fn build(b: *std.Build) void {
         });
         const release_tests = b.addTest(.{ .root_module = scalar_module, .filters = &.{"A3"} });
         scalar_tests.dependOn(&b.addRunArtifact(release_tests).step);
+        const a67_release_tests = b.addTest(.{ .root_module = scalar_module, .filters = &.{ "A6", "A7" } });
+        a67_tests.dependOn(&b.addRunArtifact(a67_release_tests).step);
         const bytes_release_tests = b.addTest(.{ .root_module = scalar_module, .filters = &.{"A4"} });
         bytes_tests.dependOn(&b.addRunArtifact(bytes_release_tests).step);
     }
@@ -89,5 +97,6 @@ fn benchImports(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.l
     const cases = b.createModule(.{ .root_source_file = b.path("ci/cases.zig"), .target = target, .optimize = optimize, .imports = &.{ .{ .name = "aegis", .module = aegis }, .{ .name = "material", .module = material } } });
     const numeric = b.createModule(.{ .root_source_file = b.path("ci/numeric.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     const bytes = b.createModule(.{ .root_source_file = b.path("ci/bytes.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
-    return b.allocator.dupe(std.Build.Module.Import, &.{ .{ .name = "cases", .module = cases }, .{ .name = "numeric", .module = numeric }, .{ .name = "bytes", .module = bytes }, .{ .name = "material", .module = material } }) catch @panic("out of memory configuring benchmarks");
+    const a67 = b.createModule(.{ .root_source_file = b.path("ci/a67.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
+    return b.allocator.dupe(std.Build.Module.Import, &.{ .{ .name = "aegis", .module = aegis }, .{ .name = "cases", .module = cases }, .{ .name = "numeric", .module = numeric }, .{ .name = "bytes", .module = bytes }, .{ .name = "a67", .module = a67 }, .{ .name = "material", .module = material } }) catch @panic("out of memory configuring benchmarks");
 }

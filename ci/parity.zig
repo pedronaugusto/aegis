@@ -244,3 +244,8 @@ export fn wrapperBytesAdoptDead(gpa: *const std.mem.Allocator, allocation: [*]u8
 export fn wrapperBytesReplace(gpa: *const std.mem.Allocator, allocation: [*]u8, capacity: usize, live_len: usize, input: [*]const u8, n: usize) usize {
     return bytes.replaceConsumer(true, gpa.*, allocation[0..capacity], live_len, input[0..n]) catch 0;
 }
+
+const a67_parity = @import("a67_parity.zig");
+comptime {
+    _ = a67_parity;
+}

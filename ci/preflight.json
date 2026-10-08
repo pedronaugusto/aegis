@@ -47,6 +47,16 @@
       "zig",
       "build",
       "test-secret-bytes"
+    ],
+    [
+      "zig",
+      "build",
+      "check-a67"
+    ],
+    [
+      "zig",
+      "build",
+      "test-a67"
     ]
   ],
   "docs": {

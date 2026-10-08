@@ -169,3 +169,69 @@ test "A7 MustUse take and documented acknowledgment discharge" {
     defer ignored.deinit();
     ignored.acknowledge("false result intentionally ignored by this fixture");
 }
+
+test "A7 containers explicitly move bound Owned values and retain cleanup identity" {
+    const O = own.Owned(Resource, Resource.deinit);
+    var cleaned: usize = 0;
+    var queue: b.Queue(O, 2) = .init;
+    defer queue.deinit(O.deinit);
+    var owner = O.init(.{ .gpa = t.allocator, .bytes = try t.allocator.alloc(u8, 1), .cleaned = &cleaned });
+    owner.borrowMut().bytes[0] = 42;
+    try queue.push(&owner);
+    try t.expectEqual(@as(u8, 42), (try queue.peek()).borrow().bytes[0]);
+    var taken: O = undefined;
+    try queue.pop(&taken);
+    try t.expectEqual(@as(u8, 42), taken.borrow().bytes[0]);
+    var buffer = try b.Buffer(O).initAllocated(t.allocator, 1, 2);
+    defer buffer.deinit(O.deinit);
+    try buffer.append(&taken);
+    try t.expectEqual(@as(u8, 42), buffer.items()[0].borrow().bytes[0]);
+    try buffer.reserve(2);
+    try t.expectEqual(@as(u8, 42), buffer.items()[0].borrow().bytes[0]);
+    buffer.clear(O.deinit);
+    try t.expectEqual(@as(usize, 1), cleaned);
+}
+
+fn ringConstruction(gpa: std.mem.Allocator) !void {
+    const O = own.Owned(Resource, Resource.deinit);
+    var cleaned: usize = 0;
+    var queue = try b.RingBuffer(O).initAllocated(gpa, 2, 4);
+    defer queue.deinit(O.deinit);
+    for (0..2) |i| {
+        var owner = O.init(.{ .gpa = gpa, .bytes = try gpa.alloc(u8, 1), .cleaned = &cleaned });
+        owner.borrowMut().bytes[0] = @intCast(i); // safe: loop index is 0 or 1
+        try queue.push(&owner);
+    }
+    var taken: O = undefined;
+    try queue.pop(&taken);
+    taken.deinit();
+    var next = O.init(.{ .gpa = gpa, .bytes = try gpa.alloc(u8, 1), .cleaned = &cleaned });
+    next.borrowMut().bytes[0] = 2;
+    try queue.push(&next);
+    const first = (try queue.peek()).borrow().bytes.ptr;
+    queue.reserve(4) catch |err| {
+        try t.expect(first == (try queue.peek()).borrow().bytes.ptr);
+        try t.expectEqual(@as(usize, 2), queue.len());
+        return err;
+    };
+    try queue.pop(&taken);
+    try t.expectEqual(@as(u8, 1), taken.borrow().bytes[0]);
+    taken.deinit();
+    try queue.pop(&taken);
+    try t.expectEqual(@as(u8, 2), taken.borrow().bytes[0]);
+    taken.deinit();
+    try t.expectEqual(@as(usize, 3), cleaned);
+}
+test "A7 dynamic FIFO wrap growth ownership and every allocation failure" {
+    var no_resize = shake.alloc.NoResize.init(t.allocator);
+    try t.checkAllAllocationFailures(no_resize.allocator(), ringConstruction, .{});
+    var storage: [3]u32 = undefined;
+    var queue = try b.QueueBuffer(u32).initBuffer(&storage);
+    defer queue.deinit(noop);
+    try t.expectError(error.InvalidCapacity, b.RingBuffer(u32).initBuffer(&.{}));
+    try t.expectError(error.CapacityExceeded, queue.reserve(4));
+    var x: u32 = 3;
+    try queue.push(&x);
+    try queue.pop(&x);
+    try t.expectEqual(@as(u32, 3), x);
+}

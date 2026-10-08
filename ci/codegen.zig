@@ -3,7 +3,8 @@ const std = @import("std");
 const owner_names = [_][]const u8{ "secret_s32", "transfer_s32", "secret_s48", "transfer_s48", "secret_material", "transfer_material", "cleanup", "cleanup_material", "budget", "job", "increment" };
 const numeric_names = [_][]const u8{ "numeric_add", "numeric_sub", "numeric_mul", "numeric_div", "numeric_rem", "numeric_shift", "numeric_saturating", "numeric_ranged", "numeric_cast", "numeric_identity", "numeric_counter", "numeric_count", "numeric_bits", "numeric_duration", "numeric_rounding", "numeric_instant", "numeric_invariant", "numeric_diagnostics", "numeric_encoding" };
 const bytes_names = [_][]const u8{ "bytes_dead", "bytes_cleanup", "bytes_resize", "bytes_reserve", "bytes_move", "bytes_adopt_dead", "bytes_replace" };
-const names = owner_names ++ numeric_names ++ bytes_names;
+const a67_names = [_][]const u8{ "a67_mutex", "a67_rw_read", "a67_rw_write", "a67_once_ready", "a67_once_cold", "a67_condition", "a67_array", "a67_queue", "a67_buffer", "a67_budget", "a67_owned", "a67_must_use", "a67_confined", "a67_ordered", "a67_ring_buffer", "a67_limit" };
+const names = owner_names ++ numeric_names ++ bytes_names ++ a67_names;
 pub fn main(init: std.process.Init) !void {
     const a = init.arena.allocator();
     const args = try init.minimal.args.toSlice(a);
@@ -63,7 +64,7 @@ pub fn main(init: std.process.Init) !void {
                         if (!allocation_wipe) return error.MissingFullCapacityErasure;
                         if (std.mem.eql(u8, name, "bytes_adopt_dead") and std.mem.find(u8, body, "i64 %2, i1 true)") == null) return error.MissingAdoptedCapacityErasure;
                     }
-                } else if (!std.mem.startsWith(u8, name, "numeric_")) {
+                } else if (!std.mem.startsWith(u8, name, "numeric_") and !std.mem.startsWith(u8, name, "a67_")) {
                     const acquire = if (std.mem.startsWith(u8, target, "x86")) std.mem.find(u8, body, "acquire monotonic") != null else std.mem.find(u8, body, "@llvm.aarch64.ldaxr") != null and std.mem.find(u8, body, "@llvm.aarch64.stxr") != null;
                     if (!acquire or std.mem.find(u8, body, "release") == null) return error.MissingLockOrdering;
                 }

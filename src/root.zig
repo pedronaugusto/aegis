@@ -17,3 +17,19 @@ pub const assert = @import("assert.zig");
 pub const bounded = @import("bounded.zig");
 /// Static nonblocking cleanup owners and explicit result obligations.
 pub const own = @import("own.zig");
+/// Exclusive std.Io.Mutex guards, with explicit Io release.
+pub const BlockingGuarded = @import("BlockingGuarded.zig").BlockingGuarded;
+/// Bounded std.Io.RwLock guards with immutable/mutable borrows.
+pub const RwGuarded = @import("RwGuarded.zig").RwGuarded;
+/// Bounded condition waiters with guard reacquisition on every return.
+pub const Condition = @import("Condition.zig");
+/// Stable initialization, retry and acquire/release publication.
+pub const Once = @import("Once.zig").Once;
+/// Explicit logical-task initializer stack; zero-sized in release.
+pub const InitContext = @import("Once.zig").InitContext;
+/// Comptime partial rank relation with Debug logical-task diagnostics.
+pub const Order = @import("Order.zig").Order;
+/// Checked single-task state in Debug/ReleaseSafe, plain payload in fast/small.
+pub const Confined = @import("Confined.zig").Confined;
+/// Stable caller-issued logical-task identity for Confined.
+pub const TaskIdentity = @import("Confined.zig").Identity;
