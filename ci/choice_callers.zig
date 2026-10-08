@@ -4,7 +4,7 @@ const std = @import("std");
 const s = @import("aegis").secret;
 const base = @import("choice_baseline.zig");
 pub const names = .{ "equal0", "equal1", "equal32", "equal48", "equal512", "dynamic", "order_big", "order_little", "order_runtime", "int8", "int16", "int32", "int64", "signed8", "signed16", "signed32", "signed64", "logic", "bytes", "alias", "montgomery", "curve", "offline", "finished", "dead" };
-fn chosen(comptime wrapped: bool, a: *const [1]u8, b: *const [1]u8) if (wrapped) s.Choice else base.Bit {
+inline fn chosen(comptime wrapped: bool, a: *const [1]u8, b: *const [1]u8) if (wrapped) s.Choice else base.Bit {
     return if (wrapped) s.equal(1, a, b) else base.equal(a, b) catch unreachable; // unreachable: both fixed arrays have identical public lengths
 }
 inline fn equal(comptime wrapped: bool, comptime N: usize, a: *const [N]u8, b: *const [N]u8) u32 {

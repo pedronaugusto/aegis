@@ -51,7 +51,12 @@ pub fn main(init: std.process.Init) !void {
                     }
                     // Retain the exact enclosing bodies; semantic taint review is a separate gate.
                     const wb = try function(scratch, ir, try alias(a, ir, wn));
-                    try audit(scratch, wb);
+                    audit(scratch, wb) catch |err| {
+                        var failure = std.Io.File.stderr().writer(init.io, &.{});
+                        try failure.interface.print("{s} {s} {s} {s}: caller audit {s}\n", .{ target, mode, mitigation, name, @errorName(err) });
+                        try failure.interface.flush();
+                        return err;
+                    };
                     try report.writer.print("{s} {s} {s} {s} checked-caller bytes-of-normalized-text={d} caller-ir={d}\n", .{ target, mode, mitigation, name, wi.len, wb.len });
                 }
             }
