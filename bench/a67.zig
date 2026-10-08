@@ -90,7 +90,7 @@ fn operation(comptime name: []const u8, comptime wrapped: bool) Operation {
                     var out: u64 = undefined;
                     if (wrapped) owner.pop(&out) catch @panic("live head") else {
                         out = owner.storage[owner.head];
-                        owner.head = if (owner.head == 2) 0 else owner.head + 1;
+                        owner.head = if (owner.head == owner.storage.len - 1) 0 else owner.head + 1;
                         owner.used -= 1;
                     }
                     return out;
