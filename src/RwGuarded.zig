@@ -8,6 +8,8 @@ pub fn RwGuarded(comptime T: type) type {
         const Self = @This();
         const Count = @Int(.unsigned, @divFloor(@bitSizeOf(usize) - 1, 2));
         pub const maximum_admission = std.math.maxInt(Count);
+        /// Marks the owner as safe to share through a mutable pointer: all access is behind its lock.
+        pub const interior_lock = true;
         /// Private: base std lock with matching cancellation/wake semantics.
         lock: Io.RwLock = .init,
         /// Private: readers/writers admitted or waiting, bounded before std counters change.
@@ -73,6 +75,13 @@ pub fn RwGuarded(comptime T: type) type {
                 return null;
             }
             return .{ .owner = self };
+        }
+        /// The data of an owner that no other task can reach: for the sole owner's teardown, which
+        /// then needs no Io. Asserts nobody is admitted in Debug and ReleaseSafe. The owner is not
+        /// used again; this ends every borrow and takes no lock.
+        pub fn teardown(self: *Self) *T {
+            std.debug.assert(self.admitted.load(.monotonic) == 0);
+            return &self.data;
         }
         pub const ReadGuard = struct {
             /// Private: uncopied logical-task capability.

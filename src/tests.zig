@@ -18,4 +18,5 @@ test {
     _ = @import("testing/consumers_test.zig");
     _ = @import("testing/foundations_test.zig");
     _ = @import("testing/abi_test.zig");
+    _ = @import("testing/gaps_test.zig");
 }

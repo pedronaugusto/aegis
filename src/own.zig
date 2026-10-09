@@ -35,6 +35,14 @@ pub fn Owned(comptime T: type, comptime cleanup: fn (*T) void) type {
         pub fn init(value: T) Self {
             return .{ .data = value };
         }
+        /// Takes the payload out of `source` by its `moveInto` when `T` declares one, else by assignment,
+        /// and consumes `source`. For a payload that must not exist twice, such as a Budget reservation:
+        /// `init` would copy it and leave the source able to release it again.
+        pub fn initFrom(source: *T) Self {
+            var self: Self = .{ .data = undefined };
+            transfer(T, source, &self.data);
+            return self;
+        }
         pub fn borrow(self: *Self) *const T {
             bind(&self.state, self);
             return &self.data;

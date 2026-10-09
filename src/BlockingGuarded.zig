@@ -4,6 +4,8 @@ const std = @import("std");
 pub fn BlockingGuarded(comptime T: type) type {
     return struct {
         const Self = @This();
+        /// Marks the owner as safe to share through a mutable pointer: all access is behind its lock.
+        pub const interior_lock = true;
         /// Private: synchronization kernel; no unlocked data access.
         mutex: std.Io.Mutex = .init,
         /// Private: only borrow through a live guard.
@@ -24,6 +26,13 @@ pub fn BlockingGuarded(comptime T: type) type {
         pub fn tryAcquire(self: *Self) ?Guard {
             if (!self.mutex.tryLock()) return null;
             return .{ .owner = self };
+        }
+        /// The data of an owner that no other task can reach: for the sole owner's teardown, which
+        /// then needs no Io. Asserts the mutex is free in Debug and ReleaseSafe. The owner is not
+        /// used again; this ends every borrow and takes no lock.
+        pub fn teardown(self: *Self) *T {
+            std.debug.assert(self.mutex.state.load(.monotonic) == .unlocked);
+            return &self.data;
         }
         /// Uncopied single-task capability. All borrows end before wait or release.
         pub const Guard = struct {

@@ -11,7 +11,9 @@ pub fn Owner(comptime T: type, comptime wrapped: bool) type {
     return if (wrapped) aegis.Guarded(T) else Direct(T);
 }
 fn lock(comptime T: type, owner: *Direct(T)) void {
-    while (owner.lock.cmpxchgWeak(false, true, .acquire, .monotonic) != null) std.atomic.spinLoopHint();
+    while (owner.lock.swap(true, .acquire)) {
+        while (owner.lock.load(.monotonic)) std.atomic.spinLoopHint();
+    }
 }
 
 pub fn secret(comptime T: type, comptime wrapped: bool, source: *T) u8 {

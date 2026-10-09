@@ -31,7 +31,7 @@ pub fn build(b: *std.Build) void {
     }) });
     test_step.dependOn(&b.addRunArtifact(example).step);
     preflight.addCi(b, .{ .tests = test_step, .portable_tests = true, .bench = .{
-        .programs = &.{ .{ .name = "owners", .source = "bench/owners.zig" }, .{ .name = "numeric", .source = "bench/numeric.zig" }, .{ .name = "choices", .source = "bench/choices.zig" }, .{ .name = "bytes", .source = "bench/bytes.zig" }, .{ .name = "guarded-bounded", .source = "bench/a67.zig" }, .{ .name = "handles-input", .source = "bench/handles_input.zig" } },
+        .programs = &.{ .{ .name = "owners", .source = "bench/owners.zig" }, .{ .name = "numeric", .source = "bench/numeric.zig" }, .{ .name = "choices", .source = "bench/choices.zig" }, .{ .name = "bytes", .source = "bench/bytes.zig" }, .{ .name = "guarded-bounded", .source = "bench/a67.zig" }, .{ .name = "handles-input", .source = "bench/handles_input.zig" }, .{ .name = "gaps", .source = "bench/gaps.zig" } },
         .imports = benchImports,
         .target = target,
         .optimize = optimize,
@@ -166,7 +166,8 @@ fn benchImports(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.l
     const safety = b.createModule(.{ .root_source_file = b.path("ci/safety_parity.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     const bytes = b.createModule(.{ .root_source_file = b.path("ci/bytes.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     const a67 = b.createModule(.{ .root_source_file = b.path("ci/a67.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
-    return b.allocator.dupe(std.Build.Module.Import, &.{ .{ .name = "aegis", .module = aegis }, .{ .name = "cases", .module = cases }, .{ .name = "numeric", .module = numeric }, .{ .name = "choices", .module = choices }, .{ .name = "shakedown", .module = shake.module("shakedown") }, .{ .name = "bytes", .module = bytes }, .{ .name = "a67", .module = a67 }, .{ .name = "material", .module = material }, .{ .name = "safety", .module = safety } }) catch @panic("out of memory configuring benchmarks");
+    const gaps = b.createModule(.{ .root_source_file = b.path("ci/gaps.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
+    return b.allocator.dupe(std.Build.Module.Import, &.{ .{ .name = "aegis", .module = aegis }, .{ .name = "cases", .module = cases }, .{ .name = "numeric", .module = numeric }, .{ .name = "choices", .module = choices }, .{ .name = "shakedown", .module = shake.module("shakedown") }, .{ .name = "bytes", .module = bytes }, .{ .name = "a67", .module = a67 }, .{ .name = "gaps", .module = gaps }, .{ .name = "material", .module = material }, .{ .name = "safety", .module = safety } }) catch @panic("out of memory configuring benchmarks");
 }
 
 fn choiceBenchmarkLlvm(b: *std.Build, step: *std.Build.Step, seen: *std.AutoHashMapUnmanaged(*std.Build.Step, void)) void {

@@ -282,8 +282,12 @@ pub fn Limit(comptime Repr: type) type {
         pub fn init(maximum: Repr) Self {
             return .{ .maximum = maximum };
         }
+        /// Whether `amount` is over the maximum; an amount equal to it is within.
+        pub fn exceeds(self: Self, amount: Repr) bool {
+            return amount > self.maximum;
+        }
         pub fn check(self: Self, amount: Repr) CheckError!void {
-            if (amount > self.maximum) return error.LimitExceeded;
+            if (self.exceeds(amount)) return error.LimitExceeded;
         }
     };
 }

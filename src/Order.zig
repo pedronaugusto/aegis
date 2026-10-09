@@ -72,8 +72,14 @@ pub fn Order(comptime ranks: []const Rank) type {
                 const Self = @This();
                 /// Private: access only through an ordered guard.
                 base: LockType,
+                /// As the base lock's: all access is behind its lock.
+                pub const interior_lock = LockType.interior_lock;
                 pub fn init(base: LockType) Self {
                     return .{ .base = base };
+                }
+                /// The data of a sole owner, with no lock, no Io and no rank check, as the base lock's `teardown`.
+                pub fn teardown(self: *Self) @typeInfo(@TypeOf(LockType.teardown)).@"fn".return_type.? {
+                    return self.base.teardown();
                 }
                 fn wrap(self: *Self, context: *Context, base: anytype) Capability(@TypeOf(base), Context) {
                     context.push(self, rank);

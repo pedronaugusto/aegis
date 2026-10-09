@@ -109,11 +109,11 @@ test "A3 clock domains correspondence and Io adapters" {
     try t.expectEqual(@as(i64, 1003), (try b.correspond(a, Real.fromRaw(1000))).raw());
     try t.expectError(error.Overflow, Awake.fromRaw(std.math.maxInt(i64)).add(U.Duration(.millisecond, i64).fromRaw(1)));
     try t.expectError(error.ClockMismatch, Awake.fromIoTimestamp(.{ .raw = .fromNanoseconds(0), .clock = .real }, .exact));
-    const stamp = try b.toIoTimestamp();
+    const stamp = b.toIoTimestamp();
     try t.expectEqual(std.Io.Clock.awake, stamp.clock);
     try t.expectEqual(@as(i96, 13_000_000), stamp.raw.nanoseconds);
     try t.expectEqual(@as(i64, 13), (try Awake.fromIoTimestamp(stamp, .exact)).raw());
-    try t.expectEqual(@as(i96, -1_000_000), (try U.Duration(.millisecond, i64).fromRaw(-1).toIoDuration()).nanoseconds);
+    try t.expectEqual(@as(i96, -1_000_000), U.Duration(.millisecond, i64).fromRaw(-1).toIoDuration().nanoseconds);
     try t.expectError(error.Inexact, U.Duration(.millisecond, i64).fromIoDuration(.fromNanoseconds(1), .exact));
 }
 

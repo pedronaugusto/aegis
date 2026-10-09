@@ -22,6 +22,8 @@ comptime {
     std.debug.assert(a.Condition == sync.Condition);
     std.debug.assert(a.Once == sync.Once);
     std.debug.assert(a.InitContext == sync.InitContext);
+    std.debug.assert(a.Lazy == sync.Lazy);
+    std.debug.assert(a.Shared == sync.Shared);
     std.debug.assert(a.Order == sync.Order);
     std.debug.assert(a.Confined == sync.Confined);
     std.debug.assert(a.TaskIdentity == sync.TaskIdentity);

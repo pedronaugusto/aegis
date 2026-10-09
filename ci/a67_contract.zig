@@ -5,6 +5,7 @@ const O = a.Order(&.{.{ .name = "one" }});
 fn cleanup(value: *u64) void {
     value.* = 0;
 }
+const S = a.Shared(u64, cleanup);
 const Recursive = struct {
     once: *a.Once(u64),
     task: *a.InitContext,
@@ -59,5 +60,20 @@ pub fn main(init: std.process.Init) !void {
         var reservation = try budget.reserve(1);
         budget.used = 0; // Deliberate corrupted admission state, isolates all-mode underflow check.
         reservation.release();
+    } else if (std.mem.eql(u8, name, "shared-overflow")) {
+        var owner = try S.create(std.heap.page_allocator, 1);
+        owner.block.count.store(S.maximum_handles, .monotonic); // Deliberate corrupted count, isolates the all-mode limit.
+        _ = owner.retain();
+    } else if (std.mem.eql(u8, name, "shared-twice")) {
+        var owner = try S.create(std.heap.page_allocator, 1);
+        var other = owner.retain();
+        owner.release();
+        owner.release();
+        other.release();
+    } else if (std.mem.eql(u8, name, "teardown-held")) {
+        var owner = a.Guarded(u64).init(1);
+        var held = owner.acquire();
+        defer held.deinit();
+        std.mem.doNotOptimizeAway(owner.teardown());
     } else return error.UnknownCase;
 }

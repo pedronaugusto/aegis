@@ -63,6 +63,8 @@ comptime {
     std.debug.assert(aegis.Condition == sync.Condition);
     std.debug.assert(aegis.Once == sync.Once);
     std.debug.assert(aegis.InitContext == sync.InitContext);
+    std.debug.assert(aegis.Lazy == sync.Lazy);
+    std.debug.assert(aegis.Shared == sync.Shared);
     std.debug.assert(aegis.Order == sync.Order);
     std.debug.assert(aegis.Confined == sync.Confined);
     std.debug.assert(aegis.TaskIdentity == sync.TaskIdentity);

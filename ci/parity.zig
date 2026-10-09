@@ -246,6 +246,8 @@ export fn wrapperBytesReplace(gpa: *const std.mem.Allocator, allocation: [*]u8, 
 }
 
 const a67_parity = @import("a67_parity.zig");
+const gaps_parity = @import("gaps_parity.zig");
 comptime {
     _ = a67_parity;
+    _ = gaps_parity;
 }

@@ -53,8 +53,13 @@ pub fn Counter(comptime Tag: type, comptime Repr: type) type {
         /// Private: last successfully issued ID; persists unchanged on exhaustion.
         _,
         pub const NextError = error{IdExhausted};
-        pub inline fn init(last: Repr) Self {
-            return @fromBackingInt(last);
+        pub inline fn init(issued: Repr) Self {
+            return @fromBackingInt(issued);
+        }
+        /// The last ID issued, or null before the first. Reading it changes nothing.
+        pub inline fn last(self: Self) ?Id(Tag, Repr) {
+            const issued = @backingInt(self);
+            return if (issued == 0) null else Id(Tag, Repr).fromRaw(issued);
         }
         pub inline fn next(self: *Self) NextError!Id(Tag, Repr) {
             const sum = @addWithOverflow(@backingInt(self.*), 1);

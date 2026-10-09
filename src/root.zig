@@ -26,6 +26,10 @@ pub const RwGuarded = sync.RwGuarded;
 pub const Condition = sync.Condition;
 /// Stable initialization, retry and acquire/release publication.
 pub const Once = sync.Once;
+/// Leaf initialization under the election mutex: no task context, the initializer's own errors.
+pub const Lazy = sync.Lazy;
+/// Counted shared ownership of one allocated value, cleaned by the last release.
+pub const Shared = sync.Shared;
 /// Explicit logical-task initializer stack; zero-sized in release.
 pub const InitContext = sync.InitContext;
 /// Comptime partial rank relation with Debug logical-task diagnostics.

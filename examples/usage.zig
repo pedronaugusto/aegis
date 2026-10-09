@@ -13,7 +13,7 @@ pub fn main() !void {
     const request = try Request.fromRaw(1);
     const size = try aegis.int.Checked(usize).init(4).mul(8);
     const payload = aegis.units.Bytes(usize).fromRaw(size.raw());
-    const timeout = try aegis.units.Duration(.millisecond, i64).fromRaw(250).toIoDuration();
+    const timeout = aegis.units.Duration(.millisecond, i64).fromRaw(250).toIoDuration();
     aegis.assert.post(payload.raw() == 32, "payload fits the record");
     _ = request;
     _ = timeout;

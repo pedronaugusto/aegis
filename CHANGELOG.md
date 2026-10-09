@@ -6,14 +6,25 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ### Breaking
 
+- The std adapters of `units.Duration` and `units.Instant` (`toIoDuration`, `fromIoDuration`, `toIoTimestamp`, `fromIoTimestamp`) return what the representation and unit allow: a conversion that cannot fail returns its value with no error and no range check, so `try` on it no longer compiles, and one that can fail returns only the errors it can have. Their `*Error` declarations narrow to match, and are empty where the conversion cannot fail. A millisecond `i64` widens into std's nanoseconds, a nanosecond `i128` takes any std duration or timestamp, and a nanosecond `i64` still checks the narrowing.
 - Replace A3 scalar extern structs with non-exhaustive enum(Repr) values; factory APIs and checks stay the same. Reflective field construction/access no longer applies.
 
 ### Fixed
 
+- `Guarded` acquires with one swap, as a hand-written lock does, instead of a weak compare-and-swap loop that cost about 10% more per uncontended acquire; a contended waiter spins on a plain load rather than rewriting the lock line. The paired assembly and timing parity fixtures now use the swap form.
+- Unit scale conversions reduce their ratio once per distinct scale with a bounded remainder loop, so many conversions in one caller's inline loops no longer exhaust the comptime branch quota.
 - Replace matching typed ABI prototypes with calls to separately compiled raw-integer exports. Retain the failing x86 hidden-return-pointer regression. The C ABI guarantee covers 8–64-bit and usize/isize representations on every configured target. 128-bit representations remain usable Zig types but are not promised C ABI types and are excluded from this ABI fixture/audit.
 
 ### Added
 
+- `Guarded`: `tryAcquire`, `acquireYielding(io)` (parks through Io between attempts, cancelable, grants no guard on cancellation) and `teardown`; `BlockingGuarded` and `RwGuarded` get an Io-free `teardown` for a sole owner. Debug and ReleaseSafe assert the lock is free.
+- `interior_lock`: a declaration that a type is safe to share through a mutable pointer because all of its mutation is behind its own lock. The guards declare it.
+- `Lazy(T)`: leaf initialization under the election mutex, with no `InitContext`, the initializer's own errors only and a mutable handout for an `interior_lock` type.
+- `Shared(T, cleanup)`: counted shared ownership of one allocated value with `create`, `createFrom`, `retain`, `get` and `release`, a fail-stop count limit and Debug detection of a handle released twice.
+- `eql` and `compare` for `Count`, `Bytes`, `Bits`, `Duration` and `Instant`.
+- `Instant.toTimestamp` and `fromTimestamp` for the clock-free `Io.Timestamp` that `Clock.now` returns.
+- `id.Counter.last`, `bounded.Limit.exceeds` and `own.Owned.initFrom`, which takes its payload by `moveInto` and consumes the source, so a Budget reservation is owned once.
+- Paired assembly (x86-64 and aarch64, ReleaseFast and ReleaseSafe) and timing fixtures for each of these against hand-written code, native contention and Io-schedule tests, and release/Debug contract cases for the fail-stop limits.
 - Standalone build modules for each implemented namespace, with shared root declaration identities and a gantry-enforced base/secret/upper layer graph.
 
 - A8 generational domains, fixed/growing/dense storage, primary-witness secondary associations and checked typed indices.
