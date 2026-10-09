@@ -1,5 +1,6 @@
 //! Deterministic A5 enclosing-caller lowering/cost gate. Raw evidence is private.
 const std = @import("std");
+const module_args = @import("module_args.zig");
 const cases = @import("choice_callers.zig");
 pub fn main(init: std.process.Init) !void {
     const a = init.arena.allocator();
@@ -15,7 +16,7 @@ pub fn main(init: std.process.Init) !void {
                 const profile = try a.print("{s}/profile.zig", .{destination});
                 try dir.writeFile(init.io, .{ .sub_path = profile, .data = try a.print("const std = @import(\"std\");\npub const mitigation: std.crypto.SideChannelsMitigations = .{s};\n", .{mitigation}) });
                 const stem = try a.print("{s}/{s}-{s}-{s}", .{ destination, target, mode, mitigation });
-                const result = try std.process.run(init.gpa, init.io, .{ .argv = &.{ args[1], "build-obj", try a.print("-O{s}", .{mode}), "-target", target, "-mcpu=baseline", "-fllvm", "-fstrip", "--dep", "aegis", "--dep", "profile", "-Mroot=ci/choice_parity.zig", "-Maegis=src/root.zig", try a.print("-Mprofile={s}", .{profile}), try a.print("-femit-llvm-ir={s}.ll", .{stem}), try a.print("-femit-asm={s}.s", .{stem}), "-fno-emit-bin" }, .stdout_limit = .limited(4096), .stderr_limit = .limited(65536) });
+                const result = try std.process.run(init.gpa, init.io, .{ .argv = try module_args.expand(init.arena.allocator(), &.{ args[1], "build-obj", try a.print("-O{s}", .{mode}), "-target", target, "-mcpu=baseline", "-fllvm", "-fstrip", "--dep", "aegis", "--dep", "profile", "-Mroot=ci/choice_parity.zig", "-Maegis=src/root.zig", try a.print("-Mprofile={s}", .{profile}), try a.print("-femit-llvm-ir={s}.ll", .{stem}), try a.print("-femit-asm={s}.s", .{stem}), "-fno-emit-bin" }), .stdout_limit = .limited(4096), .stderr_limit = .limited(65536) });
                 defer init.gpa.free(result.stdout);
                 defer init.gpa.free(result.stderr);
                 if (result.term != .exited or result.term.exited != 0) {

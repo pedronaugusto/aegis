@@ -1,5 +1,5 @@
 const std = @import("std");
-const s = @import("../constant_time.zig");
+const s = @import("../root.zig").secret;
 const t = std.testing;
 fn reveal(c: s.Choice) bool {
     return c.declassify("test oracle verdict");

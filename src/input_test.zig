@@ -1,5 +1,5 @@
 const std = @import("std");
-const input = @import("input.zig");
+const input = @import("root.zig").input;
 const t = std.testing;
 const Header = struct { body: []const u8, kind: u8 };
 const ParseError = error{ Truncated, LimitExceeded, Canceled };

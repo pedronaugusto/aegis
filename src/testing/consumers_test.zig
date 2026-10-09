@@ -1,7 +1,7 @@
 const std = @import("std");
 const shake = @import("shakedown");
-const Secret = @import("../Secret.zig").Secret;
-const Guarded = @import("../Guarded.zig").Guarded;
+const Secret = @import("../root.zig").Secret;
+const Guarded = @import("../root.zig").Guarded;
 const Material = @import("material").Material;
 
 fn patterns(_: void, c: *shake.Case) !void {

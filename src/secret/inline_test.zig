@@ -1,5 +1,5 @@
 const std = @import("std");
-const Secret = @import("Secret.zig").Secret;
+const Secret = @import("../root.zig").Secret;
 const Material = @import("material").Material;
 
 fn erased(bytes: []const u8) !void {

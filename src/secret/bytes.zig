@@ -122,7 +122,3 @@ fn eraseAndFree(gpa: std.mem.Allocator, allocation: []u8) void {
     // allocation's exact extent/alignment directly so the hook sees zero bytes.
     if (allocation.len != 0) gpa.rawFree(allocation, .fromByteUnits(@alignOf(u8)), @returnAddress());
 }
-
-test {
-    _ = @import("SecretBytes_test.zig");
-}

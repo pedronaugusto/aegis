@@ -1,7 +1,7 @@
 //! Scalar units with explicit, checked conversion; no scheduler or implicit clock cast.
 const std = @import("std");
-const ints = @import("int.zig");
-const scalar = @import("scalar.zig");
+const ints = @import("int");
+const scalar = @import("scalar");
 /// Rounding down/up is toward negative/positive infinity, respectively.
 pub const Rounding = enum { exact, down, up };
 /// Fixed duration scales, represented exactly as nanoseconds.

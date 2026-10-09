@@ -66,7 +66,3 @@ fn validate(comptime T: type) void {
         else => @compileError("Secret requires pointer-free fixed inline material"),
     }
 }
-
-test {
-    _ = @import("Secret_test.zig");
-}

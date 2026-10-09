@@ -14,6 +14,8 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ### Added
 
+- Standalone build modules for each implemented namespace, with shared root declaration identities and a gantry-enforced base/secret/upper layer graph.
+
 - A8 generational domains, fixed/growing/dense storage, primary-witness secondary associations and checked typed indices.
 - A9 nonowning refined-input adapters and bounded pointer-free public error context with explicit text classification.
 

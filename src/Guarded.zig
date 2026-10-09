@@ -42,7 +42,3 @@ pub fn Guarded(comptime T: type) type {
         };
     };
 }
-
-test {
-    _ = @import("Guarded_test.zig");
-}

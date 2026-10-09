@@ -1,5 +1,5 @@
 const std = @import("std");
-const Guarded = @import("Guarded.zig").Guarded;
+const Guarded = @import("root.zig").Guarded;
 
 fn fail(owner: *Guarded(u64)) error{Injected}!void {
     var held = owner.acquire();

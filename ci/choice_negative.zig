@@ -1,5 +1,6 @@
 //! A5 unsupported-profile and explicit-reveal/format compile contracts.
 const std = @import("std");
+const module_args = @import("module_args.zig");
 pub fn main(init: std.process.Init) !void {
     const a = init.arena.allocator();
     const args = try init.minimal.args.toSlice(a);
@@ -40,7 +41,7 @@ pub fn main(init: std.process.Init) !void {
 }
 fn rejected(init: std.process.Init, zig: []const u8, path: []const u8, target: []const u8, cpu: []const u8, mode: []const u8, backend: []const u8, message: []const u8) !void {
     const a = init.arena.allocator();
-    const result = try std.process.run(init.gpa, init.io, .{ .argv = &.{ zig, "build-obj", try a.print("-O{s}", .{mode}), "-target", target, try a.print("-mcpu={s}", .{cpu}), backend, "--dep", "aegis", try a.print("-Mroot={s}", .{path}), "-Maegis=src/root.zig", "-fno-emit-bin" }, .stdout_limit = .limited(4096), .stderr_limit = .limited(32768) });
+    const result = try std.process.run(init.gpa, init.io, .{ .argv = try module_args.expand(init.arena.allocator(), &.{ zig, "build-obj", try a.print("-O{s}", .{mode}), "-target", target, try a.print("-mcpu={s}", .{cpu}), backend, "--dep", "aegis", try a.print("-Mroot={s}", .{path}), "-Maegis=src/root.zig", "-fno-emit-bin" }), .stdout_limit = .limited(4096), .stderr_limit = .limited(32768) });
     defer init.gpa.free(result.stdout);
     defer init.gpa.free(result.stderr);
     if (result.term != .exited or result.term.exited == 0 or std.mem.find(u8, result.stderr, message) == null) {

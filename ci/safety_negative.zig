@@ -1,5 +1,6 @@
 //! A8/A9 intended-reason compilation failures, including secret and owner rejection.
 const std = @import("std");
+const module_args = @import("module_args.zig");
 pub fn main(init: std.process.Init) !void {
     const arena = init.arena.allocator();
     const args = try init.minimal.args.toSlice(arena);
@@ -28,7 +29,7 @@ pub fn main(init: std.process.Init) !void {
         const path = try arena.print(".zig-cache/a8-a9-negative/{d}.zig", .{i});
         try dir.writeFile(init.io, .{ .sub_path = path, .data = try arena.print("const std=@import(\"std\"); const a=@import(\"aegis\"); export fn run() void {{ checked() catch {{}}; }} fn checked() !void {{ {s} }}\n", .{case[0]}) });
         for ([_][]const u8{ "ReleaseSafe", "ReleaseFast", "ReleaseSmall" }) |mode| {
-            const result = try std.process.run(init.gpa, init.io, .{ .argv = &.{ args[1], "build-obj", try arena.print("-O{s}", .{mode}), "--dep", "aegis", try arena.print("-Mroot={s}", .{path}), "-Maegis=src/root.zig", "-fno-emit-bin" }, .stderr_limit = .limited(32768) });
+            const result = try std.process.run(init.gpa, init.io, .{ .argv = try module_args.expand(init.arena.allocator(), &.{ args[1], "build-obj", try arena.print("-O{s}", .{mode}), "--dep", "aegis", try arena.print("-Mroot={s}", .{path}), "-Maegis=src/root.zig", "-fno-emit-bin" }), .stderr_limit = .limited(32768) });
             defer init.gpa.free(result.stdout);
             defer init.gpa.free(result.stderr);
             if (result.term != .exited or result.term.exited == 0 or std.mem.find(u8, result.stderr, case[1]) == null) {

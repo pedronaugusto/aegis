@@ -1,5 +1,4 @@
 //! Boundary marker and parser adaptation; parsing conveys no authority or ownership.
-const std = @import("std");
 fn View(comptime T: type) type {
     return switch (@typeInfo(T)) {
         .pointer => |p| blk: {

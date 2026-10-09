@@ -1,5 +1,5 @@
 const std = @import("std");
-const e = @import("err.zig");
+const e = @import("root.zig").err;
 const t = std.testing;
 const Frame = struct {
     pub const aegis_public_frame = true;

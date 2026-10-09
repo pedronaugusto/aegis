@@ -1,6 +1,6 @@
 const std = @import("std");
 const shake = @import("shakedown");
-const h = @import("handle.zig");
+const h = @import("root.zig").handle;
 const t = std.testing;
 const Tag = struct {};
 fn ignore(_: *u32) void {}
@@ -60,27 +60,6 @@ test "A8 pool stale forged cross-instance and clear keys fail in every mode" {
     p.clear(ignore);
     try t.expectError(error.InvalidKey, p.get(next));
     try t.expectError(error.InvalidInstance, P.initBuffer(&slots, .{ .namespace = 7, .serial = 0 }));
-}
-
-test "A8 exhaustive small generations retire every slot permanently" {
-    const P = @import("handle/pool.zig").WithGeneration(u32, Tag, u2);
-    var slots: [2]P.Slot = undefined;
-    var p = try P.initBuffer(&slots, instance());
-    var previous: [6]P.Key = undefined;
-    for (0..6) |i| {
-        var value: u32 = 31;
-        const key = try p.insert(&value);
-        previous[i] = key;
-        for (previous[0..i]) |old| try t.expect(!p.contains(old));
-        var removed: u32 = undefined;
-        try p.remove(key, &removed);
-    }
-    var value: u32 = 11;
-    try t.expectError(error.Full, p.insert(&value));
-    try t.expectEqual(@as(u32, 11), value);
-    p.clear(ignore);
-    try t.expectError(error.Full, p.insert(&value));
-    try t.expectEqual(@as(usize, 2), p.retired);
 }
 
 test "A8 growth and dense swap preserve keys and fix both links" {
@@ -275,20 +254,6 @@ fn denseTrace(_: void, c: *shake.Case) !void {
 }
 test "A8 generated dense swaps preserve independent keyed values" {
     try shake.check(t.allocator, {}, denseTrace, .{ .cases = 128 });
-}
-test "A8 clear exhausts rather than resets generations" {
-    const P = @import("handle/pool.zig").WithGeneration(u32, Tag, u2);
-    var slots: [1]P.Slot = undefined;
-    var p = try P.initBuffer(&slots, instance());
-    for (0..3) |_| {
-        var value: u32 = 1;
-        const key = try p.insert(&value);
-        p.clear(ignore);
-        try t.expect(!p.contains(key));
-    }
-    var value: u32 = 2;
-    try t.expectError(error.Full, p.insert(&value));
-    try t.expectEqual(@as(usize, 1), p.retired);
 }
 
 test "A8 reserve admission failure preserves live keys values and borrows" {

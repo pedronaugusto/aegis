@@ -1,5 +1,6 @@
 //! Strict optimizer-equivalence gate: aliases or exact normalized instruction equality.
 const std = @import("std");
+const module_args = @import("module_args.zig");
 const owner_names = [_][]const u8{ "secret_s32", "transfer_s32", "secret_s48", "transfer_s48", "secret_material", "transfer_material", "cleanup", "cleanup_material", "budget", "job", "increment" };
 const numeric_names = [_][]const u8{ "numeric_add", "numeric_sub", "numeric_mul", "numeric_div", "numeric_rem", "numeric_shift", "numeric_saturating", "numeric_ranged", "numeric_cast", "numeric_identity", "numeric_counter", "numeric_count", "numeric_bits", "numeric_duration", "numeric_rounding", "numeric_instant", "numeric_invariant", "numeric_diagnostics", "numeric_encoding" };
 const bytes_names = [_][]const u8{ "bytes_dead", "bytes_cleanup", "bytes_resize", "bytes_reserve", "bytes_move", "bytes_adopt_dead", "bytes_replace" };
@@ -14,7 +15,7 @@ pub fn main(init: std.process.Init) !void {
     for ([_][]const u8{ "x86_64-linux-gnu", "aarch64-linux-gnu" }) |target| {
         for ([_][]const u8{ "ReleaseFast", "ReleaseSafe" }) |mode| {
             const stem = try a.print(".zig-cache/parity/{s}-{s}", .{ target, mode });
-            const result = try std.process.run(init.gpa, init.io, .{ .argv = &.{ args[1], "build-obj", try a.print("-O{s}", .{mode}), "-target", target, "-mcpu=baseline", "-fllvm", "-fstrip", "--dep", "aegis", "--dep", "material", "-Mroot=ci/parity.zig", "-Maegis=src/root.zig", "-Mmaterial=src/testing/Material.zig", try a.print("-femit-llvm-ir={s}.ll", .{stem}), try a.print("-femit-asm={s}.s", .{stem}), try a.print("-femit-bin={s}.o", .{stem}), "--cache-dir", ".zig-cache/parity/cache", "--global-cache-dir", ".zig-cache/global" }, .stdout_limit = .limited(4096), .stderr_limit = .limited(16384) });
+            const result = try std.process.run(init.gpa, init.io, .{ .argv = try module_args.expand(init.arena.allocator(), &.{ args[1], "build-obj", try a.print("-O{s}", .{mode}), "-target", target, "-mcpu=baseline", "-fllvm", "-fstrip", "--dep", "aegis", "--dep", "material", "-Mroot=ci/parity.zig", "-Maegis=src/root.zig", "-Mmaterial=src/testing/Material.zig", try a.print("-femit-llvm-ir={s}.ll", .{stem}), try a.print("-femit-asm={s}.s", .{stem}), try a.print("-femit-bin={s}.o", .{stem}), "--cache-dir", ".zig-cache/parity/cache", "--global-cache-dir", ".zig-cache/global" }), .stdout_limit = .limited(4096), .stderr_limit = .limited(16384) });
             defer init.gpa.free(result.stdout);
             defer init.gpa.free(result.stderr);
             if (result.term != .exited or result.term.exited != 0) {

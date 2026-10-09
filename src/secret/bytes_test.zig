@@ -1,6 +1,6 @@
 const std = @import("std");
 const shake = @import("shakedown");
-const SecretBytes = @import("SecretBytes.zig");
+const SecretBytes = @import("../root.zig").SecretBytes;
 
 // Inspects while the allocation is still valid, BEFORE forwarding free. Never
 // reads freed memory, formats content, or relies on Debug allocator poisoning.

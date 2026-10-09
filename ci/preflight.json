@@ -62,6 +62,16 @@
       "zig",
       "build",
       "check-handles-input"
+    ],
+    [
+      "zig",
+      "build",
+      "check-namespaces"
+    ],
+    [
+      "zig",
+      "build",
+      "test-handles-input-modes"
     ]
   ],
   "docs": {

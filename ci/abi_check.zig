@@ -1,5 +1,6 @@
 //! Deterministic raw-prototype ABI parity on every configured cross target.
 const std = @import("std");
+const module_args = @import("module_args.zig");
 const builtin = @import("builtin");
 pub fn main(init: std.process.Init) !void {
     const a = init.arena.allocator();
@@ -65,7 +66,7 @@ pub fn main(init: std.process.Init) !void {
     if (total_mismatches != 0) return error.RawIntegerAbiMismatch;
 }
 fn run(init: std.process.Init, argv: []const []const u8) !void {
-    const result = try std.process.run(init.gpa, init.io, .{ .argv = argv, .stderr_limit = .limited(16384) });
+    const result = try std.process.run(init.gpa, init.io, .{ .argv = try module_args.expand(init.arena.allocator(), argv), .stderr_limit = .limited(16384) });
     defer init.gpa.free(result.stdout);
     defer init.gpa.free(result.stderr);
     if (result.term != .exited or result.term.exited != 0) {
