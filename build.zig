@@ -87,6 +87,9 @@ pub fn build(b: *std.Build) void {
     run_bytes_contracts.addArg(b.graph.zig_exe);
     run_bytes_contracts.setCwd(b.path("."));
     b.step("check-secret-bytes", "Require all-mode move rejection and portable byte owner compilation").dependOn(&run_bytes_contracts.step);
+    const focus = b.step("test-handles-input", "Run selected A8/A9 cases without unrelated tooling");
+    const focused = b.addTest(.{ .root_module = m, .filters = filters, .use_llvm = true });
+    focus.dependOn(&b.addRunArtifact(focused).step);
     const bytes_tests = b.step("test-secret-bytes", "Run A4 ownership contracts in both release modes");
     const scalar_tests = b.step("test-scalars", "Run A3 contracts in both release modes");
     for ([_]std.lang.Optimize{ .safe, .fast }) |mode| {

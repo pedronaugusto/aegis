@@ -1,8 +1,8 @@
 # aegis
 
-Explicit safety types for any Zig project: inline and allocated secrets, spin-guarded data, checked scalar arithmetic, audited value kernels, distinct IDs and units, and executable contracts. Runtime code depends only on std; required wiping, locking, arithmetic, range and conversion checks remain enabled in every build.
+Explicit safety types for any Zig project: inline and allocated secrets, spin-guarded data, checked scalar arithmetic, audited value kernels, distinct IDs and units, checked generational storage, refined input adapters, bounded public diagnostics, and executable contracts. Runtime code depends only on std; required wiping, locking, arithmetic, range and conversion checks remain enabled in every build.
 
-Work in progress. Implemented: v0 (`Secret(T)` and spin `Guarded(T)`), A3 numeric/domain foundations, A4 `SecretBytes` and A5 Choice/compare/select value kernels. The full safety catalogue and consumer adoption remain later work.
+Work in progress. Implemented: v0 (`Secret(T)` and spin `Guarded(T)`), A3 numeric/domain foundations, A4 `SecretBytes` A5 Choice/compare/select value kernels, and A8/A9 handles, typed indices, checked-input adapters and bounded error context. The full safety catalogue and consumer adoption remain later work.
 
 ## Install
 
@@ -58,11 +58,17 @@ Zig permits struct copies, field access and escaped pointers. These contracts do
 
 `assert.invariant`, `pre` and `post` fail-stop in every build with a static public message. Peer failures return errors. `debug` is optional and still evaluates its argument; `debugCheck` removes the predicate call in both release modes. `maybe` accepts a side-effect-free possibility without asserting truth; `maybeCount` instruments caller-owned storage only in test builds. Contracts do not unwind cleanup on panic.
 
+`handle.Domain` issues nonzero pool instances within a caller-supplied unique namespace. `Pool(T, Tag)` uses caller slot storage; `SlotMap` explicitly grows allocator-owned slots; `DenseSlotMap` adds contiguous iteration and swap removal. Keys retain namespace, instance, position and generation. Bounds, instance, occupancy and generation checks remain in every build. Generations never wrap: exhausted slots retire. `SecondaryMap(Key, V)` keeps full keys and requires the primary's liveness witness when resolving; stale associations remain owned until removed or pruned. Insert consumes the source only on success; remove transfers into uninitialized disjoint destination storage. Cleanup receives detached values, with no hidden lock. Growth and structural mutation end the documented borrows. `Index(Tag, Repr)` (also `typedIndex`) brands a position and validates the current slice at every access.
+
+`input.Untrusted(T)` preserves a nonowning value or const pointer view. `parse(context, parser)` invokes a parser with an explicit named error union and distinct refined result. Parsing conveys no authentication, authorization or immutable ownership; borrowed results require the input to remain live and unchanged. The adapter adds no parser engine or implicit allocation.
+
+`err.Context(Frame, N)` retains the first N public frames and marks truncation. `Failure(ErrorSet, Frame, N)` retains the original cause beside an inline context. Frame structs explicitly declare `pub const aegis_public_frame = true`; admitted fields are public booleans, integers, enums, nested admitted frames and `PublicText(N)`. Pointers, slices, owners, unknown aggregates and custom formatters are rejected. This is reviewed classification, not secret-flow proof. Default crypto frames contain no runtime text. Optional runtime text requires `PublicSource.classify(bytes, comptime reason)` and bounded escaping; callers must never classify secrets as public. Context formatting allocates nothing and preserves Writer errors.
+
 ## Scope
 
 `aegis.secret` exposes `Choice`, `equal`, `equalBytes`, `compareUnsigned` and `OrderChoices`; choices offer logic, integer/byte selection and explicit `declassify(comptime reason)`. Public length and overlap validation remain enabled.
 
-No reference counting, blocking locks, pools, handles, generic deleters or code analysis. Runtime closure is std only. Tags, checks and explicit raw boundaries are API discipline; Zig fields/reflection can bypass them. [Design](https://github.com/pedronaugusto/aegis/blob/main/docs/design.md) records the ownership and foreign-boundary contracts. Glint admission and consumer adoption remain later work. Equal handwritten wipe/locking cost does not mean those operations have zero cost.
+No reference counting, protocol parsers, automatic destructors or code analysis. Runtime closure is std only. Tags, checks and explicit raw boundaries are API discipline; Zig fields/reflection can bypass them. [Design](https://github.com/pedronaugusto/aegis/blob/main/docs/design.md) records the ownership and foreign-boundary contracts. Glint admission and consumer adoption remain later work. Equal handwritten wipe/locking cost does not mean those operations have zero cost.
 
 ## Built with
 
@@ -70,7 +76,7 @@ No reference counting, blocking locks, pools, handles, generic deleters or code 
 
 ## Testing
 
-Run targeted cases with `zig build test -Dtest-filter=A3`, `-Dtest-filter=Secret`, `-Dtest-filter=A4`, `-Dtest-filter=A5`, `-Dtest-filter=Guarded` or `-Dtest-filter=Consumer`. `zig build lint` checks source/docs/structure, negative compilation, consumer isolation and strict codegen parity. `zig build check` compiles the suite; `zig build bench` runs own-operation A/B manually. The `test-secret-bytes` and `check-secret-bytes` gates exercise release cleanup and portable byte-owner contracts. The `check-choices` and `check-choices-negative` gates audit enclosing callers and disclosure/support contracts. The `test-scalars` and `check-contracts` gates retain release-mode failures; `check-negative` rejects cross-domain use. CI smoke-checks benchmark programs without timing gates. The hosted merge includes targeted Linux TSan.
+Run A8/A9 cases with `zig build test-handles-input -Dtest-filter=A8 -Dtest-filter=A9`. Run targeted cases with `zig build test -Dtest-filter=A3`, `-Dtest-filter=Secret`, `-Dtest-filter=A4`, `-Dtest-filter=A5`, `-Dtest-filter=Guarded` or `-Dtest-filter=Consumer`. `zig build lint` checks source/docs/structure, negative compilation, consumer isolation and strict codegen parity. `zig build check` compiles the suite; `zig build bench` runs own-operation A/B manually. The `test-secret-bytes` and `check-secret-bytes` gates exercise release cleanup and portable byte-owner contracts. The `check-choices` and `check-choices-negative` gates audit enclosing callers and disclosure/support contracts. The `test-scalars` and `check-contracts` gates retain release-mode failures; `check-negative` rejects cross-domain use. CI smoke-checks benchmark programs without timing gates. The hosted merge includes targeted Linux TSan.
 
 ## Licence
 

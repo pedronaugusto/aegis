@@ -16,3 +16,10 @@ pub const assert = @import("assert.zig");
 
 /// Copyable choices and audited byte comparison/select kernels.
 pub const secret = @import("constant_time.zig");
+
+/// Checked generational keys and typed positions; owners require external synchronization.
+pub const handle = @import("handle.zig");
+/// Boundary markers preserving each parser's exact error and refined result contract.
+pub const input = @import("input.zig");
+/// Allocation-free closed public diagnostic frames.
+pub const err = @import("err.zig");

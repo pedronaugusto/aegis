@@ -3,6 +3,8 @@ const family = @import("preflight_rules");
 pub const layers: []const gantry.rules.Layer = &.{
     .{ .name = "primitives", .patterns = &.{ "src/Secret.zig", "src/SecretBytes.zig", "src/Guarded.zig", "src/constant_time.zig", "src/scalar.zig", "src/int.zig", "src/id.zig", "src/assert.zig" } },
     .{ .name = "units", .patterns = &.{"src/units.zig"} },
+    .{ .name = "handles", .patterns = &.{ "src/handle.zig", "src/handle/**" } },
+    .{ .name = "boundary", .patterns = &.{ "src/input.zig", "src/err.zig" } },
     .{ .name = "public", .patterns = &.{"src/root.zig"} },
 };
 pub const required = [_][]const u8{ "src/root.zig", "src/Secret.zig", "src/SecretBytes.zig", "src/Guarded.zig", "src/constant_time.zig", "src/scalar.zig", "src/int.zig", "src/id.zig", "src/assert.zig", "src/tests.zig" };

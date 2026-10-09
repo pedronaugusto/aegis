@@ -1,4 +1,7 @@
 test {
+    _ = @import("handle_test.zig");
+    _ = @import("input_test.zig");
+    _ = @import("err_test.zig");
     _ = @import("root.zig");
     _ = @import("testing/constant_time_test.zig");
     _ = @import("Secret.zig");
