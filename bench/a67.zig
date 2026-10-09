@@ -14,7 +14,7 @@ fn State(comptime wrapped: bool) type {
         mutex: if (wrapped) a.BlockingGuarded(u64) else c.DirectMutex = if (wrapped) .init(0) else .{ .data = 0 },
         rw: if (wrapped) a.RwGuarded(u64) else c.DirectRw = if (wrapped) .init(0) else .{ .data = 0 },
         once: if (wrapped) a.Once(u64) else c.DirectOnce = if (wrapped) .init() else .{},
-        changed: a.Condition = .initLimit(0),
+        changed: if (wrapped) a.Condition else c.DirectCondition = .{ .limit = 0 },
         array: if (wrapped) a.bounded.Array(u64, 3) else c.DirectArray = if (wrapped) .init else .{},
         queue: if (wrapped) a.bounded.Queue(u64, 3) else c.DirectQueue = if (wrapped) .init else .{},
         budget: if (wrapped) a.bounded.Budget(u64) else c.DirectBudget = if (wrapped) .init(1024) else .{ .maximum = 1024 },

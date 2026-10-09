@@ -31,7 +31,7 @@ export fn baselineA67OnceCold(io: *const std.Io, owner: *c.DirectOnce, seed: u64
 export fn wrapperA67OnceCold(io: *const std.Io, owner: *a.Once(u64), seed: u64) ?*const u64 {
     return c.onceCold(true, io.*, owner, seed) catch null;
 }
-export fn baselineA67Condition(io: *const std.Io, changed: *a.Condition, owner: *c.DirectMutex, timeout: *const std.Io.Timeout) u64 {
+export fn baselineA67Condition(io: *const std.Io, changed: *c.DirectCondition, owner: *c.DirectMutex, timeout: *const std.Io.Timeout) u64 {
     return c.condition(false, io.*, changed, owner, timeout.*) catch |err| @intFromError(err);
 }
 export fn wrapperA67Condition(io: *const std.Io, changed: *a.Condition, owner: *a.BlockingGuarded(u64), timeout: *const std.Io.Timeout) u64 {

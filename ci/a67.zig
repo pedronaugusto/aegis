@@ -3,9 +3,10 @@ const std = @import("std");
 const builtin = @import("builtin");
 const a = @import("aegis");
 const Io = std.Io;
+pub const DirectCondition = @import("a67_condition.zig");
 pub const DirectMutex = struct { mutex: Io.Mutex = .init, data: u64 };
 pub const DirectRw = struct { lock: Io.RwLock = .init, admitted: std.atomic.Value(usize) = .init(0), limit: usize = 65535, data: u64 };
-pub const DirectOnce = struct { state: std.atomic.Value(enum(u32) { empty, running, ready }) = .init(.empty), mutex: Io.Mutex = .init, changed: a.Condition = .{}, data: u64 = undefined };
+pub const DirectOnce = struct { state: std.atomic.Value(enum(u32) { empty, running, ready }) = .init(.empty), mutex: Io.Mutex = .init, changed: DirectCondition = .{}, data: u64 = undefined };
 pub const DirectArray = struct { storage: [3]u64 = undefined, used: usize = 0 };
 pub const DirectQueue = struct {
     storage: [3]u64 = undefined,
@@ -121,7 +122,7 @@ pub fn onceCold(comptime wrapped: bool, io: Io, owner: if (wrapped) *a.Once(u64)
     owner.mutex.unlock(io);
     return &owner.data;
 }
-pub fn condition(comptime wrapped: bool, io: Io, changed: *a.Condition, owner: if (wrapped) *a.BlockingGuarded(u64) else *DirectMutex, timeout: Io.Timeout) a.Condition.WaitError!u64 {
+pub fn condition(comptime wrapped: bool, io: Io, changed: if (wrapped) *a.Condition else *DirectCondition, owner: if (wrapped) *a.BlockingGuarded(u64) else *DirectMutex, timeout: Io.Timeout) a.Condition.WaitError!u64 {
     if (wrapped) {
         var guard = try owner.acquire(io);
         defer guard.deinit(io);
