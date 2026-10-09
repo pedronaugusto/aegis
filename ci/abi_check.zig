@@ -25,6 +25,9 @@ pub fn main(init: std.process.Init) !void {
         const stem = try a.print(".zig-cache/abi/{s}", .{target});
         try run(init, &.{ args[1], "build-obj", "-OReleaseFast", "-fllvm", "-fstrip", "-target", target, "--dep", "aegis", "-Mroot=ci/abi.zig", source, try a.print("-femit-bin={s}.o", .{stem}), try a.print("-femit-llvm-ir={s}.ll", .{stem}) });
         try run(init, &.{ args[1], "build-obj", "-OReleaseFast", "-fllvm", "-fstrip", "-target", target, "ci/abi_raw.zig", try a.print("-femit-bin={s}-raw.o", .{stem}) });
+        // Preserve the raw-Zig regression and also compile genuinely foreign C
+        // prototypes on every ABI profile, including 32-bit x86 and wasm.
+        try run(init, &.{ args[1], "cc", "-target", target, "-O2", "-ffreestanding", "-fno-stack-protector", "-c", "ci/abi_raw.c", "-o", try a.print("{s}-c.o", .{stem}) });
         const ir = try dir.readFileAlloc(init.io, try a.print("{s}.ll", .{stem}), a, .limited(16 * 1024 * 1024));
         var lines = std.mem.splitScalar(u8, ir, '\n');
         var count: usize = 0;
@@ -54,6 +57,11 @@ pub fn main(init: std.process.Init) !void {
     try run(init, &.{ args[1], "build-exe", "-OReleaseFast", "-fllvm", ".zig-cache/abi/native-raw.o", "--dep", "aegis", "-Mroot=ci/abi_native.zig", source, try a.print("-femit-bin={s}", .{binary}) });
     try run(init, &.{binary});
     try out.interface.print("native {s}-{s}: separately linked raw integer calls and record fields passed\n", .{ @tagName(builtin.cpu.arch), @tagName(builtin.os.tag) });
+    try run(init, &.{ args[1], "cc", "-O2", "-ffreestanding", "-fno-stack-protector", "-c", "ci/abi_raw.c", "-o", ".zig-cache/abi/native-c.o" });
+    const c_binary = try a.print(".zig-cache/abi/native-c{s}", .{if (builtin.os.tag == .windows) ".exe" else ""});
+    try run(init, &.{ args[1], "build-exe", "-OReleaseFast", "-fllvm", ".zig-cache/abi/native-c.o", "--dep", "aegis", "-Mroot=ci/abi_native.zig", source, try a.print("-femit-bin={s}", .{c_binary}) });
+    try run(init, &.{c_binary});
+    try out.interface.print("native {s}-{s}: independently compiled C integer calls and record fields passed\n", .{ @tagName(builtin.cpu.arch), @tagName(builtin.os.tag) });
     if (total_mismatches != 0) return error.RawIntegerAbiMismatch;
 }
 fn run(init: std.process.Init, argv: []const []const u8) !void {

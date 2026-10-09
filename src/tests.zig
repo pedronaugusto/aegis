@@ -2,6 +2,7 @@ test {
     _ = @import("root.zig");
     _ = @import("testing/bounded_test.zig");
     _ = @import("testing/sync_test.zig");
+    _ = @import("testing/constant_time_test.zig");
     _ = @import("Secret.zig");
     _ = @import("SecretBytes.zig");
     _ = @import("Guarded.zig");

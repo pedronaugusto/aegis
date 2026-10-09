@@ -33,3 +33,6 @@ pub const Order = @import("Order.zig").Order;
 pub const Confined = @import("Confined.zig").Confined;
 /// Stable caller-issued logical-task identity for Confined.
 pub const TaskIdentity = @import("Confined.zig").Identity;
+
+/// Copyable choices and audited byte comparison/select kernels.
+pub const secret = @import("constant_time.zig");
