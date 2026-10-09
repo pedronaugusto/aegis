@@ -18,7 +18,7 @@ pub fn SecondaryMap(comptime KeyType: type, comptime V: type) type {
         pub fn put(self: *Self, primary: anytype, key: Key, source: *V) PutError!void {
             if (!primary.contains(key)) return error.InvalidKey;
             if (self.index.contains(key)) return error.AlreadyPresent;
-            if (transfer.overlaps(V, source, self.entries)) return error.AliasedStorage;
+            if (transfer.overlapsOwner(V, source, self) or transfer.overlaps(V, source, self.entries)) return error.AliasedStorage;
             try self.index.ensureUnusedCapacity(self.gpa, 1);
             if (self.free_head == std.math.maxInt(usize)) {
                 const count = std.math.add(usize, self.entries.len, self.entries.len / 2 + 1) catch return error.OutOfMemory;
@@ -57,7 +57,7 @@ pub fn SecondaryMap(comptime KeyType: type, comptime V: type) type {
         /// Removal needs no witness: stale associations still own values needing cleanup.
         pub fn remove(self: *Self, key: Key, destination: *V) KeyError!void {
             const position = self.index.get(key) orelse return error.Missing;
-            if (transfer.overlaps(V, destination, self.entries)) return error.AliasedStorage;
+            if (transfer.overlapsOwner(V, destination, self) or transfer.overlaps(V, destination, self.entries)) return error.AliasedStorage;
             _ = self.index.remove(key);
             transfer.move(V, &self.entries[position].value, destination);
             self.entries[position].live = false;

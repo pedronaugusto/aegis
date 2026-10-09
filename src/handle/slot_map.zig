@@ -50,7 +50,7 @@ pub fn SlotMap(comptime T: type, comptime Tag: type) type {
             self.storage.free_head = head;
         }
         pub fn insert(self: *Self, source: *T) InsertError!Key {
-            if (transfer.overlaps(T, source, self.storage.slots)) return error.AliasedStorage;
+            if (transfer.overlapsOwner(T, source, self) or transfer.overlaps(T, source, self.storage.slots)) return error.AliasedStorage;
             if (self.storage.free_head == std.math.maxInt(usize)) {
                 const old = self.capacity();
                 if (old == self.max_capacity) return error.Full;
@@ -69,6 +69,8 @@ pub fn SlotMap(comptime T: type, comptime Tag: type) type {
             return self.storage.getConst(key);
         }
         pub fn remove(self: *Self, key: Key, destination: *T) KeyError!void {
+            if (!self.contains(key)) return error.InvalidKey;
+            if (transfer.overlapsOwner(T, destination, self)) return error.AliasedStorage;
             return self.storage.remove(key, destination);
         }
         pub fn clear(self: *Self, comptime cleanup: fn (*T) void) void {

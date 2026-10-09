@@ -22,6 +22,10 @@ pub fn WithGeneration(comptime T: type, comptime Tag: type, comptime G: type) ty
             state: enum { free, live, retired } = .free,
             value: T = undefined,
         };
+        comptime {
+            std.debug.assert(@sizeOf(Key) <= 48);
+            std.debug.assert(@sizeOf(Self) <= 80);
+        }
         pub const InitError = error{InvalidInstance};
         pub const KeyError = error{ InvalidKey, AliasedStorage };
         pub const InsertError = error{ Full, AliasedStorage };
@@ -35,11 +39,13 @@ pub fn WithGeneration(comptime T: type, comptime Tag: type, comptime G: type) ty
             for (slots, 0..) |*slot, i| slot.* = .{ .next = if (i + 1 < slots.len) i + 1 else none };
             return .{ .slots = slots, .instance = instance, .free_head = if (slots.len == 0) none else 0 };
         }
-        pub fn insert(self: *Self, source: *T) InsertError!Key {
-            if (transfer.overlaps(T, source, self.slots)) return error.AliasedStorage;
+        pub inline fn insert(self: *Self, source: *T) InsertError!Key {
+            if (transfer.overlapsOwner(T, source, self)) return error.AliasedStorage;
+            const slots = self.slots;
+            if (transfer.overlaps(T, source, slots)) return error.AliasedStorage;
             if (self.free_head == none) return error.Full;
             const i = self.free_head;
-            const slot = &self.slots[i];
+            const slot = &slots[i];
             self.free_head = slot.next;
             transfer.move(T, source, &slot.value);
             slot.state = .live;
@@ -47,7 +53,7 @@ pub fn WithGeneration(comptime T: type, comptime Tag: type, comptime G: type) ty
             return .{ .instance = self.instance, .index = i, .generation = slot.generation };
         }
         pub inline fn contains(self: *const Self, key: Key) bool {
-            if (!self.instance.eql(key.instance) or key.index >= self.slots.len) return false;
+            if (self.instance.namespace != key.instance.namespace or self.instance.serial != key.instance.serial or key.index >= self.slots.len) return false;
             const slot = &self.slots[key.index];
             return slot.state == .live and slot.generation == key.generation;
         }
@@ -59,15 +65,14 @@ pub fn WithGeneration(comptime T: type, comptime Tag: type, comptime G: type) ty
             if (!self.contains(key)) return error.InvalidKey;
             return &self.slots[key.index].value;
         }
-        pub fn remove(self: *Self, key: Key, destination: *T) KeyError!void {
+        pub inline fn remove(self: *Self, key: Key, destination: *T) KeyError!void {
             if (!self.contains(key)) return error.InvalidKey;
-            if (transfer.overlaps(T, destination, self.slots)) return error.AliasedStorage;
+            if (transfer.overlapsOwner(T, destination, self) or transfer.overlaps(T, destination, self.slots)) return error.AliasedStorage;
             const slot = &self.slots[key.index];
             transfer.move(T, &slot.value, destination);
-            self.invalidate(key.index);
+            self.invalidate(slot, key.index);
         }
-        fn invalidate(self: *Self, i: usize) void {
-            const slot = &self.slots[i];
+        fn invalidate(self: *Self, slot: *Slot, i: usize) void {
             self.len -= 1;
             if (slot.generation == std.math.maxInt(G)) {
                 slot.state = .retired;
@@ -85,7 +90,7 @@ pub fn WithGeneration(comptime T: type, comptime Tag: type, comptime G: type) ty
                 if (slot.state != .live) continue;
                 var detached: T = undefined;
                 transfer.move(T, &slot.value, &detached);
-                self.invalidate(i);
+                self.invalidate(slot, i);
                 cleanup(&detached);
             }
         }

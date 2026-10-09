@@ -73,7 +73,7 @@ pub fn main(init: std.process.Init) !void {
         }
     }
 }
-fn alias(a: std.mem.Allocator, ir: []const u8, name: []const u8) ![]const u8 {
+pub fn alias(a: std.mem.Allocator, ir: []const u8, name: []const u8) ![]const u8 {
     const marker = try a.print("@{s} = alias ", .{name});
     const start = std.mem.find(u8, ir, marker) orelse {
         _ = try function(a, ir, name);
@@ -84,7 +84,7 @@ fn alias(a: std.mem.Allocator, ir: []const u8, name: []const u8) ![]const u8 {
     const at = std.mem.find(u8, line, ", ptr @") orelse return error.MalformedAlias;
     return line[at + 7 ..];
 }
-fn function(a: std.mem.Allocator, ir: []const u8, name: []const u8) ![]const u8 {
+pub fn function(a: std.mem.Allocator, ir: []const u8, name: []const u8) ![]const u8 {
     const marker = try a.print("@{s}(", .{name});
     var lines = std.mem.splitScalar(u8, ir, '\n');
     var body: std.Io.Writer.Allocating = .init(a);
@@ -100,7 +100,7 @@ fn function(a: std.mem.Allocator, ir: []const u8, name: []const u8) ![]const u8 
     return error.MissingEmittedFunction;
 }
 
-fn instructions(a: std.mem.Allocator, text: []const u8, name: []const u8, target: []const u8) ![]const u8 {
+pub fn instructions(a: std.mem.Allocator, text: []const u8, name: []const u8, target: []const u8) ![]const u8 {
     const marker = try a.print(".L{s}:", .{name});
     const start = std.mem.find(u8, text, marker) orelse std.mem.find(u8, text, try a.print("\n{s}:", .{name})) orelse return error.MissingAssemblyFunction;
     const end = std.mem.findPos(u8, text, start, ".size") orelse return error.MissingAssemblySize;
@@ -139,7 +139,7 @@ fn instructions(a: std.mem.Allocator, text: []const u8, name: []const u8, target
 fn integer(comptime T: type, bytes: []const u8, offset: usize) T {
     return std.mem.readInt(T, bytes[offset..][0..@sizeOf(T)], .little);
 }
-fn symbolSize(object: []const u8, name: []const u8) !u64 {
+pub fn symbolSize(object: []const u8, name: []const u8) !u64 {
     if (!std.mem.eql(u8, object[0..4], "\x7fELF") or object[4] != 2 or object[5] != 1) return error.ExpectedElf64Little;
     const sections = integer(u64, object, 40);
     const stride = integer(u16, object, 58);
@@ -162,7 +162,7 @@ fn symbolSize(object: []const u8, name: []const u8) !u64 {
     return error.MissingObjectSymbol;
 }
 
-fn exportName(a: std.mem.Allocator, prefix: []const u8, name: []const u8) ![]const u8 {
+pub fn exportName(a: std.mem.Allocator, prefix: []const u8, name: []const u8) ![]const u8 {
     var out: std.Io.Writer.Allocating = .init(a);
     try out.writer.writeAll(prefix);
     var parts = std.mem.splitScalar(u8, name, '_');
@@ -174,7 +174,7 @@ fn exportName(a: std.mem.Allocator, prefix: []const u8, name: []const u8) ![]con
 }
 
 // LLVM's machine-function merger can create assembly aliases absent from LLVM IR.
-fn assemblyAlias(a: std.mem.Allocator, assembly: []const u8, name: []const u8) ![]const u8 {
+pub fn assemblyAlias(a: std.mem.Allocator, assembly: []const u8, name: []const u8) ![]const u8 {
     const marker = try a.print("\n{s} = ", .{name});
     const start = std.mem.find(u8, assembly, marker) orelse return name;
     const begin = start + marker.len;

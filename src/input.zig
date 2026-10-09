@@ -49,6 +49,10 @@ pub fn Untrusted(comptime T: type) type {
             const e = @typeInfo(R).error_union;
             if (e.error_set == anyerror or e.payload == bool or e.payload == Self or e.payload == T or e.payload == View(T) or e.payload == void)
                 @compileError("Untrusted parser must return a distinct refined result with a named error set");
+            switch (@typeInfo(e.payload)) {
+                .@"struct", .@"union", .@"enum", .@"opaque" => if (@hasDecl(e.payload, "aegis_untrusted")) @compileError("Untrusted parser must return a distinct refined result"),
+                else => {},
+            }
             return R;
         }
     };

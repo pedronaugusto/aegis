@@ -206,3 +206,105 @@ fn trace(_: void, c: *shake.Case) !void {
 test "A8 generated churn has independent live-set oracle" {
     try shake.check(t.allocator, {}, trace, .{ .cases = 128 });
 }
+
+test "A8 transfers reject aliasing the owner metadata before mutation" {
+    const P = h.Pool(usize, Tag);
+    var slots: [1]P.Slot = undefined;
+    var p = try P.initBuffer(&slots, instance());
+    try t.expectError(error.AliasedStorage, p.insert(&p.len));
+    try t.expectEqual(@as(usize, 0), p.len);
+    var source: usize = 8;
+    const key = try p.insert(&source);
+    try t.expectError(error.AliasedStorage, p.remove(key, &p.len));
+    try t.expectEqual(@as(usize, 1), p.len);
+    try t.expectEqual(@as(usize, 8), (try p.get(key)).*);
+}
+
+fn secondaryAllocations(gpa: std.mem.Allocator) !void {
+    const Primary = h.Pool(u32, Tag);
+    var slots: [4]Primary.Slot = undefined;
+    var primary = try Primary.initBuffer(&slots, instance());
+    defer primary.deinit(ignore);
+    var secondary = h.SecondaryMap(Primary.Key, Resource).init(gpa);
+    defer secondary.deinit(Resource.cleanup);
+    for (0..4) |_| {
+        var seed: u32 = 1;
+        const key = try primary.insert(&seed);
+        try putResource(&secondary, &primary, key, gpa);
+    }
+    var removed: u32 = undefined;
+    const first: Primary.Key = .{ .instance = instance(), .index = 0, .generation = 1 };
+    try primary.remove(first, &removed);
+    secondary.prune(&primary, Resource.cleanup);
+}
+fn putResource(secondary: anytype, primary: anytype, key: @typeInfo(@TypeOf(primary)).pointer.child.Key, gpa: std.mem.Allocator) !void {
+    var value: Resource = .{ .gpa = gpa, .allocation = try gpa.alloc(u8, 3) };
+    errdefer value.cleanup();
+    try secondary.put(primary, key, &value);
+}
+test "A8 secondary owning growth every allocation failure and stale prune cleanup" {
+    var nr = shake.alloc.NoResize.init(t.allocator);
+    try t.checkAllAllocationFailures(nr.allocator(), secondaryAllocations, .{});
+}
+fn denseTrace(_: void, c: *shake.Case) !void {
+    var map = try h.Dense(u32, Tag).init(t.allocator, instance(), .{ .max_capacity = 8 });
+    defer map.deinit(ignore);
+    var keys: [8]?@TypeOf(map).Key = @splat(null);
+    var values: [8]u32 = @splat(0);
+    var count: usize = 0;
+    for (0..128) |_| {
+        const i = shake.gen.intRange(c.source, usize, 0, 7);
+        if (keys[i]) |key| {
+            var removed: u32 = undefined;
+            try map.remove(key, &removed);
+            try t.expectEqual(values[i], removed);
+            try t.expect(!map.contains(key));
+            keys[i] = null;
+            count -= 1;
+        } else {
+            var value = shake.gen.int(c.source, u32);
+            values[i] = value;
+            keys[i] = try map.insert(&value);
+            count += 1;
+        }
+        try t.expectEqual(count, map.items().len);
+        for (keys, values) |key, value| if (key) |live| {
+            try t.expectEqual(value, (try map.get(live)).*);
+        };
+    }
+}
+test "A8 generated dense swaps preserve independent keyed values" {
+    try shake.check(t.allocator, {}, denseTrace, .{ .cases = 128 });
+}
+test "A8 clear exhausts rather than resets generations" {
+    const P = @import("handle/pool.zig").WithGeneration(u32, Tag, u2);
+    var slots: [1]P.Slot = undefined;
+    var p = try P.initBuffer(&slots, instance());
+    for (0..3) |_| {
+        var value: u32 = 1;
+        const key = try p.insert(&value);
+        p.clear(ignore);
+        try t.expect(!p.contains(key));
+    }
+    var value: u32 = 2;
+    try t.expectError(error.Full, p.insert(&value));
+    try t.expectEqual(@as(usize, 1), p.retired);
+}
+
+test "A8 reserve admission failure preserves live keys values and borrows" {
+    var failing = std.testing.FailingAllocator.init(t.allocator, .{});
+    var map = try h.SlotMap(u32, Tag).init(failing.allocator(), instance(), .{ .capacity = 1, .max_capacity = 4 });
+    defer map.deinit(ignore);
+    var value: u32 = 23;
+    const key = try map.insert(&value);
+    const borrow = try map.get(key);
+    failing.fail_index = failing.alloc_index;
+    try t.expectError(error.OutOfMemory, map.reserve(4));
+    try t.expectEqual(borrow, try map.get(key));
+    try t.expectEqual(@as(u32, 23), borrow.*);
+    value = 24;
+    try t.expectError(error.OutOfMemory, map.insert(&value));
+    try t.expectEqual(@as(u32, 24), value);
+    try t.expectError(error.CapacityExceeded, map.reserve(5));
+    try t.expectEqual(@as(usize, 1), map.len());
+}

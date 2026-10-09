@@ -53,7 +53,7 @@ pub fn DenseSlotMap(comptime T: type, comptime Tag: type) type {
             self.keys = keys;
         }
         pub fn insert(self: *Self, source: *T) InsertError!Key {
-            if (transfer.overlaps(T, source, self.values)) return error.AliasedStorage;
+            if (transfer.overlapsOwner(T, source, self) or transfer.overlaps(T, source, self.values)) return error.AliasedStorage;
             if (self.used == self.values.len or self.primary.storage.free_head == std.math.maxInt(usize)) {
                 const old = self.primary.capacity();
                 if (old == self.primary.max_capacity) return error.Full;
@@ -80,7 +80,7 @@ pub fn DenseSlotMap(comptime T: type, comptime Tag: type) type {
         }
         pub fn remove(self: *Self, key: Key, destination: *T) KeyError!void {
             if (!self.contains(key)) return error.InvalidKey;
-            if (transfer.overlaps(T, destination, self.values)) return error.AliasedStorage;
+            if (transfer.overlapsOwner(T, destination, self) or transfer.overlaps(T, destination, self.values)) return error.AliasedStorage;
             var position: usize = undefined;
             try self.primary.remove(key, &position);
             transfer.move(T, &self.values[position], destination);

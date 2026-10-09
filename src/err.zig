@@ -83,7 +83,7 @@ pub fn Context(comptime Frame: type, comptime N: usize) type {
         buffer: [N]Frame = undefined,
         len: usize = 0,
         truncated: bool = false,
-        pub fn push(self: *Self, frame: Frame) void {
+        pub inline fn push(self: *Self, frame: Frame) void {
             if (self.len >= N) {
                 self.truncated = true;
                 return;

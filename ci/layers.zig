@@ -1,8 +1,9 @@
 const gantry = @import("gantry");
 const family = @import("preflight_rules");
 pub const layers: []const gantry.rules.Layer = &.{
-    .{ .name = "primitives", .patterns = &.{ "src/Secret.zig", "src/SecretBytes.zig", "src/Guarded.zig", "src/constant_time.zig", "src/scalar.zig", "src/int.zig", "src/id.zig", "src/assert.zig" } },
-    .{ .name = "units", .patterns = &.{"src/units.zig"} },
+    .{ .name = "base", .patterns = &.{ "src/scalar.zig", "src/int.zig", "src/id.zig", "src/units.zig", "src/assert.zig" } },
+    .{ .name = "secret", .patterns = &.{ "src/Secret.zig", "src/SecretBytes.zig", "src/constant_time.zig" } },
+    .{ .name = "sync", .patterns = &.{"src/Guarded.zig"} },
     .{ .name = "handles", .patterns = &.{ "src/handle.zig", "src/handle/**" } },
     .{ .name = "boundary", .patterns = &.{ "src/input.zig", "src/err.zig" } },
     .{ .name = "public", .patterns = &.{"src/root.zig"} },

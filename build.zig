@@ -24,7 +24,7 @@ pub fn build(b: *std.Build) void {
     }) });
     test_step.dependOn(&b.addRunArtifact(example).step);
     preflight.addCi(b, .{ .tests = test_step, .portable_tests = true, .bench = .{
-        .programs = &.{ .{ .name = "owners", .source = "bench/owners.zig" }, .{ .name = "numeric", .source = "bench/numeric.zig" }, .{ .name = "choices", .source = "bench/choices.zig" }, .{ .name = "bytes", .source = "bench/bytes.zig" } },
+        .programs = &.{ .{ .name = "owners", .source = "bench/owners.zig" }, .{ .name = "numeric", .source = "bench/numeric.zig" }, .{ .name = "choices", .source = "bench/choices.zig" }, .{ .name = "bytes", .source = "bench/bytes.zig" }, .{ .name = "handles-input", .source = "bench/handles_input.zig" } },
         .imports = benchImports,
         .target = target,
         .optimize = optimize,
@@ -90,6 +90,14 @@ pub fn build(b: *std.Build) void {
     const focus = b.step("test-handles-input", "Run selected A8/A9 cases without unrelated tooling");
     const focused = b.addTest(.{ .root_module = m, .filters = filters, .use_llvm = true });
     focus.dependOn(&b.addRunArtifact(focused).step);
+    const safety_check = b.step("check-handles-input", "Require A8/A9 portable layout/instruction and negative contracts");
+    for ([_][]const u8{ "safety_codegen", "safety_negative" }) |source| {
+        const program = b.addExecutable(.{ .name = source, .root_module = b.createModule(.{ .root_source_file = b.path(b.fmt("ci/{s}.zig", .{source})), .target = b.graph.host, .optimize = .safe }) });
+        const run = b.addRunArtifact(program);
+        run.addArg(b.graph.zig_exe);
+        run.setCwd(b.path("."));
+        safety_check.dependOn(&run.step);
+    }
     const bytes_tests = b.step("test-secret-bytes", "Run A4 ownership contracts in both release modes");
     const scalar_tests = b.step("test-scalars", "Run A3 contracts in both release modes");
     for ([_]std.lang.Optimize{ .safe, .fast }) |mode| {
@@ -113,15 +121,16 @@ fn benchImports(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.l
     const numeric = b.createModule(.{ .root_source_file = b.path("ci/numeric.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     const choices = b.createModule(.{ .root_source_file = b.path("ci/choice_callers.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     const shake = b.dependencyLazy("shakedown", .{ .target = target, .optimize = optimize }) catch @panic("shakedown unavailable for A5 benchmark");
+    const safety = b.createModule(.{ .root_source_file = b.path("ci/safety_parity.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     const bytes = b.createModule(.{ .root_source_file = b.path("ci/bytes.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
-    return b.allocator.dupe(std.Build.Module.Import, &.{ .{ .name = "cases", .module = cases }, .{ .name = "numeric", .module = numeric }, .{ .name = "choices", .module = choices }, .{ .name = "shakedown", .module = shake.module("shakedown") }, .{ .name = "bytes", .module = bytes }, .{ .name = "material", .module = material } }) catch @panic("out of memory configuring benchmarks");
+    return b.allocator.dupe(std.Build.Module.Import, &.{ .{ .name = "cases", .module = cases }, .{ .name = "numeric", .module = numeric }, .{ .name = "choices", .module = choices }, .{ .name = "shakedown", .module = shake.module("shakedown") }, .{ .name = "bytes", .module = bytes }, .{ .name = "material", .module = material }, .{ .name = "safety", .module = safety } }) catch @panic("out of memory configuring benchmarks");
 }
 
 fn choiceBenchmarkLlvm(b: *std.Build, step: *std.Build.Step, seen: *std.AutoHashMapUnmanaged(*std.Build.Step, void)) void {
     const entry = seen.getOrPut(b.allocator, step) catch @panic("OOM");
     if (entry.found_existing) return;
     if (step.cast(std.Build.Step.Compile)) |compile| {
-        if (std.mem.eql(u8, compile.name, "choices")) compile.use_llvm = true;
+        if (std.mem.eql(u8, compile.name, "choices") or std.mem.eql(u8, compile.name, "handles-input")) compile.use_llvm = true;
     }
     for (step.dependencies.items) |dependency| choiceBenchmarkLlvm(b, dependency, seen);
 }

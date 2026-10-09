@@ -57,6 +57,11 @@
       "zig",
       "build",
       "check-choices-negative"
+    ],
+    [
+      "zig",
+      "build",
+      "check-handles-input"
     ]
   ],
   "docs": {
