@@ -3,7 +3,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const a = @import("aegis");
 const Io = std.Io;
-pub const DirectCondition = @import("a67_condition.zig");
+pub const DirectCondition = @import("DirectCondition.zig");
 pub const DirectMutex = struct { mutex: Io.Mutex = .init, data: u64 };
 pub const DirectRw = struct { lock: Io.RwLock = .init, admitted: std.atomic.Value(usize) = .init(0), limit: usize = 65535, data: u64 };
 pub const DirectOnce = struct { state: std.atomic.Value(enum(u32) { empty, running, ready }) = .init(.empty), mutex: Io.Mutex = .init, changed: DirectCondition = .{}, data: u64 = undefined };

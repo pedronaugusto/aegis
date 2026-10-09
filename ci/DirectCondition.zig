@@ -1,5 +1,5 @@
 //! Handwritten bounded waiter registry: independent necessary-operation cost floor.
-const Condition = @This();
+const Self = @This();
 const std = @import("std");
 const Io = std.Io;
 
@@ -18,7 +18,7 @@ pub const WaitError = Io.Cancelable || Io.Timeout.Error || error{WaiterLimit};
 
 /// Internal kernel seam. Caller holds this mutex; no value borrow survives the call.
 /// Association misuse fails in every mode, before releasing the caller's lock.
-pub fn waitMutex(self: *Condition, io: Io, owner_mutex: *Io.Mutex, timeout: Io.Timeout) WaitError!void {
+pub fn waitMutex(self: *Self, io: Io, owner_mutex: *Io.Mutex, timeout: Io.Timeout) WaitError!void {
     const deadline = timeout.toDeadline(io);
     self.mutex.lockUncancelable(io);
     if (self.associated) |associated| {
@@ -72,7 +72,7 @@ pub fn waitMutex(self: *Condition, io: Io, owner_mutex: *Io.Mutex, timeout: Io.T
         // Spurious wakes keep the original absolute deadline.
     }
 }
-fn notifyOne(self: *Condition, io: Io) void {
+fn notifyOne(self: *Self, io: Io) void {
     var item = self.first;
     while (item) |waiter| : (item = waiter.next) {
         if (waiter.notified.load(.monotonic) == 0) {
@@ -84,12 +84,12 @@ fn notifyOne(self: *Condition, io: Io) void {
 }
 /// Caller should publish its predicate under the associated data lock.
 /// No FIFO/fairness guarantee; registration order is LIFO.
-pub fn signal(self: *Condition, io: Io) void {
+pub fn signal(self: *Self, io: Io) void {
     self.mutex.lockUncancelable(io);
     defer self.mutex.unlock(io);
     self.notifyOne(io);
 }
-pub fn broadcast(self: *Condition, io: Io) void {
+pub fn broadcast(self: *Self, io: Io) void {
     self.mutex.lockUncancelable(io);
     defer self.mutex.unlock(io);
     var item = self.first;
