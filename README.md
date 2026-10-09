@@ -12,7 +12,7 @@ Requires Zig 0.17.0:
 zig fetch --save=aegis git+https://github.com/pedronaugusto/aegis#main
 ```
 
-Add the dependency's `aegis` module, or one standalone namespace such as `aegis.handle`, `aegis.input`, `aegis.err`, `aegis.secret`, `aegis.sync`, `aegis.bounded`, `aegis.own` or `aegis.int`. Every implemented namespace is registered separately; root and standalone imports share declaration identities. Consumers fetch neither preflight nor shakedown.
+Add the dependency's `aegis` module, or one standalone namespace such as `aegis.handle`, `aegis.input`, `aegis.err`, `aegis.secret`, `aegis.sync`, `aegis.bounded`, `aegis.own` or `aegis.int`. Wire a namespace with `exe.root_module.addImport("aegis.handle", aegis_dependency.module("aegis.handle"))`. Every implemented namespace is registered separately; root and standalone imports share declaration identities. Consumers fetch neither preflight nor shakedown.
 
 ## Usage
 

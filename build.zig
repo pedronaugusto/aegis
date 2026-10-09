@@ -40,7 +40,10 @@ pub fn build(b: *std.Build) void {
     // benchmark executables and their CI object projections to audited LLVM.
     var llvm_steps: std.AutoHashMapUnmanaged(*std.Build.Step, void) = .empty;
     for (b.top_level_steps.values()) |step| choiceBenchmarkLlvm(b, &step.step, &llvm_steps);
-    preflight.addConsumerCheck(b, .{ .package = "aegis", .program = b.path("ci/consumer.zig") });
+    var consumer_modules: [namespace_names.len + 1][]const u8 = undefined;
+    consumer_modules[0] = "aegis";
+    inline for (namespace_names, 0..) |name, i| consumer_modules[i + 1] = "aegis." ++ name;
+    preflight.addConsumerCheck(b, .{ .package = "aegis", .program = b.path("ci/consumer.zig"), .modules = &consumer_modules });
 
     const negative = b.addExecutable(.{ .name = "aegis-negative", .root_module = b.createModule(.{
         .root_source_file = b.path("ci/negative.zig"),
