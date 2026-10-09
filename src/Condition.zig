@@ -70,6 +70,13 @@ pub fn waitMutex(self: *Condition, io: Io, owner_mutex: *Io.Mutex, timeout: Io.T
             canceled = true;
             return error.Canceled;
         };
+        // Some host Io backends return normally when signal races cancellation.
+        // Accept the wake only after checking pending cancellation; forwarding in
+        // deregistration preserves the signal for an eligible surviving waiter.
+        io.checkCancel() catch {
+            canceled = true;
+            return error.Canceled;
+        };
         if (waiter.notified.load(.acquire) != 0) return;
         switch (deadline) {
             .none => {},

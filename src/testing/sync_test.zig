@@ -134,6 +134,65 @@ test "A6 condition cancellation wins raced signal and returns with guard" {
     try t.expect(owner.tryAcquire() == null);
 }
 
+const PendingCancelSignal = struct {
+    condition: *a.Condition,
+    pending: bool = false,
+    const L = shake.Layer(PendingCancelSignal, .{ .futexWait = futex, .checkCancel = check });
+    fn futex(userdata: ?*anyopaque, _: *const u32, _: u32, _: Io.Timeout) Io.Cancelable!void {
+        const layer = L.of(userdata);
+        layer.state.condition.signal(layer.base);
+        layer.state.pending = true;
+    }
+    fn check(userdata: ?*anyopaque) Io.Cancelable!void {
+        const layer = L.of(userdata);
+        if (layer.state.pending) return error.Canceled;
+        return layer.base.checkCancel();
+    }
+};
+test "A6 condition accepts pending cancellation after a normally returned signal" {
+    var owner = a.BlockingGuarded(u32).init(3);
+    var changed = a.Condition.init();
+    var layer = PendingCancelSignal.L.init(t.io, .{ .condition = &changed });
+    var held = try owner.acquire(layer.io());
+    defer held.deinit(layer.io());
+    try t.expectError(error.Canceled, changed.wait(layer.io(), &held, .none));
+    try t.expectEqual(@as(usize, 0), changed.count);
+    try t.expectEqual(@as(u32, 3), held.value().*);
+    try t.expect(owner.tryAcquire() == null);
+}
+
+const ForwardedSignal = struct {
+    owner: a.BlockingGuarded(u32) = .init(3),
+    changed: a.Condition = .initLimit(2),
+    started: Io.Event = .unset,
+    fn survivor(self: *ForwardedSignal, io: Io) !void {
+        var held = try self.owner.acquire(io);
+        defer held.deinit(io);
+        self.started.set(io);
+        try self.changed.wait(io, &held, .none);
+        try t.expectEqual(@as(u32, 3), held.value().*);
+    }
+    fn main(self: *ForwardedSignal, io: Io) !void {
+        var survivor_task = try io.concurrent(survivor, .{ self, io });
+        try self.started.wait(io);
+        // Taking the same owner proves the survivor registered before releasing it.
+        var held = try self.owner.acquire(io);
+        var layer = PendingCancelSignal.L.init(io, .{ .condition = &self.changed });
+        try t.expectError(error.Canceled, self.changed.wait(layer.io(), &held, .none));
+        held.deinit(io);
+        try survivor_task.await(io);
+        try t.expectEqual(@as(usize, 0), self.changed.count);
+    }
+};
+test "A6 condition canceled notified waiter forwards the signal to a survivor" {
+    for (0..8) |seed| {
+        const sim = try shake.Sim.init(t.allocator, .{ .seed = seed, .yield_per_million = 200000 });
+        defer sim.deinit();
+        var state: ForwardedSignal = .{};
+        try t.expectEqual(shake.Sim.Outcome.finished, sim.run(ForwardedSignal.main, .{ &state, sim.io() }));
+    }
+}
+
 const OnceValue = struct { a: u64, b: u64 };
 fn initialize(_: Io, counter: *usize, destination: *OnceValue) error{BadInit}!void {
     counter.* += 1;
