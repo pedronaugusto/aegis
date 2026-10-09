@@ -131,9 +131,14 @@ const Pair = struct { base: f64, wrap: f64 };
 noinline fn measure(comptime wrapped: bool, io: Io, op: Operation, count: usize) f64 {
     var state: State(wrapped) = undefined;
     state.init();
+    return measureOperations(io, op, &state, count);
+}
+// One timed loop for both sides: distinct generic instantiations otherwise
+// place identical loops at different instruction offsets on the shared host.
+noinline fn measureOperations(io: Io, op: Operation, state: *anyopaque, count: usize) f64 {
     var sum: u64 = 0;
     const start = Io.Clock.awake.now(io);
-    for (0..count) |_| sum +%= op(io, &state);
+    for (0..count) |_| sum +%= op(io, state);
     const elapsed = start.durationTo(Io.Clock.awake.now(io)).nanoseconds;
     std.mem.doNotOptimizeAway(sum);
     return @as(f64, @floatFromInt(elapsed)) / @as(f64, @floatFromInt(count));
