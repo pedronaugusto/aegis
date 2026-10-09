@@ -2,6 +2,8 @@ const std = @import("std");
 const builtin = @import("builtin");
 const shake = @import("shakedown");
 const a = @import("../root.zig");
+// Exercise the documented portable baton executor with the same seeded Io policies.
+// Native kernel contention/publication is independently covered below and by hosted TSan.
 const Io = std.Io;
 const t = std.testing;
 
@@ -95,7 +97,7 @@ const WaitState = struct {
 test "A6 condition simulated signal cancel deadline and spurious wake cleanup" {
     for (0..8) |seed| {
         inline for (.{ WaitState.signal, WaitState.cancel, WaitState.timeout }) |run| {
-            const sim = try shake.Sim.init(t.allocator, .{ .seed = seed, .yield_per_million = 250000, .spurious_wake_per_million = 300000 });
+            const sim = try shake.Sim.init(t.allocator, .{ .executor = .threads, .seed = seed, .yield_per_million = 250000, .spurious_wake_per_million = 300000 });
             defer sim.deinit();
             var state: WaitState = .{};
             try t.expectEqual(shake.Sim.Outcome.finished, sim.run(run, .{ &state, sim.io() }));
@@ -186,7 +188,7 @@ const ForwardedSignal = struct {
 };
 test "A6 condition canceled notified waiter forwards the signal to a survivor" {
     for (0..8) |seed| {
-        const sim = try shake.Sim.init(t.allocator, .{ .seed = seed, .yield_per_million = 200000 });
+        const sim = try shake.Sim.init(t.allocator, .{ .executor = .threads, .seed = seed, .yield_per_million = 200000 });
         defer sim.deinit();
         var state: ForwardedSignal = .{};
         try t.expectEqual(shake.Sim.Outcome.finished, sim.run(ForwardedSignal.main, .{ &state, sim.io() }));
@@ -247,7 +249,7 @@ const OnceRace = struct {
 };
 test "A6 once simulated waiting cancel never cancels initializer or publishes partial" {
     for (0..8) |seed| {
-        const sim = try shake.Sim.init(t.allocator, .{ .seed = seed });
+        const sim = try shake.Sim.init(t.allocator, .{ .executor = .threads, .seed = seed });
         defer sim.deinit();
         var state: OnceRace = .{};
         defer state.once.deinit(cleanupValue);
@@ -417,7 +419,7 @@ const BroadcastState = struct {
 };
 test "A6 condition broadcast wakes every registered waiter and cap refuses excess" {
     for (0..8) |seed| {
-        const sim = try shake.Sim.init(t.allocator, .{ .seed = seed, .yield_per_million = 150000 });
+        const sim = try shake.Sim.init(t.allocator, .{ .executor = .threads, .seed = seed, .yield_per_million = 150000 });
         defer sim.deinit();
         var state: BroadcastState = .{};
         try t.expectEqual(shake.Sim.Outcome.finished, sim.run(BroadcastState.main, .{ &state, sim.io() }));
@@ -437,7 +439,7 @@ const OnceLimit = struct {
     }
 };
 test "A6 Once finite waiting ceiling does not disturb initializer" {
-    const sim = try shake.Sim.init(t.allocator, .{});
+    const sim = try shake.Sim.init(t.allocator, .{ .executor = .threads });
     defer sim.deinit();
     var state: OnceLimit = .{};
     defer state.race.once.deinit(cleanupValue);
@@ -457,7 +459,7 @@ fn canceledWinner(state: *OnceRace, io: Io) !void {
 }
 test "A6 canceled initializer wakes existing waiters to retry publication" {
     for (0..4) |seed| {
-        const sim = try shake.Sim.init(t.allocator, .{ .seed = seed });
+        const sim = try shake.Sim.init(t.allocator, .{ .executor = .threads, .seed = seed });
         defer sim.deinit();
         var state: OnceRace = .{};
         defer state.once.deinit(cleanupValue);
