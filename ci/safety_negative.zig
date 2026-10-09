@@ -23,7 +23,7 @@ pub fn main(init: std.process.Init) !void {
         .{ "const Frame = struct { pub const aegis_public_frame = true; choice: a.secret.Choice }; var ctx: a.err.Context(Frame, 4) = .{}; _ = &ctx;", "no owners or formatters" },
         .{ "const Frame = struct { pub const aegis_public_frame = true; value: u32, pub fn format(_: @This(), _: *std.Io.Writer) std.Io.Writer.Error!void {} }; var ctx: a.err.Context(Frame, 4) = .{}; _ = &ctx;", "no owners or formatters" },
         .{ "const F = a.err.Failure(anyerror, u32, 1); var x: F = undefined; _ = &x;", "named error set" },
-        .{ "_ = a.err.PublicSource.classify(\"value\", \"   \" );", "classification requires a reason" },
+        .{ "_ = a.err.PublicSource.classify(\"   \", \"value\" );", "classification requires a reason" },
     };
     inline for (cases, 0..) |case, i| {
         const path = try arena.print(".zig-cache/a8-a9-negative/{d}.zig", .{i});

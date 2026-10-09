@@ -1,6 +1,6 @@
 //! Independently importable secret owners and audited value kernels.
 pub const Secret = @import("secret/inline.zig").Secret;
-pub const SecretBytes = @import("secret/bytes.zig");
+pub const SecretBytes = @import("secret/SecretBytes.zig");
 const value = @import("secret/value.zig");
 pub const Choice = value.Choice;
 pub const OrderChoices = value.OrderChoices;

@@ -69,7 +69,7 @@ pub fn SecondaryMap(comptime KeyType: type, comptime V: type) type {
             for (self.entries) |*entry| {
                 if (!entry.live or primary.contains(entry.key)) continue;
                 var detached: V = undefined;
-                self.remove(entry.key, &detached) catch unreachable;
+                self.remove(entry.key, &detached) catch unreachable; // unreachable: the live association is indexed and detached storage is disjoint
                 cleanup(&detached);
             }
         }
@@ -77,7 +77,7 @@ pub fn SecondaryMap(comptime KeyType: type, comptime V: type) type {
             for (self.entries) |*entry| {
                 if (!entry.live) continue;
                 var detached: V = undefined;
-                self.remove(entry.key, &detached) catch unreachable;
+                self.remove(entry.key, &detached) catch unreachable; // unreachable: the live association is indexed and detached storage is disjoint
                 cleanup(&detached);
             }
         }

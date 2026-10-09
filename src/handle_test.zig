@@ -93,11 +93,11 @@ test "A8 growth and dense swap preserve keys and fix both links" {
 const Resource = struct {
     allocation: []u8,
     gpa: std.mem.Allocator,
-    pub fn moveInto(self: *@This(), destination: *@This()) void {
+    pub fn moveInto(self: *Resource, destination: *Resource) void {
         destination.* = self.*;
         self.* = undefined;
     }
-    pub fn cleanup(self: *@This()) void {
+    pub fn cleanup(self: *Resource) void {
         self.gpa.free(self.allocation);
         self.* = undefined;
     }
@@ -106,15 +106,15 @@ fn allocated(comptime dense: bool, gpa: std.mem.Allocator) !void {
     const Map = if (dense) h.Dense(Resource, Tag) else h.SlotMap(Resource, Tag);
     var map = try Map.init(gpa, instance(), .{ .capacity = 1, .max_capacity = 16 });
     defer map.deinit(Resource.cleanup);
-    const key = try acquire(&map, gpa, 8);
+    const key = try acquire(gpa, &map, 8);
     try map.reserve(16);
     var detached: Resource = undefined;
     try map.remove(key, &detached);
     detached.cleanup();
-    _ = try acquire(&map, gpa, 4);
+    _ = try acquire(gpa, &map, 4);
     map.clear(Resource.cleanup);
 }
-fn acquire(map: anytype, gpa: std.mem.Allocator, n: usize) !@typeInfo(@TypeOf(map)).pointer.child.Key {
+fn acquire(gpa: std.mem.Allocator, map: anytype, n: usize) !@typeInfo(@TypeOf(map)).pointer.child.Key {
     var item: Resource = .{ .gpa = gpa, .allocation = try gpa.alloc(u8, n) };
     errdefer item.cleanup();
     return map.insert(&item);
@@ -209,14 +209,14 @@ fn secondaryAllocations(gpa: std.mem.Allocator) !void {
     for (0..4) |_| {
         var seed: u32 = 1;
         const key = try primary.insert(&seed);
-        try putResource(&secondary, &primary, key, gpa);
+        try putResource(gpa, &secondary, &primary, key);
     }
     var removed: u32 = undefined;
     const first: Primary.Key = .{ .instance = instance(), .index = 0, .generation = 1 };
     try primary.remove(first, &removed);
     secondary.prune(&primary, Resource.cleanup);
 }
-fn putResource(secondary: anytype, primary: anytype, key: @typeInfo(@TypeOf(primary)).pointer.child.Key, gpa: std.mem.Allocator) !void {
+fn putResource(gpa: std.mem.Allocator, secondary: anytype, primary: anytype, key: @typeInfo(@TypeOf(primary)).pointer.child.Key) !void {
     var value: Resource = .{ .gpa = gpa, .allocation = try gpa.alloc(u8, 3) };
     errdefer value.cleanup();
     try secondary.put(primary, key, &value);

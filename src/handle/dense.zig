@@ -88,14 +88,14 @@ pub fn DenseSlotMap(comptime T: type, comptime Tag: type) type {
             if (position != self.used) {
                 transfer.move(T, &self.values[self.used], &self.values[position]);
                 self.keys[position] = self.keys[self.used];
-                (self.primary.get(self.keys[position]) catch unreachable).* = position;
+                (self.primary.get(self.keys[position]) catch unreachable).* = position; // unreachable: the live swapped key retains its primary association
             }
         }
         /// Reverse dense order; cleanup receives detached values, never a stored pointer.
         pub fn clear(self: *Self, comptime cleanup: fn (*T) void) void {
             while (self.used != 0) {
                 var detached: T = undefined;
-                self.remove(self.keys[self.used - 1], &detached) catch unreachable;
+                self.remove(self.keys[self.used - 1], &detached) catch unreachable; // unreachable: the last dense entry is live and detached storage is disjoint
                 cleanup(&detached);
             }
         }

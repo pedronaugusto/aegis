@@ -1,5 +1,6 @@
 //! A8/A9 portable compilation and strict paired release instruction/layout gate.
 const std = @import("std");
+const builtin = @import("builtin");
 const module_args = @import("module_args.zig");
 const emitted = @import("codegen.zig");
 const names = [_][]const u8{ "handle_get", "handle_insert", "handle_remove", "handle_index", "input_parse", "context_push", "input_diagnostics", "dense_sum" };
@@ -28,7 +29,7 @@ pub fn main(init: std.process.Init) !void {
         }
     }
     for ([_][]const u8{ "Debug", "ReleaseSafe", "ReleaseFast", "ReleaseSmall" }) |mode| {
-        const exe = try arena.print(".zig-cache/a8-a9/retirement-{s}{s}", .{ mode, if (@import("builtin").os.tag == .windows) ".exe" else "" });
+        const exe = try arena.print(".zig-cache/a8-a9/retirement-{s}{s}", .{ mode, if (builtin.os.tag == .windows) ".exe" else "" });
         const compiled = try std.process.run(init.gpa, init.io, .{ .argv = &.{ args[1], "build-exe", try arena.print("-O{s}", .{mode}), "--dep", "pool", "-Mroot=ci/pool_retirement.zig", "-Mpool=src/handle/pool.zig", try arena.print("-femit-bin={s}", .{exe}) }, .stderr_limit = .limited(32768) });
         defer init.gpa.free(compiled.stdout);
         defer init.gpa.free(compiled.stderr);

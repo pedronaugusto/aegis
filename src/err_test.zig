@@ -34,7 +34,7 @@ test "A9 inline contexts preserve first frames cause and independent copies" {
     try t.expect(zero.truncated and zero.frames().len == 0);
 }
 test "A9 classified text escapes complete bytes with bounded storage" {
-    const text = e.PublicText(8).copy(.classify("a\n\x80z", "public protocol label"));
+    const text = e.PublicText(8).copy(.classify("public protocol label", "a\n\x80z"));
     try t.expectEqualStrings("a\\x0a", text.view());
     try t.expect(text.truncated);
     const label = e.PublicText(16).literal("safe\"\\");

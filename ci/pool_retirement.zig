@@ -1,5 +1,6 @@
 //! Independent finite-width retirement/clear fixture; no test-only public API.
 const std = @import("std");
+const pool = @import("pool");
 const t = std.testing;
 const Tag = struct {};
 fn ignore(_: *u32) void {}
@@ -8,7 +9,7 @@ pub fn main() !void {
     try clears();
 }
 fn removals() !void {
-    const P = @import("pool").WithGeneration(u32, Tag, u2);
+    const P = pool.WithGeneration(u32, Tag, u2);
     var slots: [2]P.Slot = undefined;
     var p = try P.initBuffer(&slots, .{ .namespace = 7, .serial = 1 });
     var previous: [6]P.Key = undefined;
@@ -28,7 +29,7 @@ fn removals() !void {
     try t.expectEqual(@as(usize, 2), p.retired);
 }
 fn clears() !void {
-    const P = @import("pool").WithGeneration(u32, Tag, u2);
+    const P = pool.WithGeneration(u32, Tag, u2);
     var slots: [1]P.Slot = undefined;
     var p = try P.initBuffer(&slots, .{ .namespace = 7, .serial = 1 });
     for (0..3) |_| {

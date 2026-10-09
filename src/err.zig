@@ -3,7 +3,7 @@ const std = @import("std");
 /// Explicit classification of runtime text. The reason is reviewed at the consumer site.
 pub const PublicSource = struct {
     bytes: []const u8,
-    pub fn classify(bytes: []const u8, comptime reason: []const u8) PublicSource {
+    pub fn classify(comptime reason: []const u8, bytes: []const u8) PublicSource {
         if (comptime std.mem.trim(u8, reason, " \t\r\n").len == 0) @compileError("public text classification requires a reason");
         return .{ .bytes = bytes };
     }

@@ -42,8 +42,9 @@ test "A9 parser boundary fuzz target" {
 const Parsed = struct {
     allocation: []u8,
     gpa: std.mem.Allocator,
-    fn deinit(self: *@This()) void {
+    fn deinit(self: *Parsed) void {
         self.gpa.free(self.allocation);
+        self.* = undefined;
     }
 };
 const Ctx = struct { gpa: std.mem.Allocator, fail: bool, cancel: bool };
