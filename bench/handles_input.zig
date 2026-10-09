@@ -1,4 +1,5 @@
 //! Interleaved ABBA/BAAB measurements; identical required checks and capacity.
+//! Explicit non-inline kernel calls keep each iteration inside the measured boundary.
 const std = @import("std");
 const shake = @import("shakedown");
 const c = @import("safety");
@@ -34,36 +35,36 @@ noinline fn measure(comptime name: []const u8, comptime wrapped: bool, io: std.I
         state = state *% 6364136223846793005 +% 1;
         const index: usize = @intCast(if (comptime std.mem.eql(u8, name, "random")) (state >> 24) & 255 else i & 255); // safe: both positions are masked to 0..255
         if (comptime std.mem.eql(u8, name, "sequential") or std.mem.eql(u8, name, "random")) {
-            sum +%= if (wrapped) c.wrapperHandleGet(&owner, &keys[index]) else c.baselineHandleGet(&owner, &keys[index]);
+            sum +%= if (wrapped) @call(.never_inline, c.wrapperHandleGet, .{ &owner, &keys[index] }) else @call(.never_inline, c.baselineHandleGet, .{ &owner, &keys[index] });
         } else if (comptime std.mem.eql(u8, name, "churn")) {
             var value: u32 = undefined;
-            const removed = if (wrapped) c.wrapperHandleRemove(&owner, &keys[index], &value) else c.baselineHandleRemove(&owner, &keys[index], &value);
+            const removed = if (wrapped) @call(.never_inline, c.wrapperHandleRemove, .{ &owner, &keys[index], &value }) else @call(.never_inline, c.baselineHandleRemove, .{ &owner, &keys[index], &value });
             std.debug.assert(removed);
-            const generation = if (wrapped) c.wrapperHandleInsert(&owner, &value) else c.baselineHandleInsert(&owner, &value);
+            const generation = if (wrapped) @call(.never_inline, c.wrapperHandleInsert, .{ &owner, &value }) else @call(.never_inline, c.baselineHandleInsert, .{ &owner, &value });
             keys[index].generation = generation;
             sum +%= generation;
         } else if (comptime std.mem.eql(u8, name, "index")) {
             const raw: u32 = @intCast(index); // safe: masked position is 0..255
-            sum +%= if (wrapped) c.wrapperHandleIndex(raw, &values, values.len) else c.baselineHandleIndex(raw, &values, values.len);
+            sum +%= if (wrapped) @call(.never_inline, c.wrapperHandleIndex, .{ raw, &values, values.len }) else @call(.never_inline, c.baselineHandleIndex, .{ raw, &values, values.len });
         } else if (comptime std.mem.startsWith(u8, name, "parse")) {
             input[0] = @truncate(i); // safe: synthetic public byte cycles
-            sum +%= if (wrapped) c.wrapperInputParse(&input, input.len, 64) else c.baselineInputParse(&input, input.len, 64);
+            sum +%= if (wrapped) @call(.never_inline, c.wrapperInputParse, .{ &input, input.len, 64 }) else @call(.never_inline, c.baselineInputParse, .{ &input, input.len, 64 });
         } else if (comptime std.mem.eql(u8, name, "context")) {
             ctx.len = i & 7; // Includes full/truncated contexts, with the same public limit.
-            if (wrapped) c.wrapperContextPush(&ctx, 1, @truncate(i), 2) else c.baselineContextPush(&ctx, 1, @truncate(i), 2); // safe: public numeric offset cycles
+            if (wrapped) @call(.never_inline, c.wrapperContextPush, .{ &ctx, 1, @as(u32, @truncate(i)), 2 }) else @call(.never_inline, c.baselineContextPush, .{ &ctx, 1, @as(u32, @truncate(i)), 2 }); // safe: public numeric offset cycles
             sum +%= ctx.len;
         } else if (comptime std.mem.startsWith(u8, name, "diagnostics")) {
             input[1] = if (i & 1 == 0) 32 else 255;
             ctx.len = 0;
             const ptr = if (comptime std.mem.eql(u8, name, "diagnostics_null")) null else &ctx;
-            sum +%= if (wrapped) c.wrapperInputDiagnostics(&input, input.len, 64, ptr) else c.baselineInputDiagnostics(&input, input.len, 64, ptr);
+            sum +%= if (wrapped) @call(.never_inline, c.wrapperInputDiagnostics, .{ &input, input.len, 64, ptr }) else @call(.never_inline, c.baselineInputDiagnostics, .{ &input, input.len, 64, ptr });
         } else if (comptime std.mem.eql(u8, name, "dense")) {
             values[index] +%= 1;
-            sum +%= if (wrapped) c.wrapperDenseSum(&values, values.len) else c.baselineDenseSum(&values, values.len);
+            sum +%= if (wrapped) @call(.never_inline, c.wrapperDenseSum, .{ &values, values.len }) else @call(.never_inline, c.baselineDenseSum, .{ &values, values.len });
         }
     }
-    const elapsed = start.durationTo(std.Io.Clock.awake.now(io)).nanoseconds;
     std.mem.doNotOptimizeAway(sum);
+    const elapsed = start.durationTo(std.Io.Clock.awake.now(io)).nanoseconds;
     return @as(f64, @floatFromInt(elapsed)) / @as(f64, @floatFromInt(rounds));
 }
 pub fn median(values: []f64) f64 {
