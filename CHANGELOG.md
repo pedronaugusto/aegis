@@ -17,7 +17,7 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ### Added
 
-- `Guarded`: `tryAcquire`, `acquireYielding(io)` (parks through Io between attempts, cancelable, grants no guard on cancellation) and `teardown`; `BlockingGuarded` and `RwGuarded` get an Io-free `teardown` for a sole owner. Debug and ReleaseSafe assert the lock is free.
+- `Guarded`: `tryAcquire`, `acquireYielding(io)` (parks through Io between attempts, cancelable, grants no guard on cancellation) and `acquireYieldingUncancelable(io)` and `teardown`; `BlockingGuarded` and `RwGuarded` get an Io-free `teardown` for a sole owner. Debug and ReleaseSafe assert the lock is free.
 - `interior_lock`: a declaration that a type is safe to share through a mutable pointer because all of its mutation is behind its own lock. The guards declare it.
 - `Lazy(T)`: leaf initialization under the election mutex, with no `InitContext`, the initializer's own errors only and a mutable handout for an `interior_lock` type.
 - `Shared(T, cleanup)`: counted shared ownership of one allocated value with `create`, `createFrom`, `retain`, `get` and `release`, a fail-stop count limit and Debug detection of a handle released twice.

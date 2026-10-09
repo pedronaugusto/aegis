@@ -62,6 +62,33 @@ test "A6 Guarded yielding acquire canceled while parked grants nothing and keeps
     after.deinit();
 }
 
+fn takeUncancelable(state: *Yielding, io: Io) u32 {
+    var held = state.owner.acquireYieldingUncancelable(io);
+    defer held.deinit();
+    held.value().* += 1;
+    return held.value().*;
+}
+fn cancelWaiter(io: Io, waiter: *Io.Future(u32)) u32 {
+    return waiter.cancel(io);
+}
+
+test "A6 Guarded uncancelable yielding acquire ignores a cancellation request while parked" {
+    var clock: shake.Clock = .init(t.io, .{});
+    const io = clock.io();
+    var state: Yielding = .{};
+    var holder = state.owner.acquire();
+    var waiter = try io.concurrent(takeUncancelable, .{ &state, io });
+    try clock.awaitArmed(1, patience);
+    var canceler = try io.concurrent(cancelWaiter, .{ io, &waiter });
+    // Give the request real time to reach the parked waiter before the lock frees.
+    try t.io.sleep(.fromMilliseconds(20), .awake);
+    holder.deinit();
+    clock.advance(.fromMicroseconds(50));
+    try t.expectEqual(@as(u32, 1), canceler.await(io));
+    var after = state.owner.tryAcquire().?;
+    after.deinit();
+}
+
 test "A6 Guarded yielding acquire of a free lock never touches Io" {
     var clock: shake.Clock = .init(t.io, .{});
     var state: Yielding = .{};

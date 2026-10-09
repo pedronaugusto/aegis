@@ -57,6 +57,14 @@ pub fn Guarded(comptime T: type) type {
             return .{ .owner = owner };
         }
 
+        /// `acquireYielding` for a cleanup path that cannot take an error: cancellation is blocked for the
+        /// wait, so it returns only once the lock is held.
+        pub fn acquireYieldingUncancelable(owner: *Self, io: std.Io) Guard {
+            const before = io.swapCancelProtection(.blocked);
+            defer _ = io.swapCancelProtection(before);
+            return owner.acquireYielding(io) catch unreachable; // unreachable: cancellation is blocked for the wait
+        }
+
         /// The data of an owner that no other task can reach: for the sole owner's teardown, where
         /// acquiring would be needless. Asserts the lock is free in Debug and ReleaseSafe. The owner
         /// is not used again; this ends every borrow and takes no lock.
