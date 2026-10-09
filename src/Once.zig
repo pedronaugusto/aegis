@@ -30,6 +30,7 @@ pub const InitContext = struct {
 
 /// Stable once owner; drain initializer/waiters/readers before teardown.
 /// Immutable borrows do not make mutable pointees safe. No reset/poison recovery.
+/// For a bounded initializer with no Io, which needs no task context, see `Lazy`.
 pub fn Once(comptime T: type) type {
     return struct {
         const Self = @This();

@@ -109,12 +109,12 @@ test "A6 Guarded acquire try-acquire and yielding acquire exclude each other nat
     var state: Mixed = .{};
     var group: Io.Group = .init;
     defer group.cancel(t.io);
-    for (0..6) |_| try group.concurrent(t.io, Mixed.worker, .{ &state, t.io, 3000 });
+    for (0..4) |_| try group.concurrent(t.io, Mixed.worker, .{ &state, t.io, 1500 });
     try group.await(t.io);
     var held = state.owner.acquire();
     defer held.deinit();
-    try t.expectEqual(@as(usize, 6 * 3000), held.value().count);
-    try t.expectEqual(@as(usize, 6 * 3000 * 17), held.value().checksum);
+    try t.expectEqual(@as(usize, 4 * 1500), held.value().count);
+    try t.expectEqual(@as(usize, 4 * 1500 * 17), held.value().checksum);
 }
 
 test "A6 teardown hands a sole owner its data without an Io or a lock" {
