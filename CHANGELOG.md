@@ -23,7 +23,7 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 - A7 fixed arrays, queues/rings, explicit bounded buffers, finite limits/reservations and static nonblocking Owned/MustUse contracts.
 - A5 (work in progress): one-bit Choice, explicit verdict disclosure, byte equality, endian order and fixed-width selection with public length/overlap errors.
 - Separate A5 caller/codegen, unsupported-profile/type, disclosure/format and native property tests; own manual paired benchmarks.
-- Latest published green preflight/shakedown pins and preflight-generated CI.
+- Latest published green preflight/shakedown pins and preflight-generated CI. The contract gates run as `zig build contracts`, in three groups that hosted CI shards across jobs.
 
 - A4 SecretBytes: full-capacity byte ownership, explicit adoption/exposure/reserve/transfer, overlap-rejecting replacement, shrink erasure, zeroed growth and fail-closed formatting. All cleanup wipes full capacity before free, including slack; errors retain promised ownership and borrows. No remap, implicit growth or slice ownership escape API.
 - Pre-free observing-allocator regressions, NoResize allocation-failure coverage, shrinking resize properties, portable/all-mode move contracts and paired enclosing dead-use erasure/codegen fixtures with a full-wipe handwritten baseline.

@@ -137,6 +137,23 @@ pub fn build(b: *std.Build) void {
         const bytes_release_tests = b.addTest(.{ .root_module = scalar_module, .filters = &.{"A4"} });
         bytes_tests.dependOn(&b.addRunArtifact(bytes_release_tests).step);
     }
+    contractGroups(b);
+}
+
+// The contract gates split into groups of near-equal hosted cost. Each group is
+// one hosted job, and `contracts` runs them all.
+fn contractGroups(b: *std.Build) void {
+    const groups = [_]struct { name: []const u8, description: []const u8, steps: []const []const u8 }{
+        .{ .name = "contracts-values", .description = "Run the A3 to A5 value and owner contracts", .steps = &.{ "check-negative", "check-parity", "check-contracts", "test-scalars", "check-secret-bytes", "test-secret-bytes" } },
+        .{ .name = "contracts-choices", .description = "Run the A5 choice contracts", .steps = &.{ "check-choices", "check-choices-negative" } },
+        .{ .name = "contracts-published", .description = "Run the A6 to A9 contracts and the published-module gates", .steps = &.{ "check-a67", "test-a67", "check-handles-input", "test-handles-input-modes", "check-namespaces", "check-consumer" } },
+    };
+    const all = b.step("contracts", "Run every contract group");
+    for (groups) |group| {
+        const step = b.step(group.name, group.description);
+        for (group.steps) |name| step.dependOn(&b.top_level_steps.get(name).?.step);
+        all.dependOn(step);
+    }
 }
 
 fn benchImports(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize) []const std.Build.Module.Import {
