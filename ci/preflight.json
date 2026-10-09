@@ -51,6 +51,16 @@
     [
       "zig",
       "build",
+      "check-a67"
+    ],
+    [
+      "zig",
+      "build",
+      "test-a67"
+    ],
+    [
+      "zig",
+      "build",
       "check-choices"
     ],
     [

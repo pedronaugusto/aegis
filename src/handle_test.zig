@@ -273,3 +273,35 @@ test "A8 reserve admission failure preserves live keys values and borrows" {
     try t.expectError(error.CapacityExceeded, map.reserve(5));
     try t.expectEqual(@as(usize, 1), map.len());
 }
+
+const owners = @import("own");
+const OwnedResource = owners.Owned(Resource, Resource.cleanup);
+fn allocatedOwned(comptime dense: bool, gpa: std.mem.Allocator) !void {
+    const Map = if (dense) h.Dense(OwnedResource, Tag) else h.SlotMap(OwnedResource, Tag);
+    var map = try Map.init(gpa, instance(), .{ .capacity = 1, .max_capacity = 4 });
+    defer map.deinit(OwnedResource.deinit);
+    var source = OwnedResource.init(.{ .gpa = gpa, .allocation = try gpa.dupe(u8, "owned") });
+    const key = blk: {
+        errdefer source.deinit();
+        _ = source.borrow(); // Bind the Debug address before explicit transfer.
+        break :blk try map.insert(&source);
+    };
+    try t.expectEqualStrings("owned", (try map.get(key)).borrow().allocation);
+    try map.reserve(4); // Moves the bound owner and rebinds at its new destination.
+    try t.expectEqualStrings("owned", (try map.get(key)).borrow().allocation);
+    var detached: OwnedResource = undefined;
+    try map.remove(key, &detached);
+    detached.deinit();
+    try t.expect(!map.contains(key));
+}
+fn allocatedOwnedSlots(gpa: std.mem.Allocator) !void {
+    try allocatedOwned(false, gpa);
+}
+fn allocatedOwnedDense(gpa: std.mem.Allocator) !void {
+    try allocatedOwned(true, gpa);
+}
+test "A8 published A7 bound Owned moves growth removal and allocation failure cleanup" {
+    var nr = shake.alloc.NoResize.init(t.allocator);
+    try t.checkAllAllocationFailures(nr.allocator(), allocatedOwnedSlots, .{});
+    try t.checkAllAllocationFailures(nr.allocator(), allocatedOwnedDense, .{});
+}

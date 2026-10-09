@@ -19,6 +19,8 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 - A8 generational domains, fixed/growing/dense storage, primary-witness secondary associations and checked typed indices.
 - A9 nonowning refined-input adapters and bounded pointer-free public error context with explicit text classification.
 
+- A6 std.Io blocking and bounded read/write guards, bounded condition registration, stable Once publication/retry, explicit logical-task ordering and checked Confined handoff.
+- A7 fixed arrays, queues/rings, explicit bounded buffers, finite limits/reservations and static nonblocking Owned/MustUse contracts.
 - A5 (work in progress): one-bit Choice, explicit verdict disclosure, byte equality, endian order and fixed-width selection with public length/overlap errors.
 - Separate A5 caller/codegen, unsupported-profile/type, disclosure/format and native property tests; own manual paired benchmarks.
 - Latest published green preflight/shakedown pins and preflight-generated CI.

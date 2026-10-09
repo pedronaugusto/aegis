@@ -14,6 +14,8 @@ pub fn main(init: std.process.Init) !void {
         if (std.mem.find(u8, result.stderr, message) == null) return error.UnexpectedCompilationFailure;
     }
     const scalar_cases = .{
+        .{ "order_cycle", "cyclic lock order" },
+        .{ "zero_ring", "ring capacity must be nonzero" },
         .{ "id_domain", "expected type" },
         .{ "count_domain", "expected type" },
         .{ "byte_unit", "expected type" },

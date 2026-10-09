@@ -13,6 +13,8 @@ test {
     _ = @import("testing/boundaries_test.zig");
     _ = @import("root.zig");
     _ = @import("secret/value_test.zig");
+    _ = @import("testing/bounded_test.zig");
+    _ = @import("testing/sync_test.zig");
     _ = @import("testing/consumers_test.zig");
     _ = @import("testing/foundations_test.zig");
     _ = @import("testing/abi_test.zig");

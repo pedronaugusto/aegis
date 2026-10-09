@@ -14,6 +14,10 @@ pub fn build(b: *std.Build) void {
     const shake = b.dependencyLazy("shakedown", .{ .target = target, .optimize = optimize }) catch return;
     const material = b.createModule(.{ .root_source_file = b.path("src/testing/Material.zig"), .target = target, .optimize = optimize });
     const m = testModule(b, graph, shake.module("shakedown"), material, target, optimize);
+    if (tsan) {
+        graph.root.sanitize_thread = true;
+        inline for (namespace_names) |name| @field(graph, name).sanitize_thread = true;
+    }
     m.sanitize_thread = tsan;
     if (tsan) m.link_libc = true;
     const tests = b.addTest(.{ .root_module = m, .filters = filters, .use_llvm = true });
@@ -27,7 +31,7 @@ pub fn build(b: *std.Build) void {
     }) });
     test_step.dependOn(&b.addRunArtifact(example).step);
     preflight.addCi(b, .{ .tests = test_step, .portable_tests = true, .bench = .{
-        .programs = &.{ .{ .name = "owners", .source = "bench/owners.zig" }, .{ .name = "numeric", .source = "bench/numeric.zig" }, .{ .name = "choices", .source = "bench/choices.zig" }, .{ .name = "bytes", .source = "bench/bytes.zig" }, .{ .name = "handles-input", .source = "bench/handles_input.zig" } },
+        .programs = &.{ .{ .name = "owners", .source = "bench/owners.zig" }, .{ .name = "numeric", .source = "bench/numeric.zig" }, .{ .name = "choices", .source = "bench/choices.zig" }, .{ .name = "bytes", .source = "bench/bytes.zig" }, .{ .name = "guarded-bounded", .source = "bench/a67.zig" }, .{ .name = "handles-input", .source = "bench/handles_input.zig" } },
         .imports = benchImports,
         .target = target,
         .optimize = optimize,
@@ -37,6 +41,7 @@ pub fn build(b: *std.Build) void {
     var llvm_steps: std.AutoHashMapUnmanaged(*std.Build.Step, void) = .empty;
     for (b.top_level_steps.values()) |step| choiceBenchmarkLlvm(b, &step.step, &llvm_steps);
     preflight.addConsumerCheck(b, .{ .package = "aegis", .program = b.path("ci/consumer.zig") });
+
     const negative = b.addExecutable(.{ .name = "aegis-negative", .root_module = b.createModule(.{
         .root_source_file = b.path("ci/negative.zig"),
         .target = b.graph.host,
@@ -112,12 +117,20 @@ pub fn build(b: *std.Build) void {
         const mode_tests = b.addTest(.{ .root_module = mode_module, .filters = &.{ "A8", "A9" }, .use_llvm = true });
         modes.dependOn(&b.addRunArtifact(mode_tests).step);
     }
+    const a67 = b.addExecutable(.{ .name = "aegis-a67-contracts", .root_module = b.createModule(.{ .root_source_file = b.path("ci/a67_check.zig"), .target = b.graph.host, .optimize = .safe }) });
+    const run_a67 = b.addRunArtifact(a67);
+    run_a67.addArg(b.graph.zig_exe);
+    run_a67.setCwd(b.path("."));
+    b.step("check-a67", "Require mode-matrix safety/diagnostics and portable value layouts").dependOn(&run_a67.step);
+    const a67_tests = b.step("test-a67", "Run A6/A7 synchronization, ownership and bounds in both release modes");
     const bytes_tests = b.step("test-secret-bytes", "Run A4 ownership contracts in both release modes");
     const scalar_tests = b.step("test-scalars", "Run A3 contracts in both release modes");
     for ([_]std.lang.Optimize{ .safe, .fast }) |mode| {
         const scalar_module = testModule(b, namespaceGraph(b, b.graph.host, mode), shake.module("shakedown"), material, b.graph.host, mode);
         const release_tests = b.addTest(.{ .root_module = scalar_module, .filters = &.{"A3"} });
         scalar_tests.dependOn(&b.addRunArtifact(release_tests).step);
+        const a67_release_tests = b.addTest(.{ .root_module = scalar_module, .filters = &.{ "A6", "A7" } });
+        a67_tests.dependOn(&b.addRunArtifact(a67_release_tests).step);
         const bytes_release_tests = b.addTest(.{ .root_module = scalar_module, .filters = &.{"A4"} });
         bytes_tests.dependOn(&b.addRunArtifact(bytes_release_tests).step);
     }
@@ -132,7 +145,8 @@ fn benchImports(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.l
     const shake = b.dependencyLazy("shakedown", .{ .target = target, .optimize = optimize }) catch @panic("shakedown unavailable for A5 benchmark");
     const safety = b.createModule(.{ .root_source_file = b.path("ci/safety_parity.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     const bytes = b.createModule(.{ .root_source_file = b.path("ci/bytes.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
-    return b.allocator.dupe(std.Build.Module.Import, &.{ .{ .name = "cases", .module = cases }, .{ .name = "numeric", .module = numeric }, .{ .name = "choices", .module = choices }, .{ .name = "shakedown", .module = shake.module("shakedown") }, .{ .name = "bytes", .module = bytes }, .{ .name = "material", .module = material }, .{ .name = "safety", .module = safety } }) catch @panic("out of memory configuring benchmarks");
+    const a67 = b.createModule(.{ .root_source_file = b.path("ci/a67.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
+    return b.allocator.dupe(std.Build.Module.Import, &.{ .{ .name = "aegis", .module = aegis }, .{ .name = "cases", .module = cases }, .{ .name = "numeric", .module = numeric }, .{ .name = "choices", .module = choices }, .{ .name = "shakedown", .module = shake.module("shakedown") }, .{ .name = "bytes", .module = bytes }, .{ .name = "a67", .module = a67 }, .{ .name = "material", .module = material }, .{ .name = "safety", .module = safety } }) catch @panic("out of memory configuring benchmarks");
 }
 
 fn choiceBenchmarkLlvm(b: *std.Build, step: *std.Build.Step, seen: *std.AutoHashMapUnmanaged(*std.Build.Step, void)) void {
@@ -144,7 +158,7 @@ fn choiceBenchmarkLlvm(b: *std.Build, step: *std.Build.Step, seen: *std.AutoHash
     for (step.dependencies.items) |dependency| choiceBenchmarkLlvm(b, dependency, seen);
 }
 
-const namespace_names = .{ "int", "id", "units", "assert", "secret", "sync", "handle", "input", "err" };
+const namespace_names = .{ "int", "id", "units", "assert", "secret", "sync", "handle", "input", "err", "bounded", "own" };
 const Graph = struct {
     root: *std.Build.Module,
     int: *std.Build.Module,
@@ -156,6 +170,8 @@ const Graph = struct {
     handle: *std.Build.Module,
     input: *std.Build.Module,
     err: *std.Build.Module,
+    bounded: *std.Build.Module,
+    own: *std.Build.Module,
 };
 fn namespaceGraph(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize) Graph {
     const scalar = b.createModule(.{ .root_source_file = b.path("src/scalar.zig"), .target = target, .optimize = optimize });

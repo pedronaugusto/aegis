@@ -14,6 +14,27 @@ pub const units = @import("units");
 /// Always-on programmer contracts and explicitly optional diagnostics.
 pub const assert = @import("assert");
 
+/// Bounded single-owner storage and explicit finite admission.
+pub const bounded = @import("bounded");
+/// Static nonblocking cleanup owners and explicit result obligations.
+pub const own = @import("own");
+/// Exclusive std.Io.Mutex guards, with explicit Io release.
+pub const BlockingGuarded = sync.BlockingGuarded;
+/// Bounded std.Io.RwLock guards with immutable/mutable borrows.
+pub const RwGuarded = sync.RwGuarded;
+/// Bounded condition waiters with guard reacquisition on every return.
+pub const Condition = sync.Condition;
+/// Stable initialization, retry and acquire/release publication.
+pub const Once = sync.Once;
+/// Explicit logical-task initializer stack; zero-sized in release.
+pub const InitContext = sync.InitContext;
+/// Comptime partial rank relation with Debug logical-task diagnostics.
+pub const Order = sync.Order;
+/// Checked single-task state in Debug/ReleaseSafe, plain payload in fast/small.
+pub const Confined = sync.Confined;
+/// Stable caller-issued logical-task identity for Confined.
+pub const TaskIdentity = sync.TaskIdentity;
+
 /// Copyable choices and audited byte comparison/select kernels.
 pub const secret = @import("secret");
 
@@ -24,5 +45,5 @@ pub const input = @import("input");
 /// Allocation-free closed public diagnostic frames.
 pub const err = @import("err");
 
-/// Spin synchronization; namespace declarations share the root aliases.
+/// Synchronization and logical-task contracts sharing the root aliases.
 pub const sync = @import("sync");
