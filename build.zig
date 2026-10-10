@@ -18,6 +18,9 @@ pub fn build(b: *std.Build) void {
     const tests = b.addTest(.{ .root_module = m, .filters = filters, .use_llvm = true });
     test_step.dependOn(&b.addRunArtifact(tests).step);
     check.dependOn(&tests.step);
+    // The tests whose threads contend natively, which CI runs under `-Dthread-sanitizer=true` on Linux.
+    const races = b.addTest(.{ .name = "aegis-native-races", .root_module = m, .filters = &.{ "Guarded native", "Consumer Job", "A6 native", "A12 native" }, .use_llvm = true });
+    b.step("test-native-races", "Run the native mutual exclusion and Job race tests").dependOn(&b.addRunArtifact(races).step);
     const example = b.addExecutable(.{ .name = "aegis-example", .root_module = b.createModule(.{
         .root_source_file = b.path("examples/usage.zig"),
         .target = target,

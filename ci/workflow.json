@@ -11,5 +11,36 @@
     "x86_64-macos",
     "aarch64-macos"
   ],
-  "sanitizer": "test"
+  "jobs": [
+    {
+      "name": "Contracts (values)",
+      "step": "contracts-values",
+      "tiers": ["fast", "merge", "release"],
+      "setup": false
+    },
+    {
+      "name": "Contracts (choices)",
+      "step": "contracts-choices",
+      "tiers": ["fast", "merge", "release"],
+      "setup": false
+    },
+    {
+      "name": "Contracts (published)",
+      "step": "contracts-published",
+      "tiers": ["fast", "merge", "release"],
+      "setup": false
+    },
+    {
+      "name": "Linux targeted thread sanitizer",
+      "step": "test-native-races",
+      "args": ["-Dthread-sanitizer=true", "-Dci-lint=false"],
+      "setup": false
+    },
+    {
+      "name": "ThreadSanitizer (Linux)",
+      "step": "test",
+      "args": ["-Dthread-sanitizer=true", "-Doptimize=debug", "-Dci-lint=false"],
+      "tiers": ["release"]
+    }
+  ]
 }
