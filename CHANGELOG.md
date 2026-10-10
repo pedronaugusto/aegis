@@ -6,6 +6,8 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ### Added
 
+- `int.narrow(Target, source) ?Target`: the one checked narrowing for generic code. It is null where `cast` fails with `Overflow` and the value where it fits, whatever the pair of integer types, where `cast` returns a value for a conversion that cannot fail and an error union otherwise.
+- `SpinRwGuarded(T)`: the reader-writer form of `Guarded`, a spin lock with no Io for many readers or one writer (`read`, `write`, `tryRead`, `tryWrite`, `isHeld`, `teardown`). A waiting writer holds off new readers.
 - `Guarded.acquireScheduling`: acquire for a section a few system calls long on OS threads with no `Io` to wait through (a reap, a fork gap). A contended waiter yields the thread between tries, where `acquire` pauses, so a holder that was descheduled can run.
 
 ### Breaking

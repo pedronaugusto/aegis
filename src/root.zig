@@ -26,6 +26,8 @@ pub const scope = @import("scope.zig");
 pub const BlockingGuarded = sync.BlockingGuarded;
 /// Bounded std.Io.RwLock guards with immutable/mutable borrows.
 pub const RwGuarded = sync.RwGuarded;
+/// The reader-writer form of `Guarded`: a spin lock for many readers or one writer, with no Io.
+pub const SpinRwGuarded = sync.SpinRwGuarded;
 /// Bounded condition waiters with guard reacquisition on every return.
 pub const Condition = sync.Condition;
 /// Stable initialization, retry and acquire/release publication.

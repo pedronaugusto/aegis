@@ -1,5 +1,6 @@
 //! Independently importable published synchronization and logical-task contracts.
 pub const Guarded = @import("Guarded.zig").Guarded;
+pub const SpinRwGuarded = @import("SpinRwGuarded.zig").SpinRwGuarded;
 pub const BlockingGuarded = @import("BlockingGuarded.zig").BlockingGuarded;
 pub const RwGuarded = @import("RwGuarded.zig").RwGuarded;
 pub const Condition = @import("Condition.zig");

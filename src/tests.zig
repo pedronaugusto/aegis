@@ -8,6 +8,8 @@ test {
     _ = @import("secret/inline_test.zig");
     _ = @import("secret/bytes_test.zig");
     _ = @import("Guarded_test.zig");
+    _ = @import("int_test.zig");
+    _ = @import("SpinRwGuarded.zig");
     _ = @import("secret.zig");
     _ = @import("sync.zig");
     _ = @import("handle.zig");

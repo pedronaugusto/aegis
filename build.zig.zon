@@ -5,7 +5,7 @@
     .minimum_zig_version = "0.17.0",
     .paths = .{ "build.zig", "build.zig.zon", "src", "LICENSE", "README.md", "CHANGELOG.md" },
     .dependencies = .{
-        .preflight = .{ .url = "git+https://github.com/pedronaugusto/preflight#e3d81b9e477c1c690f1ce03506511935d16035c3", .hash = "preflight-0.1.0-LX1Zwl2HCQB4-h0brJMmXe_1ZA3UoIT6vI9kJ3IE1grE", .lazy = true },
-        .shakedown = .{ .url = "git+https://github.com/pedronaugusto/shakedown#99418acb02deacefe8cc555c4205dce98f54ef68", .hash = "shakedown-0.1.0-BR8U409YEgCLU7igVgkutLKZ1u5FzuaC6geo-4n84d_G", .lazy = true },
+        .preflight = .{ .url = "git+https://github.com/pedronaugusto/preflight#2734bc4840a7d721b5be7c08fa280d77e4fdc711", .hash = "preflight-0.1.0-LX1Zwm2DCgCnVoQYkowrCTf0WvHmUM23MdoReSEY6uCj", .lazy = true },
+        .shakedown = .{ .url = "git+https://github.com/pedronaugusto/shakedown#86b4f88289a713704fbe8a392c4aab0b490577b5", .hash = "shakedown-0.1.0-BR8U43ozFQDJNVBDPhBjsrxvCiTteef9X8d_UceICsVs", .lazy = true },
     },
 }

@@ -43,6 +43,13 @@ pub inline fn cast(comptime Target: type, source: anytype) CastResult(Target, @T
     }
 }
 
+/// `source` as `Target`, or null when it does not fit: the one checked narrowing for generic code, where `cast`'s
+/// result type (a value where every source converts, an error union otherwise) cannot be written once.
+pub inline fn narrow(comptime Target: type, source: anytype) ?Target {
+    const result = cast(Target, source);
+    return if (@typeInfo(@TypeOf(result)) == .error_union) result catch null else result;
+}
+
 /// Checked arithmetic; operands are raw Repr, results remain checked.
 pub fn Checked(comptime Repr: type) type {
     scalar.integer(Repr);
