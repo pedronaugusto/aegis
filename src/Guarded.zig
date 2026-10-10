@@ -33,6 +33,21 @@ pub fn Guarded(comptime T: type) type {
             return .{ .owner = owner };
         }
 
+        /// Acquire for a section a few system calls long, on OS threads and with no `Io` to wait through
+        /// (a reap, a fork gap): a contended waiter hands the processor back with `std.Thread.yield` between
+        /// tries, so a holder that was descheduled can run. A system that cannot yield only brings the next
+        /// try sooner. Not for a cooperative `Io` (use `acquireYielding`).
+        pub fn acquireScheduling(owner: *Self) Guard {
+            while (owner.lock.swap(true, .acquire)) {
+                while (owner.lock.load(.monotonic)) {
+                    std.Thread.yield() catch |err| switch (err) {
+                        error.SystemCannotYield => std.atomic.spinLoopHint(),
+                    };
+                }
+            }
+            return .{ .owner = owner };
+        }
+
         /// Whether some task holds the lock at this instant, read without taking it. A snapshot for tests
         /// and diagnostics: an unheld lock can be taken a moment later, and a held one says nothing about
         /// who holds it. Never a substitute for acquiring.

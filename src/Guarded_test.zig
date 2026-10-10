@@ -48,3 +48,29 @@ test "Guarded native contention mutual exclusion and publication" {
         try std.testing.expectEqual(threads * 2000 * 17, held.value().checksum);
     }
 }
+
+fn schedulingWorker(owner: *Guarded(Shared), rounds: usize) void {
+    for (0..rounds) |_| {
+        var held = owner.acquireScheduling();
+        defer held.deinit();
+        held.value().count += 1;
+        held.value().checksum += 17;
+    }
+}
+
+test "Guarded scheduling acquire keeps mutual exclusion and sees a held lock" {
+    var owner = Guarded(Shared).init(.{});
+    var first = owner.acquireScheduling();
+    try std.testing.expect(owner.isHeld());
+    try std.testing.expect(owner.tryAcquire() == null);
+    first.deinit();
+    try std.testing.expect(!owner.isHeld());
+    var group: std.Io.Group = .init;
+    defer group.cancel(std.testing.io);
+    for (0..4) |_| try group.concurrent(std.testing.io, schedulingWorker, .{ &owner, 2000 });
+    try group.await(std.testing.io);
+    var held = owner.acquire();
+    defer held.deinit();
+    try std.testing.expectEqual(@as(usize, 4 * 2000), held.value().count);
+    try std.testing.expectEqual(@as(usize, 4 * 2000 * 17), held.value().checksum);
+}

@@ -4,6 +4,10 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Added
+
+- `Guarded.acquireScheduling`: acquire for a section a few system calls long on OS threads with no `Io` to wait through (a reap, a fork gap). A contended waiter yields the thread between tries, where `acquire` pauses, so a holder that was descheduled can run.
+
 ### Breaking
 
 - A conversion that cannot fail carries no error set and no range check. `int.cast`, `Count.convert`, `Bytes.convert`, `Bits.convert`, `Duration.convert`, `Instant.convert`, `Duration.fromIoDuration`, `Instant.fromTimestamp` and `Instant.fromIoTimestamp` return the value where every source value converts and keep exactly the errors that can occur otherwise, so `try` and `catch` on a conversion that cannot fail no longer compile. The decision is portable: `usize` and `isize` count as 32 bits as a target and 64 as a source, so `u32` into `usize` and `usize` into `u64` cannot fail and `u64` into `usize` can, on every target. `Bytes.ConvertError` and `Bits.ConvertError` are `int.CastError`.
