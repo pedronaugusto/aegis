@@ -1,7 +1,6 @@
 //! Typestate mode matrix, intended-reason compile rejections and portable profiles.
 const std = @import("std");
 const builtin = @import("builtin");
-const module_args = @import("module_args.zig");
 
 const Run = struct { gpa: std.mem.Allocator, arena: std.mem.Allocator, io: std.Io, zig: []const u8 };
 
@@ -22,7 +21,7 @@ pub fn main(init: std.process.Init) !void {
 fn modes(run: Run) !void {
     for ([_][]const u8{ "Debug", "ReleaseSafe", "ReleaseFast", "ReleaseSmall" }) |mode| {
         const binary = try run.arena.print(".zig-cache/a10/contracts-{s}{s}", .{ mode, if (builtin.os.tag == .windows) ".exe" else "" });
-        const compiled = try std.process.run(run.gpa, run.io, .{ .argv = try module_args.expand(run.arena, &.{ run.zig, "build-exe", try run.arena.print("-O{s}", .{mode}), "--dep", "aegis", "-Mroot=ci/a10_contract.zig", "-Maegis=src/root.zig", try run.arena.print("-femit-bin={s}", .{binary}) }), .stderr_limit = .limited(16384) });
+        const compiled = try std.process.run(run.gpa, run.io, .{ .argv = &.{ run.zig, "build-exe", try run.arena.print("-O{s}", .{mode}), "--dep", "aegis", "-Mroot=ci/a10_contract.zig", "-Maegis=src/root.zig", try run.arena.print("-femit-bin={s}", .{binary}) }, .stderr_limit = .limited(16384) });
         defer run.gpa.free(compiled.stdout);
         defer run.gpa.free(compiled.stderr);
         if (compiled.term != .exited or compiled.term.exited != 0) {
@@ -104,7 +103,7 @@ fn rejections(run: Run) !void {
         const path = try run.arena.print(".zig-cache/a10/negative/{d}.zig", .{i});
         try std.Io.Dir.cwd().writeFile(run.io, .{ .sub_path = path, .data = try run.arena.print("{s}    {s}\n}}\n", .{ prologue, case[0] }) });
         for ([_][]const u8{ "ReleaseSafe", "ReleaseFast", "ReleaseSmall" }) |mode| {
-            const result = try std.process.run(run.gpa, run.io, .{ .argv = try module_args.expand(run.arena, &.{ run.zig, "build-obj", try run.arena.print("-O{s}", .{mode}), "--dep", "aegis", try run.arena.print("-Mroot={s}", .{path}), "-Maegis=src/root.zig", "-fno-emit-bin" }), .stderr_limit = .limited(32768) });
+            const result = try std.process.run(run.gpa, run.io, .{ .argv = &.{ run.zig, "build-obj", try run.arena.print("-O{s}", .{mode}), "--dep", "aegis", try run.arena.print("-Mroot={s}", .{path}), "-Maegis=src/root.zig", "-fno-emit-bin" }, .stderr_limit = .limited(32768) });
             defer run.gpa.free(result.stdout);
             defer run.gpa.free(result.stderr);
             if (result.term != .exited or result.term.exited == 0 or std.mem.find(u8, result.stderr, case[1]) == null) {
@@ -120,7 +119,7 @@ fn rejections(run: Run) !void {
 fn portable(run: Run) !void {
     for ([_][]const u8{ "x86-linux-gnu", "wasm32-freestanding", "aarch64-freestanding" }) |target| {
         for ([_][]const u8{ "ReleaseSafe", "ReleaseFast" }) |mode| {
-            const result = try std.process.run(run.gpa, run.io, .{ .argv = try module_args.expand(run.arena, &.{ run.zig, "build-obj", try run.arena.print("-O{s}", .{mode}), "-target", target, "--dep", "aegis", "-Mroot=ci/a10_values.zig", "-Maegis=src/root.zig", "-fno-emit-bin" }), .stderr_limit = .limited(16384) });
+            const result = try std.process.run(run.gpa, run.io, .{ .argv = &.{ run.zig, "build-obj", try run.arena.print("-O{s}", .{mode}), "-target", target, "--dep", "aegis", "-Mroot=ci/a10_values.zig", "-Maegis=src/root.zig", "-fno-emit-bin" }, .stderr_limit = .limited(16384) });
             defer run.gpa.free(result.stdout);
             defer run.gpa.free(result.stderr);
             if (result.term != .exited or result.term.exited != 0) {

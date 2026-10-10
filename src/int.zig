@@ -1,6 +1,6 @@
 //! Scalar integers with arithmetic checks in every build mode.
 const std = @import("std");
-const scalar = @import("scalar");
+const scalar = @import("scalar.zig");
 
 /// Failed integer sign/width conversion. Floating point is deliberately excluded.
 pub const CastError = error{Overflow};

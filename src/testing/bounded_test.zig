@@ -1,7 +1,7 @@
 const std = @import("std");
 const shake = @import("shakedown");
-const b = @import("bounded");
-const own = @import("own");
+const b = @import("../bounded.zig");
+const own = @import("../own.zig");
 const t = std.testing;
 fn noop(_: *u32) void {}
 

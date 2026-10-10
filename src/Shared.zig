@@ -2,16 +2,8 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const interior = @import("interior.zig");
+const move = @import("move.zig");
 const diagnostics = builtin.mode == .debug;
-
-/// Moves `source` into `destination` through `moveInto` when `T` declares it, else by assignment.
-fn transfer(comptime T: type, source: *T, destination: *T) void {
-    const has_move = switch (@typeInfo(T)) {
-        .@"struct", .@"union", .@"enum" => @hasDecl(T, "moveInto"),
-        else => false,
-    };
-    if (has_move) source.moveInto(destination) else destination.* = source.*;
-}
 
 /// One allocated `T` and an atomic count of the handles that own it; the last `release` runs `cleanup`
 /// once and frees the block. Cleanup is static, infallible and nonblocking, and runs on whichever task
@@ -51,7 +43,7 @@ pub fn Shared(comptime T: type, comptime cleanup: fn (*T) void) type {
             const block = try gpa.create(Block);
             block.gpa = gpa;
             block.count = .init(1);
-            transfer(T, source, &block.data);
+            move.into(T, source, &block.data);
             return .{ .block = block };
         }
 

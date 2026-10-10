@@ -1,6 +1,6 @@
 //! Distinct ID domains. Import is not authentication or a uniqueness proof.
 const std = @import("std");
-const scalar = @import("scalar");
+const scalar = @import("scalar.zig");
 
 /// Copyable scalar identity without arithmetic or cross-tag conversion.
 pub fn Id(comptime Tag: type, comptime Repr: type) type {

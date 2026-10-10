@@ -1,6 +1,7 @@
 const std = @import("std");
 const shake = @import("shakedown");
 const h = @import("root.zig").handle;
+const narrow = @import("handle/pool.zig");
 const t = std.testing;
 const Tag = struct {};
 fn ignore(_: *u32) void {}
@@ -274,7 +275,7 @@ test "A8 reserve admission failure preserves live keys values and borrows" {
     try t.expectEqual(@as(usize, 1), map.len());
 }
 
-const owners = @import("own");
+const owners = @import("own.zig");
 const OwnedResource = owners.Owned(Resource, Resource.cleanup);
 fn allocatedOwned(comptime dense: bool, gpa: std.mem.Allocator) !void {
     const Map = if (dense) h.Dense(OwnedResource, Tag) else h.SlotMap(OwnedResource, Tag);
@@ -304,4 +305,41 @@ test "A8 published A7 bound Owned moves growth removal and allocation failure cl
     var nr = shake.alloc.NoResize.init(t.allocator);
     try t.checkAllAllocationFailures(nr.allocator(), allocatedOwnedSlots, .{});
     try t.checkAllAllocationFailures(nr.allocator(), allocatedOwnedDense, .{});
+}
+
+// A pool with a two-bit generation runs every slot out of generations, so retirement is reached in a few steps.
+test "A8 narrow generations retire a slot that used them all and removals stale every older key" {
+    const P = narrow.WithGeneration(u32, Tag, u2);
+    var slots: [2]P.Slot = undefined;
+    var p = try P.initBuffer(&slots, instance());
+    var previous: [6]P.Key = undefined;
+    for (0..6) |i| {
+        var value: u32 = 31;
+        const key = try p.insert(&value);
+        previous[i] = key;
+        for (previous[0..i]) |old| try t.expect(!p.contains(old));
+        var removed: u32 = undefined;
+        try p.remove(key, &removed);
+    }
+    var value: u32 = 11;
+    try t.expectError(error.Full, p.insert(&value));
+    try t.expectEqual(@as(u32, 11), value);
+    p.clear(ignore);
+    try t.expectError(error.Full, p.insert(&value));
+    try t.expectEqual(@as(usize, 2), p.retired);
+}
+
+test "A8 narrow generations retire a slot through clear" {
+    const P = narrow.WithGeneration(u32, Tag, u2);
+    var slots: [1]P.Slot = undefined;
+    var p = try P.initBuffer(&slots, instance());
+    for (0..3) |_| {
+        var value: u32 = 1;
+        const key = try p.insert(&value);
+        p.clear(ignore);
+        try t.expect(!p.contains(key));
+    }
+    var value: u32 = 2;
+    try t.expectError(error.Full, p.insert(&value));
+    try t.expectEqual(@as(usize, 1), p.retired);
 }

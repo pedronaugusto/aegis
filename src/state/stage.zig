@@ -1,16 +1,8 @@
 //! A payload staged at one state of a machine: the stage is part of the type and costs nothing at run time.
 const builtin = @import("builtin");
+const move = @import("../move.zig");
 const checked = builtin.mode == .debug or builtin.mode == .safe;
 const diagnostics = builtin.mode == .debug;
-
-/// Moves `source` into `destination` through `moveInto` when `T` declares it, else by assignment.
-fn move(comptime T: type, source: *T, destination: *T) void {
-    const has_move = switch (@typeInfo(T)) {
-        .@"struct", .@"union", .@"enum", .@"opaque" => @hasDecl(T, "moveInto"),
-        else => false,
-    };
-    if (has_move) source.moveInto(destination) else destination.* = source.*;
-}
 
 /// What a transition with a preparation returns: the preparation's own errors, or nothing when it returns void.
 fn Prepared(comptime prepare: anytype) type {
@@ -60,7 +52,7 @@ pub fn At(comptime M: type, comptime P: type, comptime s: M.State) type {
         pub fn initFrom(source: *P) Self {
             if (comptime s != M.initial) @compileError("state: only the initial stage is constructed; later stages are reached by transition");
             var self: Self = .{ .payload = undefined };
-            move(P, source, &self.payload);
+            move.into(P, source, &self.payload);
             return self;
         }
 
@@ -84,7 +76,7 @@ pub fn At(comptime M: type, comptime P: type, comptime s: M.State) type {
         pub fn take(self: *Self, destination: *P) void {
             if (comptime !M.isTerminal(s)) @compileError("state: a payload is taken from a terminal stage; ." ++ @tagName(s) ++ " is not terminal");
             self.check();
-            move(P, &self.payload, destination);
+            move.into(P, &self.payload, destination);
             if (diagnostics) self.live = false;
         }
 
@@ -102,7 +94,7 @@ pub fn At(comptime M: type, comptime P: type, comptime s: M.State) type {
         pub fn transition(self: *Self, comptime event: M.Event, destination: *Next(event)) void {
             self.check();
             self.apart(destination);
-            move(P, &self.payload, &destination.payload);
+            move.into(P, &self.payload, &destination.payload);
             if (diagnostics) {
                 destination.live = true;
                 self.live = false;

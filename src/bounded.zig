@@ -1,15 +1,8 @@
 //! Single-owner containers and externally synchronized admission. No hidden growth.
 const std = @import("std");
 const builtin = @import("builtin");
+const move = @import("move.zig");
 const diagnostics = builtin.mode == .debug;
-
-fn transfer(comptime T: type, source: *T, destination: *T) void {
-    const has_move = switch (@typeInfo(T)) {
-        .@"struct", .@"union", .@"enum" => @hasDecl(T, "moveInto"),
-        else => false,
-    };
-    if (has_move) source.moveInto(destination) else destination.* = source.*;
-}
 
 /// Initialized prefix; success transfers input, failure preserves it.
 pub fn Array(comptime T: type, comptime N: usize) type {
@@ -32,7 +25,7 @@ pub fn Array(comptime T: type, comptime N: usize) type {
         pub fn append(self: *Self, value: *T) AppendError!void {
             if (N == 0) return error.Full;
             if (self.used == N) return error.Full;
-            transfer(T, value, &self.storage[self.used]);
+            move.into(T, value, &self.storage[self.used]);
             self.used += 1;
         }
         pub fn at(self: *Self, index: usize) AtError!*T {
@@ -44,7 +37,7 @@ pub fn Array(comptime T: type, comptime N: usize) type {
             if (N == 0) return error.Empty;
             if (self.used == 0) return error.Empty;
             self.used -= 1;
-            transfer(T, &self.storage[self.used], destination);
+            move.into(T, &self.storage[self.used], destination);
         }
         /// Cleanup must be infallible/nonblocking. Invalidates every borrow.
         pub fn clear(self: *Self, comptime cleanup: fn (*T) void) void {
@@ -80,7 +73,7 @@ pub fn Ring(comptime T: type, comptime N: usize) type {
         }
         pub fn push(self: *Self, value: *T) PushError!void {
             if (self.used == N) return error.Full;
-            transfer(T, value, &self.storage[self.index(self.used)]);
+            move.into(T, value, &self.storage[self.index(self.used)]);
             self.used += 1;
         }
         pub fn peek(self: *Self) PopError!*T {
@@ -88,7 +81,7 @@ pub fn Ring(comptime T: type, comptime N: usize) type {
             return &self.storage[self.head];
         }
         pub fn pop(self: *Self, destination: *T) PopError!void {
-            transfer(T, try self.peek(), destination);
+            move.into(T, try self.peek(), destination);
             self.head = if (self.head == N - 1) 0 else self.head + 1;
             self.used -= 1;
         }
@@ -155,13 +148,13 @@ pub fn Buffer(comptime T: type) type {
         }
         pub fn append(self: *Self, value: *T) AppendError!void {
             if (self.used == self.storage.len) return error.Full;
-            transfer(T, value, &self.storage[self.used]);
+            move.into(T, value, &self.storage[self.used]);
             self.used += 1;
         }
         pub fn pop(self: *Self, destination: *T) PopError!void {
             if (self.used == 0) return error.Empty;
             self.used -= 1;
-            transfer(T, &self.storage[self.used], destination);
+            move.into(T, &self.storage[self.used], destination);
         }
         /// OOM leaves all owners and borrows intact; success moves the prefix without cleanup/copy ownership.
         pub fn reserve(self: *Self, capacity: usize) ReserveError!void {
@@ -169,7 +162,7 @@ pub fn Buffer(comptime T: type) type {
             if (capacity <= self.storage.len) return;
             const gpa = self.gpa orelse return error.CallerBacked;
             const storage = try gpa.alloc(T, capacity);
-            for (self.items(), storage[0..self.used]) |*source, *destination| transfer(T, source, destination);
+            for (self.items(), storage[0..self.used]) |*source, *destination| move.into(T, source, destination);
             gpa.free(self.storage);
             self.storage = storage;
         }
@@ -216,7 +209,7 @@ pub fn RingBuffer(comptime T: type) type {
         }
         pub fn push(self: *Self, value: *T) PushError!void {
             if (self.used == self.storage.len) return error.Full;
-            transfer(T, value, &self.storage[self.index(self.used)]);
+            move.into(T, value, &self.storage[self.index(self.used)]);
             self.used += 1;
         }
         pub fn peek(self: *Self) PopError!*T {
@@ -224,7 +217,7 @@ pub fn RingBuffer(comptime T: type) type {
             return &self.storage[self.head];
         }
         pub fn pop(self: *Self, destination: *T) PopError!void {
-            transfer(T, try self.peek(), destination);
+            move.into(T, try self.peek(), destination);
             self.head = if (self.head == self.storage.len - 1) 0 else self.head + 1;
             self.used -= 1;
         }
@@ -242,7 +235,7 @@ pub fn RingBuffer(comptime T: type) type {
             if (capacity <= self.storage.len) return;
             const gpa = self.gpa orelse return error.CallerBacked;
             const storage = try gpa.alloc(T, capacity);
-            for (0..self.used) |i| transfer(T, &self.storage[self.index(i)], &storage[i]);
+            for (0..self.used) |i| move.into(T, &self.storage[self.index(i)], &storage[i]);
             gpa.free(self.storage);
             self.storage = storage;
             self.head = 0;

@@ -1,7 +1,6 @@
 //! A8/A9 portable compilation and strict paired release instruction/layout gate.
 const std = @import("std");
 const builtin = @import("builtin");
-const module_args = @import("module_args.zig");
 const emitted = @import("codegen.zig");
 const names = [_][]const u8{ "handle_get", "handle_insert", "handle_remove", "handle_index", "input_parse", "context_push", "input_diagnostics", "dense_sum" };
 pub fn main(init: std.process.Init) !void {
@@ -17,7 +16,7 @@ pub fn main(init: std.process.Init) !void {
             var argv: std.ArrayList([]const u8) = .empty;
             try argv.appendSlice(arena, &.{ args[1], "build-obj", try arena.print("-O{s}", .{mode}), "-target", target, "-mcpu=baseline", "-fllvm", "-fstrip", "--dep", "aegis", "-Mroot=ci/safety_parity.zig", "-Maegis=src/root.zig", try arena.print("-femit-bin={s}.o", .{stem}) });
             if (paired) try argv.appendSlice(arena, &.{ try arena.print("-femit-llvm-ir={s}.ll", .{stem}), try arena.print("-femit-asm={s}.s", .{stem}) });
-            const result = try std.process.run(init.gpa, init.io, .{ .argv = try module_args.expand(init.arena.allocator(), argv.items), .stderr_limit = .limited(32768) });
+            const result = try std.process.run(init.gpa, init.io, .{ .argv = argv.items, .stderr_limit = .limited(32768) });
             defer init.gpa.free(result.stdout);
             defer init.gpa.free(result.stderr);
             if (result.term != .exited or result.term.exited != 0) {
@@ -28,23 +27,8 @@ pub fn main(init: std.process.Init) !void {
             if (paired) try compare(init, target, mode, stem);
         }
     }
-    for ([_][]const u8{ "Debug", "ReleaseSafe", "ReleaseFast", "ReleaseSmall" }) |mode| {
-        const exe = try arena.print(".zig-cache/a8-a9/retirement-{s}{s}", .{ mode, if (builtin.os.tag == .windows) ".exe" else "" });
-        const compiled = try std.process.run(init.gpa, init.io, .{ .argv = &.{ args[1], "build-exe", try arena.print("-O{s}", .{mode}), "--dep", "pool", "-Mroot=ci/pool_retirement.zig", "-Mpool=src/handle/pool.zig", try arena.print("-femit-bin={s}", .{exe}) }, .stderr_limit = .limited(32768) });
-        defer init.gpa.free(compiled.stdout);
-        defer init.gpa.free(compiled.stderr);
-        if (compiled.term != .exited or compiled.term.exited != 0) {
-            var stderr = std.Io.File.stderr().writer(init.io, &.{});
-            try stderr.interface.writeAll(compiled.stderr);
-            return error.RetirementCompilationFailed;
-        }
-        const ran = try std.process.run(init.gpa, init.io, .{ .argv = &.{exe}, .stderr_limit = .limited(32768) });
-        defer init.gpa.free(ran.stdout);
-        defer init.gpa.free(ran.stderr);
-        if (ran.term != .exited or ran.term.exited != 0) return error.RetirementContractFailed;
-    }
     var out = std.Io.File.stdout().writer(init.io, &.{});
-    try out.interface.writeAll("A8/A9: 40 profiles compiled; 32 Fast/Small layout/instruction pairs equal; retirement checked in all four modes\n");
+    try out.interface.writeAll("A8/A9: 40 profiles compiled; 32 Fast/Small layout/instruction pairs equal; retirement checked by the A8 tests\n");
     try out.interface.flush();
 }
 fn compare(init: std.process.Init, target: []const u8, mode: []const u8, stem: []const u8) !void {

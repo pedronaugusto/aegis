@@ -1,6 +1,7 @@
 //! Full-key associations. Every resolve requires the primary's liveness witness.
 const std = @import("std");
-const transfer = @import("transfer.zig");
+const move = @import("../move.zig");
+const overlap = @import("overlap.zig");
 pub fn SecondaryMap(comptime KeyType: type, comptime V: type) type {
     return struct {
         const Self = @This();
@@ -18,14 +19,14 @@ pub fn SecondaryMap(comptime KeyType: type, comptime V: type) type {
         pub fn put(self: *Self, primary: anytype, key: Key, source: *V) PutError!void {
             if (!primary.contains(key)) return error.InvalidKey;
             if (self.index.contains(key)) return error.AlreadyPresent;
-            if (transfer.overlapsOwner(V, source, self) or transfer.overlaps(V, source, self.entries)) return error.AliasedStorage;
+            if (overlap.overlapsOwner(V, source, self) or overlap.overlaps(V, source, self.entries)) return error.AliasedStorage;
             try self.index.ensureUnusedCapacity(self.gpa, 1);
             if (self.free_head == std.math.maxInt(usize)) {
                 const count = std.math.add(usize, self.entries.len, self.entries.len / 2 + 1) catch return error.OutOfMemory;
                 const next = try self.gpa.alloc(Entry, count);
                 for (0..self.entries.len) |i| {
                     next[i] = .{ .key = if (self.entries[i].live) self.entries[i].key else undefined, .live = self.entries[i].live, .next = self.entries[i].next };
-                    if (next[i].live) transfer.move(V, &self.entries[i].value, &next[i].value);
+                    if (next[i].live) move.intoPoisoning(V, &self.entries[i].value, &next[i].value);
                 }
                 var head = self.free_head;
                 var i = count;
@@ -41,7 +42,7 @@ pub fn SecondaryMap(comptime KeyType: type, comptime V: type) type {
             const position = self.free_head;
             self.free_head = self.entries[position].next;
             self.entries[position] = .{ .key = key, .live = true };
-            transfer.move(V, source, &self.entries[position].value);
+            move.intoPoisoning(V, source, &self.entries[position].value);
             self.index.putAssumeCapacity(key, position);
         }
         pub inline fn get(self: *Self, primary: anytype, key: Key) KeyError!*V {
@@ -57,9 +58,9 @@ pub fn SecondaryMap(comptime KeyType: type, comptime V: type) type {
         /// Removal needs no witness: stale associations still own values needing cleanup.
         pub fn remove(self: *Self, key: Key, destination: *V) KeyError!void {
             const position = self.index.get(key) orelse return error.Missing;
-            if (transfer.overlapsOwner(V, destination, self) or transfer.overlaps(V, destination, self.entries)) return error.AliasedStorage;
+            if (overlap.overlapsOwner(V, destination, self) or overlap.overlaps(V, destination, self.entries)) return error.AliasedStorage;
             _ = self.index.remove(key);
-            transfer.move(V, &self.entries[position].value, destination);
+            move.intoPoisoning(V, &self.entries[position].value, destination);
             self.entries[position].live = false;
             self.entries[position].next = self.free_head;
             self.free_head = position;

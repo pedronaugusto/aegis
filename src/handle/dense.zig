@@ -2,7 +2,8 @@
 const std = @import("std");
 const Domain = @import("Domain.zig");
 const maps = @import("slot_map.zig");
-const transfer = @import("transfer.zig");
+const move = @import("../move.zig");
+const overlap = @import("overlap.zig");
 pub fn DenseSlotMap(comptime T: type, comptime Tag: type) type {
     return struct {
         const Self = @This();
@@ -45,7 +46,7 @@ pub fn DenseSlotMap(comptime T: type, comptime Tag: type) type {
             const keys = try gpa.alloc(Key, next_count);
             errdefer gpa.free(keys);
             try self.primary.reserve(count);
-            for (0..self.used) |i| transfer.move(T, &self.values[i], &values[i]);
+            for (0..self.used) |i| move.intoPoisoning(T, &self.values[i], &values[i]);
             @memcpy(keys[0..self.used], self.keys[0..self.used]);
             gpa.free(self.values);
             gpa.free(self.keys);
@@ -53,7 +54,7 @@ pub fn DenseSlotMap(comptime T: type, comptime Tag: type) type {
             self.keys = keys;
         }
         pub fn insert(self: *Self, source: *T) InsertError!Key {
-            if (transfer.overlapsOwner(T, source, self) or transfer.overlaps(T, source, self.values)) return error.AliasedStorage;
+            if (overlap.overlapsOwner(T, source, self) or overlap.overlaps(T, source, self.values)) return error.AliasedStorage;
             if (self.used == self.values.len or self.primary.storage.free_head == std.math.maxInt(usize)) {
                 const old = self.primary.capacity();
                 if (old == self.primary.max_capacity) return error.Full;
@@ -62,7 +63,7 @@ pub fn DenseSlotMap(comptime T: type, comptime Tag: type) type {
             }
             var position = self.used;
             const key = try self.primary.insert(&position);
-            transfer.move(T, source, &self.values[self.used]);
+            move.intoPoisoning(T, source, &self.values[self.used]);
             self.keys[self.used] = key;
             self.used += 1;
             return key;
@@ -80,13 +81,13 @@ pub fn DenseSlotMap(comptime T: type, comptime Tag: type) type {
         }
         pub fn remove(self: *Self, key: Key, destination: *T) KeyError!void {
             if (!self.contains(key)) return error.InvalidKey;
-            if (transfer.overlapsOwner(T, destination, self) or transfer.overlaps(T, destination, self.values)) return error.AliasedStorage;
+            if (overlap.overlapsOwner(T, destination, self) or overlap.overlaps(T, destination, self.values)) return error.AliasedStorage;
             var position: usize = undefined;
             try self.primary.remove(key, &position);
-            transfer.move(T, &self.values[position], destination);
+            move.intoPoisoning(T, &self.values[position], destination);
             self.used -= 1;
             if (position != self.used) {
-                transfer.move(T, &self.values[self.used], &self.values[position]);
+                move.intoPoisoning(T, &self.values[self.used], &self.values[position]);
                 self.keys[position] = self.keys[self.used];
                 (self.primary.get(self.keys[position]) catch unreachable).* = position; // unreachable: the live swapped key retains its primary association
             }

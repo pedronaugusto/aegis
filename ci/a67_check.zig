@@ -1,7 +1,6 @@
 //! Required all-mode safety, checked-mode identity and Debug diagnostic contracts.
 const std = @import("std");
 const builtin = @import("builtin");
-const module_args = @import("module_args.zig");
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
     const arena = init.arena.allocator();
@@ -9,7 +8,7 @@ pub fn main(init: std.process.Init) !void {
     try std.Io.Dir.cwd().createDirPath(init.io, ".zig-cache/a67");
     for ([_][]const u8{ "Debug", "ReleaseSafe", "ReleaseFast", "ReleaseSmall" }) |mode| {
         const binary = try arena.print(".zig-cache/a67/contracts-{s}{s}", .{ mode, if (builtin.os.tag == .windows) ".exe" else "" });
-        const compiled = try std.process.run(gpa, init.io, .{ .argv = try module_args.expand(arena, &.{ args[1], "build-exe", try arena.print("-O{s}", .{mode}), "--dep", "aegis", "-Mroot=ci/a67_contract.zig", "-Maegis=src/root.zig", try arena.print("-femit-bin={s}", .{binary}) }), .stderr_limit = .limited(16384) });
+        const compiled = try std.process.run(gpa, init.io, .{ .argv = &.{ args[1], "build-exe", try arena.print("-O{s}", .{mode}), "--dep", "aegis", "-Mroot=ci/a67_contract.zig", "-Maegis=src/root.zig", try arena.print("-femit-bin={s}", .{binary}) }, .stderr_limit = .limited(16384) });
         defer gpa.free(compiled.stdout);
         defer gpa.free(compiled.stderr);
         if (compiled.term != .exited or compiled.term.exited != 0) {
@@ -55,7 +54,7 @@ pub fn main(init: std.process.Init) !void {
     }
     for ([_][]const u8{ "x86-linux-gnu", "wasm32-freestanding", "aarch64-freestanding" }) |target| {
         for ([_][]const u8{ "ReleaseSafe", "ReleaseFast" }) |mode| {
-            const compiled = try std.process.run(gpa, init.io, .{ .argv = try module_args.expand(arena, &.{ args[1], "build-obj", try arena.print("-O{s}", .{mode}), "-target", target, "--dep", "aegis", "-Mroot=ci/a67_values.zig", "-Maegis=src/root.zig", "-fno-emit-bin" }), .stderr_limit = .limited(16384) });
+            const compiled = try std.process.run(gpa, init.io, .{ .argv = &.{ args[1], "build-obj", try arena.print("-O{s}", .{mode}), "-target", target, "--dep", "aegis", "-Mroot=ci/a67_values.zig", "-Maegis=src/root.zig", "-fno-emit-bin" }, .stderr_limit = .limited(16384) });
             defer gpa.free(compiled.stdout);
             defer gpa.free(compiled.stderr);
             if (compiled.term != .exited or compiled.term.exited != 0) {

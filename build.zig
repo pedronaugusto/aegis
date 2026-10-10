@@ -4,20 +4,15 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const tsan = b.option(bool, "thread-sanitizer", "Instrument native thread contention on Linux") orelse false;
     const filters = b.option([]const []const u8, "test-filter", "Run tests containing this name") orelse &.{};
-    const graph = namespaceGraph(b, target, optimize);
-    b.modules.put(b.allocator, "aegis", graph.root) catch @panic("OOM");
-    inline for (namespace_names) |name| b.modules.put(b.allocator, "aegis." ++ name, @field(graph, name)) catch @panic("OOM");
+    const aegis = b.addModule("aegis", .{ .root_source_file = b.path("src/root.zig"), .target = target, .optimize = optimize });
     if (b.dep_prefix.len != 0) return;
     const preflight = b.lazyImport(@This(), "preflight") orelse return;
     const test_step = b.step("test", "Run focused ownership and synchronization tests");
     const check = b.step("check", "Compile all tests without execution");
     const shake = b.dependencyLazy("shakedown", .{ .target = target, .optimize = optimize }) catch return;
     const material = b.createModule(.{ .root_source_file = b.path("src/testing/Material.zig"), .target = target, .optimize = optimize });
-    const m = testModule(b, graph, shake.module("shakedown"), material, target, optimize);
-    if (tsan) {
-        graph.root.sanitize_thread = true;
-        inline for (namespace_names) |name| @field(graph, name).sanitize_thread = true;
-    }
+    const m = testModule(b, shake.module("shakedown"), material, target, optimize);
+    if (tsan) aegis.sanitize_thread = true;
     m.sanitize_thread = tsan;
     if (tsan) m.link_libc = true;
     const tests = b.addTest(.{ .root_module = m, .filters = filters, .use_llvm = true });
@@ -27,7 +22,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("examples/usage.zig"),
         .target = target,
         .optimize = optimize,
-        .imports = &.{.{ .name = "aegis", .module = b.modules.get("aegis").? }},
+        .imports = &.{.{ .name = "aegis", .module = aegis }},
     }) });
     test_step.dependOn(&b.addRunArtifact(example).step);
     for ([_][]const u8{ "state", "scope" }) |name| {
@@ -35,7 +30,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path(b.fmt("examples/{s}.zig", .{name})),
             .target = target,
             .optimize = optimize,
-            .imports = &.{.{ .name = "aegis", .module = b.modules.get("aegis").? }},
+            .imports = &.{.{ .name = "aegis", .module = aegis }},
         }) });
         test_step.dependOn(&b.addRunArtifact(worked).step);
     }
@@ -49,10 +44,7 @@ pub fn build(b: *std.Build) void {
     // benchmark executables and their CI object projections to audited LLVM.
     var llvm_steps: std.AutoHashMapUnmanaged(*std.Build.Step, void) = .empty;
     for (b.top_level_steps.values()) |step| choiceBenchmarkLlvm(b, &step.step, &llvm_steps);
-    var consumer_modules: [namespace_names.len + 1][]const u8 = undefined;
-    consumer_modules[0] = "aegis";
-    inline for (namespace_names, 0..) |name, i| consumer_modules[i + 1] = "aegis." ++ name;
-    preflight.addConsumerCheck(b, .{ .package = "aegis", .program = b.path("ci/consumer.zig"), .modules = &consumer_modules });
+    preflight.addConsumerCheck(b, .{ .package = "aegis", .program = b.path("ci/consumer.zig"), .modules = &.{"aegis"} });
 
     const negative = b.addExecutable(.{ .name = "aegis-negative", .root_module = b.createModule(.{
         .root_source_file = b.path("ci/negative.zig"),
@@ -86,7 +78,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("ci/choice_codegen.zig"),
         .target = b.graph.host,
         .optimize = .safe,
-        .imports = &.{.{ .name = "aegis", .module = b.modules.get("aegis").? }},
+        .imports = &.{.{ .name = "aegis", .module = aegis }},
     }) });
     const run_choices_codegen = b.addRunArtifact(choices_codegen);
     run_choices_codegen.addArg(b.graph.zig_exe);
@@ -110,11 +102,6 @@ pub fn build(b: *std.Build) void {
     const focus = b.step("test-handles-input", "Run selected A8/A9 cases without unrelated tooling");
     const focused = b.addTest(.{ .root_module = m, .filters = filters, .use_llvm = true });
     focus.dependOn(&b.addRunArtifact(focused).step);
-    const ns = b.createModule(.{ .root_source_file = b.path("ci/namespaces.zig"), .target = target, .optimize = optimize });
-    ns.addImport("aegis", graph.root);
-    inline for (namespace_names) |name| ns.addImport("aegis." ++ name, @field(graph, name));
-    const namespace_check = b.addExecutable(.{ .name = "namespace-identities", .root_module = ns });
-    b.step("check-namespaces", "Compile mixed root/standalone namespace identities").dependOn(&namespace_check.step);
     const safety_check = b.step("check-handles-input", "Require A8/A9 portable layout/instruction and negative contracts");
     for ([_][]const u8{ "safety_codegen", "safety_negative" }) |source| {
         const program = b.addExecutable(.{ .name = source, .root_module = b.createModule(.{ .root_source_file = b.path(b.fmt("ci/{s}.zig", .{source})), .target = b.graph.host, .optimize = .safe }) });
@@ -125,7 +112,7 @@ pub fn build(b: *std.Build) void {
     }
     const modes = b.step("test-handles-input-modes", "Run A8/A9 semantic contracts in all release modes");
     for ([_]std.lang.Optimize{ .safe, .fast, .small }) |mode| {
-        const mode_module = testModule(b, namespaceGraph(b, b.graph.host, mode), shake.module("shakedown"), material, b.graph.host, mode);
+        const mode_module = testModule(b, shake.module("shakedown"), material, b.graph.host, mode);
         const mode_tests = b.addTest(.{ .root_module = mode_module, .filters = &.{ "A8", "A9" }, .use_llvm = true });
         modes.dependOn(&b.addRunArtifact(mode_tests).step);
     }
@@ -138,7 +125,7 @@ pub fn build(b: *std.Build) void {
     const bytes_tests = b.step("test-secret-bytes", "Run A4 ownership contracts in both release modes");
     const scalar_tests = b.step("test-scalars", "Run A3 contracts in both release modes");
     for ([_]std.lang.Optimize{ .safe, .fast }) |mode| {
-        const scalar_module = testModule(b, namespaceGraph(b, b.graph.host, mode), shake.module("shakedown"), material, b.graph.host, mode);
+        const scalar_module = testModule(b, shake.module("shakedown"), material, b.graph.host, mode);
         const release_tests = b.addTest(.{ .root_module = scalar_module, .filters = &.{"A3"} });
         scalar_tests.dependOn(&b.addRunArtifact(release_tests).step);
         const a67_release_tests = b.addTest(.{ .root_module = scalar_module, .filters = &.{ "A6", "A7" } });
@@ -153,7 +140,7 @@ pub fn build(b: *std.Build) void {
     b.step("check-a10", "Require typestate mode-matrix contracts, intended-reason rejections and portable profiles").dependOn(&run_a10.step);
     const a10_tests = b.step("test-a10", "Run A10 typestate semantics in the three release modes");
     for ([_]std.lang.Optimize{ .safe, .fast, .small }) |mode| {
-        const release_module = testModule(b, namespaceGraph(b, b.graph.host, mode), shake.module("shakedown"), material, b.graph.host, mode);
+        const release_module = testModule(b, shake.module("shakedown"), material, b.graph.host, mode);
         const release_tests = b.addTest(.{ .root_module = release_module, .filters = &.{"A10"}, .use_llvm = true });
         a10_tests.dependOn(&b.addRunArtifact(release_tests).step);
     }
@@ -164,7 +151,7 @@ pub fn build(b: *std.Build) void {
     b.step("check-a12", "Require scope mode-matrix contracts, intended-reason rejections and portable profiles").dependOn(&run_a12.step);
     const a12_tests = b.step("test-a12", "Run A12 scope semantics in the three release modes");
     for ([_]std.lang.Optimize{ .safe, .fast, .small }) |mode| {
-        const release_module = testModule(b, namespaceGraph(b, b.graph.host, mode), shake.module("shakedown"), material, b.graph.host, mode);
+        const release_module = testModule(b, shake.module("shakedown"), material, b.graph.host, mode);
         const release_tests = b.addTest(.{ .root_module = release_module, .filters = &.{"A12"}, .use_llvm = true });
         a12_tests.dependOn(&b.addRunArtifact(release_tests).step);
     }
@@ -177,7 +164,7 @@ fn contractGroups(b: *std.Build) void {
     const groups = [_]struct { name: []const u8, description: []const u8, steps: []const []const u8 }{
         .{ .name = "contracts-values", .description = "Run the A3 to A5 value and owner contracts", .steps = &.{ "check-negative", "check-parity", "check-contracts", "test-scalars", "check-secret-bytes", "test-secret-bytes" } },
         .{ .name = "contracts-choices", .description = "Run the A5 choice contracts", .steps = &.{ "check-choices", "check-choices-negative" } },
-        .{ .name = "contracts-published", .description = "Run the A6 to A12 contracts and the published-module gates", .steps = &.{ "check-a67", "test-a67", "check-handles-input", "test-handles-input-modes", "check-a10", "test-a10", "check-a12", "test-a12", "check-namespaces", "check-consumer" } },
+        .{ .name = "contracts-published", .description = "Run the A6 to A12 contracts and the published-module gates", .steps = &.{ "check-a67", "test-a67", "check-handles-input", "test-handles-input-modes", "check-a10", "test-a10", "check-a12", "test-a12", "check-consumer" } },
     };
     const all = b.step("contracts", "Run every contract group");
     for (groups) |group| {
@@ -189,7 +176,7 @@ fn contractGroups(b: *std.Build) void {
 
 fn benchImports(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize) []const std.Build.Module.Import {
     const material = b.createModule(.{ .root_source_file = b.path("src/testing/Material.zig"), .target = target, .optimize = optimize });
-    const aegis = namespaceGraph(b, target, optimize).root;
+    const aegis = b.createModule(.{ .root_source_file = b.path("src/root.zig"), .target = target, .optimize = optimize });
     const cases = b.createModule(.{ .root_source_file = b.path("ci/cases.zig"), .target = target, .optimize = optimize, .imports = &.{ .{ .name = "aegis", .module = aegis }, .{ .name = "material", .module = material } } });
     const numeric = b.createModule(.{ .root_source_file = b.path("ci/numeric.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     const choices = b.createModule(.{ .root_source_file = b.path("ci/choice_callers.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
@@ -213,38 +200,8 @@ fn choiceBenchmarkLlvm(b: *std.Build, step: *std.Build.Step, seen: *std.AutoHash
     for (step.dependencies.items) |dependency| choiceBenchmarkLlvm(b, dependency, seen);
 }
 
-const namespace_names = .{ "int", "id", "units", "assert", "secret", "sync", "handle", "input", "err", "bounded", "own", "state", "scope" };
-const Graph = struct {
-    root: *std.Build.Module,
-    int: *std.Build.Module,
-    id: *std.Build.Module,
-    units: *std.Build.Module,
-    assert: *std.Build.Module,
-    secret: *std.Build.Module,
-    sync: *std.Build.Module,
-    handle: *std.Build.Module,
-    input: *std.Build.Module,
-    err: *std.Build.Module,
-    bounded: *std.Build.Module,
-    own: *std.Build.Module,
-    state: *std.Build.Module,
-    scope: *std.Build.Module,
-};
-fn namespaceGraph(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize) Graph {
-    const scalar = b.createModule(.{ .root_source_file = b.path("src/scalar.zig"), .target = target, .optimize = optimize });
-    var graph: Graph = undefined;
-    inline for (namespace_names) |name| @field(graph, name) = b.createModule(.{ .root_source_file = b.path("src/" ++ name ++ ".zig"), .target = target, .optimize = optimize });
-    graph.int.addImport("scalar", scalar);
-    graph.id.addImport("scalar", scalar);
-    graph.units.addImport("scalar", scalar);
-    graph.units.addImport("int", graph.int);
-    graph.root = b.createModule(.{ .root_source_file = b.path("src/root.zig"), .target = target, .optimize = optimize });
-    inline for (namespace_names) |name| graph.root.addImport(name, @field(graph, name));
-    return graph;
-}
-fn testModule(b: *std.Build, graph: Graph, shake: *std.Build.Module, material: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize) *std.Build.Module {
+fn testModule(b: *std.Build, shake: *std.Build.Module, material: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize) *std.Build.Module {
     const module = b.createModule(.{ .root_source_file = b.path("src/tests.zig"), .target = target, .optimize = optimize });
-    inline for (namespace_names) |name| module.addImport(name, @field(graph, name));
     module.addImport("shakedown", shake);
     module.addImport("material", material);
     return module;

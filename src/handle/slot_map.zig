@@ -2,7 +2,8 @@
 const std = @import("std");
 const Domain = @import("Domain.zig");
 const pool = @import("pool.zig");
-const transfer = @import("transfer.zig");
+const move = @import("../move.zig");
+const overlap = @import("overlap.zig");
 pub fn SlotMap(comptime T: type, comptime Tag: type) type {
     return struct {
         const Self = @This();
@@ -36,7 +37,7 @@ pub fn SlotMap(comptime T: type, comptime Tag: type) type {
             // No failures follow allocation: publish only after every live value moves.
             for (self.storage.slots, 0..) |*old, i| {
                 next[i] = .{ .generation = old.generation, .next = old.next, .state = old.state };
-                if (old.state == .live) transfer.move(T, &old.value, &next[i].value);
+                if (old.state == .live) move.intoPoisoning(T, &old.value, &next[i].value);
             }
             var head = self.storage.free_head;
             var i = capacity_needed;
@@ -50,7 +51,7 @@ pub fn SlotMap(comptime T: type, comptime Tag: type) type {
             self.storage.free_head = head;
         }
         pub fn insert(self: *Self, source: *T) InsertError!Key {
-            if (transfer.overlapsOwner(T, source, self) or transfer.overlaps(T, source, self.storage.slots)) return error.AliasedStorage;
+            if (overlap.overlapsOwner(T, source, self) or overlap.overlaps(T, source, self.storage.slots)) return error.AliasedStorage;
             if (self.storage.free_head == std.math.maxInt(usize)) {
                 const old = self.capacity();
                 if (old == self.max_capacity) return error.Full;
@@ -70,7 +71,7 @@ pub fn SlotMap(comptime T: type, comptime Tag: type) type {
         }
         pub fn remove(self: *Self, key: Key, destination: *T) KeyError!void {
             if (!self.contains(key)) return error.InvalidKey;
-            if (transfer.overlapsOwner(T, destination, self)) return error.AliasedStorage;
+            if (overlap.overlapsOwner(T, destination, self)) return error.AliasedStorage;
             return self.storage.remove(key, destination);
         }
         pub fn clear(self: *Self, comptime cleanup: fn (*T) void) void {

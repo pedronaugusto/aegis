@@ -6,22 +6,22 @@ pub const SecretBytes = secret.SecretBytes;
 /// Data beside its acquire/release spin lock; guards borrow until release.
 pub const Guarded = sync.Guarded;
 /// All-build checked, saturating and ranged scalar arithmetic and failing casts.
-pub const int = @import("int");
+pub const int = @import("int.zig");
 /// Distinct scalar identity domains and nonwrapping externally serialized issuers.
-pub const id = @import("id");
+pub const id = @import("id.zig");
 /// Explicit scalar units, duration scales and clock domains.
-pub const units = @import("units");
+pub const units = @import("units.zig");
 /// Always-on programmer contracts and explicitly optional diagnostics.
-pub const assert = @import("assert");
+pub const assert = @import("assert.zig");
 
 /// Bounded single-owner storage and explicit finite admission.
-pub const bounded = @import("bounded");
+pub const bounded = @import("bounded.zig");
 /// Static nonblocking cleanup owners and explicit result obligations.
-pub const own = @import("own");
+pub const own = @import("own.zig");
 /// Comptime typestate machines, staged payloads and a checked runtime transition table.
-pub const state = @import("state");
+pub const state = @import("state.zig");
 /// Scope lifetimes: a brand and a generation that catch a reference used after its scope ended.
-pub const scope = @import("scope");
+pub const scope = @import("scope.zig");
 /// Exclusive std.Io.Mutex guards, with explicit Io release.
 pub const BlockingGuarded = sync.BlockingGuarded;
 /// Bounded std.Io.RwLock guards with immutable/mutable borrows.
@@ -44,14 +44,14 @@ pub const Confined = sync.Confined;
 pub const TaskIdentity = sync.TaskIdentity;
 
 /// Copyable choices and audited byte comparison/select kernels.
-pub const secret = @import("secret");
+pub const secret = @import("secret.zig");
 
 /// Checked generational keys and typed positions; owners require external synchronization.
-pub const handle = @import("handle");
+pub const handle = @import("handle.zig");
 /// Boundary markers preserving each parser's exact error and refined result contract.
-pub const input = @import("input");
+pub const input = @import("input.zig");
 /// Allocation-free closed public diagnostic frames.
-pub const err = @import("err");
+pub const err = @import("err.zig");
 
 /// Synchronization and logical-task contracts sharing the root aliases.
-pub const sync = @import("sync");
+pub const sync = @import("sync.zig");
