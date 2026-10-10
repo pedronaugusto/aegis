@@ -3,7 +3,7 @@
     "src"
   ],
   "glint": {
-    "rules": [{"id": "Z026", "level": "gate"}]
+    "rules": [{"id": "P001", "level": "gate"}, {"id": "P003", "level": "gate"}, {"id": "Z026", "level": "gate"}]
   },
   "test_roots": [
     "src/root.zig"
