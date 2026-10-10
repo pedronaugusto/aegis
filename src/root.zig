@@ -59,3 +59,9 @@ pub const err = @import("err.zig");
 
 /// Synchronization and logical-task contracts sharing the root aliases.
 pub const sync = @import("sync.zig");
+
+// The tests run in this module, so test support that links aegis (shakedown)
+// takes this copy and the test binary holds one aegis.
+test {
+    _ = @import("tests.zig");
+}

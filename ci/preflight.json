@@ -6,7 +6,7 @@
     "rules": [{"id": "Z026", "level": "gate"}]
   },
   "test_roots": [
-    "src/tests.zig"
+    "src/root.zig"
   ],
   "test_support": [
     "src/testing/**"
