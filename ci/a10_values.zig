@@ -11,7 +11,7 @@ const Link = a.state.Machine(enum(u8) { idle, open, closed }, enum(u8) { dial, c
     },
 });
 comptime {
-    if (builtin.mode != .debug) {
+    if (builtin.optimize != .debug) {
         std.debug.assert(@sizeOf(Link.At(.idle, u32)) == @sizeOf(u32));
         std.debug.assert(@alignOf(Link.At(.idle, u32)) == @alignOf(u32));
         std.debug.assert(@sizeOf(Link.At(.closed, void)) == 0);

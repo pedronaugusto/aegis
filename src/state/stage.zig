@@ -1,8 +1,8 @@
 //! A payload staged at one state of a machine: the stage is part of the type and costs nothing at run time.
 const builtin = @import("builtin");
 const move = @import("../move.zig");
-const checked = builtin.mode == .debug or builtin.mode == .safe;
-const diagnostics = builtin.mode == .debug;
+const checked = builtin.optimize == .debug or builtin.optimize == .safe;
+const diagnostics = builtin.optimize == .debug;
 
 /// What a transition with a preparation returns: the preparation's own errors, or nothing when it returns void.
 fn Prepared(comptime prepare: anytype) type {

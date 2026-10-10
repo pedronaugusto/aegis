@@ -2,7 +2,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
 const move = @import("move.zig");
-const diagnostics = builtin.mode == .debug;
+const diagnostics = builtin.optimize == .debug;
 const State = if (diagnostics) struct { live: bool = true, address: ?*const anyopaque = null } else struct {};
 
 fn bind(state: *State, address: *const anyopaque) void {

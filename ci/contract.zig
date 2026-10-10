@@ -2,7 +2,7 @@ const std = @import("std");
 const aegis = @import("aegis");
 // An external effect proves false pre/post/invariant actually fail-stop in release.
 // Override panic only to keep subprocess output deterministic on every host.
-pub fn panic(message: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
+pub fn panic(message: []const u8, _: ?*std.lang.StackTrace, _: ?usize) noreturn {
     std.process.fatal("{s}", .{message});
 }
 pub fn main(init: std.process.Init) void {

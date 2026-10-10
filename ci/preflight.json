@@ -2,6 +2,9 @@
   "sources": [
     "src"
   ],
+  "glint": {
+    "rules": [{"id": "Z026", "level": "gate"}]
+  },
   "test_roots": [
     "src/tests.zig"
   ],

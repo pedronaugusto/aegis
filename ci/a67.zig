@@ -30,7 +30,7 @@ pub const DirectRingBuffer = struct {
 };
 pub const DirectBudget = struct { maximum: u64, used: u64 = 0 };
 pub const DirectBuffer = struct { storage: []u64, gpa: ?std.mem.Allocator, maximum: usize, used: usize = 0 };
-pub const checked = builtin.mode == .debug or builtin.mode == .safe;
+pub const checked = builtin.optimize == .debug or builtin.optimize == .safe;
 pub const DirectConfined = struct { data: u64, owner: if (checked) a.TaskIdentity else void };
 pub const Payload = struct { output: *u64, value: u64 };
 pub fn cleanup(payload: *Payload) void {

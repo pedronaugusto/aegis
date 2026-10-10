@@ -89,7 +89,7 @@ inline fn equalKernel(a: []const u8, b: []const u8) Choice {
     return fromKernel(((barrier(u32, difference) -% 1) >> 8) & 1);
 }
 /// Endian is PUBLIC. The first unequal most-significant byte determines order.
-pub inline fn compareUnsigned(comptime N: usize, endian: std.builtin.Endian, a: *const [N]u8, b: *const [N]u8) OrderChoices {
+pub inline fn compareUnsigned(comptime N: usize, endian: std.lang.Endian, a: *const [N]u8, b: *const [N]u8) OrderChoices {
     supported();
     @setRuntimeSafety(true);
     const x: *const volatile [N]u8 = a;
@@ -129,10 +129,10 @@ inline fn partialOverlap(comptime N: usize, out: *[N]u8, source: *const [N]u8) b
 inline fn supported() void {
     if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 17 or builtin.zig_version.patch != 0 or builtin.zig_version.pre != null) @compileError("aegis Choice kernels require audited Zig 0.17.0");
     if (builtin.zig_backend != .stage2_llvm) @compileError("aegis Choice kernels require the audited LLVM backend (-fllvm)");
-    if (builtin.cpu.arch != .x86_64 and builtin.cpu.arch != .aarch64) @compileError("aegis Choice kernels: target not audited; 32-bit/wasm support is staged");
-    if (builtin.os.tag != .linux and builtin.os.tag != .macos and builtin.os.tag != .windows) @compileError("aegis Choice kernels: OS profile not audited; freestanding support is staged");
-    if ((builtin.os.tag == .linux and builtin.abi != .gnu and !(builtin.cpu.arch == .x86_64 and builtin.abi == .musl)) or (builtin.os.tag == .windows and builtin.abi != .gnu)) @compileError("aegis Choice kernels: ABI profile not audited");
-    const baseline = comptime std.Target.Cpu.baseline(builtin.cpu.arch, builtin.os);
-    if (comptime !builtin.cpu.features.eql(baseline.features) or !std.mem.eql(u8, builtin.cpu.model.name, baseline.model.name)) @compileError("aegis Choice kernels require the audited baseline CPU (-mcpu=baseline)");
+    if (builtin.target.cpu.arch != .x86_64 and builtin.target.cpu.arch != .aarch64) @compileError("aegis Choice kernels: target not audited; 32-bit/wasm support is staged");
+    if (builtin.target.os.tag != .linux and builtin.target.os.tag != .macos and builtin.target.os.tag != .windows) @compileError("aegis Choice kernels: OS profile not audited; freestanding support is staged");
+    if ((builtin.target.os.tag == .linux and builtin.target.abi != .gnu and !(builtin.target.cpu.arch == .x86_64 and builtin.target.abi == .musl)) or (builtin.target.os.tag == .windows and builtin.target.abi != .gnu)) @compileError("aegis Choice kernels: ABI profile not audited");
+    const baseline = comptime std.Target.Cpu.baseline(builtin.target.cpu.arch, builtin.target.os);
+    if (comptime !builtin.target.cpu.features.eql(baseline.features) or !std.mem.eql(u8, builtin.target.cpu.model.name, baseline.model.name)) @compileError("aegis Choice kernels require the audited baseline CPU (-mcpu=baseline)");
     if (std.options.side_channels_mitigations == .none) @compileError("aegis Choice kernels require side-channel mitigations");
 }

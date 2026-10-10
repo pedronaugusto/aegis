@@ -502,7 +502,7 @@ test "A7 Owned takes a reservation by move so it releases once" {
     try t.expectEqual(@as(u8, 3), budget.remaining());
     var owner = Held.initFrom(&reservation);
     // The source was consumed: the one charge belongs to the owner alone.
-    if (builtin.mode == .debug) try t.expect(!reservation.live);
+    if (builtin.optimize == .debug) try t.expect(!reservation.live);
     try t.expectEqual(@as(u8, 3), budget.remaining());
     owner.deinit();
     try t.expectEqual(@as(u8, 10), budget.remaining());

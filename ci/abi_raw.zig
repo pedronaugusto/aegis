@@ -1,5 +1,4 @@
 //! Separate translation unit: every exported C prototype uses only raw integers.
-const std = @import("std");
 // 128-bit integers are deliberately outside the promised C ABI profile.
 pub const representations = .{ u8, i8, u16, i16, u32, i32, u64, i64, usize, isize };
 pub fn Raw(comptime R: type) type {

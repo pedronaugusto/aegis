@@ -35,7 +35,7 @@ fn State(comptime wrapped: bool) type {
     };
 }
 comptime {
-    if (builtin.mode == .fast) {
+    if (builtin.optimize == .fast) {
         std.debug.assert(@sizeOf(State(false)) == @sizeOf(State(true)));
         for (@typeInfo(State(false)).@"struct".field_names) |name| std.debug.assert(@offsetOf(State(false), name) == @offsetOf(State(true), name));
     }

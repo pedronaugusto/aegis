@@ -2,7 +2,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const Condition = @import("Condition.zig");
-const diagnostics = builtin.mode == .debug;
+const diagnostics = builtin.optimize == .debug;
 
 /// after indices describe a strict partial order, not numeric priority.
 pub const Rank = struct { name: []const u8, after: []const usize = &.{} };

@@ -5,7 +5,7 @@
     .minimum_zig_version = "0.17.0",
     .paths = .{ "build.zig", "build.zig.zon", "src", "LICENSE", "README.md", "CHANGELOG.md" },
     .dependencies = .{
-        .preflight = .{ .url = "git+https://github.com/pedronaugusto/preflight#84cccbc0e7040c42c28a7333c22cf7261b04694e", .hash = "preflight-0.1.0-LX1ZwsM0CQD0DgjeTq1o54U4UFJWYoGztCgwOCEglJvN", .lazy = true },
+        .preflight = .{ .url = "git+https://github.com/pedronaugusto/preflight#e3d81b9e477c1c690f1ce03506511935d16035c3", .hash = "preflight-0.1.0-LX1Zwl2HCQB4-h0brJMmXe_1ZA3UoIT6vI9kJ3IE1grE", .lazy = true },
         .shakedown = .{ .url = "git+https://github.com/pedronaugusto/shakedown#99418acb02deacefe8cc555c4205dce98f54ef68", .hash = "shakedown-0.1.0-BR8U409YEgCLU7igVgkutLKZ1u5FzuaC6geo-4n84d_G", .lazy = true },
     },
 }

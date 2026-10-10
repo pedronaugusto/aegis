@@ -2,7 +2,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const Condition = @import("Condition.zig");
-const diagnostics = builtin.mode == .debug;
+const diagnostics = builtin.optimize == .debug;
 
 /// One context per logical task, carried explicitly across runtime migration.
 /// Never share with another simultaneous task. Release is zero-sized.

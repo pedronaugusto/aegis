@@ -5,10 +5,10 @@ const cases = @import("choices");
 const shake = @import("shakedown");
 const samples = 16;
 const iterations = 10000;
-const Operation = *const fn (*[512]u8, *const [512]u8, *const [512]u8, usize, std.builtin.Endian) u64;
+const Operation = *const fn (*[512]u8, *const [512]u8, *const [512]u8, usize, std.lang.Endian) u64;
 fn OperationFor(comptime name: []const u8, comptime wrapped: bool) type {
     return struct {
-        fn run(out: *[512]u8, a: *const [512]u8, b: *const [512]u8, len: usize, endian: std.builtin.Endian) align(64) u64 {
+        fn run(out: *[512]u8, a: *const [512]u8, b: *const [512]u8, len: usize, endian: std.lang.Endian) align(64) u64 {
             return cases.run(name, wrapped, out, a, b, if (comptime std.mem.eql(u8, name, "dynamic")) (len << 16) | len else len, endian);
         }
     };
@@ -32,7 +32,7 @@ pub fn main(init: std.process.Init) !void {
     var buffer: [4096]u8 = undefined;
     var out = std.Io.File.stdout().writer(init.io, &buffer);
     const w = &out.interface;
-    if (!smoke) try w.print("A5 Zig {s} LLVM {s}/{s}; baseline CPU; ns/caller, 16 paired ABBA/BAAB blocks x10000; randomized class order/values; diagnostics are not a proof; hardware-counter export is separate\n", .{ builtin.zig_version_string, @tagName(builtin.cpu.arch), builtin.cpu.model.name });
+    if (!smoke) try w.print("A5 Zig {s} LLVM {s}/{s}; baseline CPU; ns/caller, 16 paired ABBA/BAAB blocks x10000; randomized class order/values; diagnostics are not a proof; hardware-counter export is separate\n", .{ builtin.zig_version_string, @tagName(builtin.target.cpu.arch), builtin.target.cpu.model.name });
     var rng_inputs = std.Random.DefaultPrng.init(0xa51);
     const random = rng_inputs.random();
     inline for (cases.names) |name| {

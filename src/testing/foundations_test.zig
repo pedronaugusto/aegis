@@ -214,7 +214,7 @@ test "A3 shifts encodings and side effects" {
     aegis.assert.pre(evaluate(&evaluated), "predicate exactly once");
     try t.expectEqual(@as(usize, 1), evaluated);
     aegis.assert.debugCheck(evaluate, &evaluated);
-    try t.expectEqual(@as(usize, if (builtin.mode == .debug) 2 else 1), evaluated);
+    try t.expectEqual(@as(usize, if (builtin.optimize == .debug) 2 else 1), evaluated);
 }
 fn evaluate(n: *usize) bool {
     n.* += 1;

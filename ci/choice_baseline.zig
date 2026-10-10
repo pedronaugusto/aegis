@@ -19,7 +19,7 @@ pub inline fn equal(a: []const u8, b: []const u8) error{LengthMismatch}!Bit {
     for (0..a.len) |i| acc |= x[i] ^ y[i];
     return bit(((barrier(u32, acc) -% 1) >> 8) & 1);
 }
-pub inline fn order(comptime N: usize, endian: std.builtin.Endian, a: *const [N]u8, b: *const [N]u8) struct { lt: Bit, eq: Bit, gt: Bit } {
+pub inline fn order(comptime N: usize, endian: std.lang.Endian, a: *const [N]u8, b: *const [N]u8) struct { lt: Bit, eq: Bit, gt: Bit } {
     @setRuntimeSafety(true);
     const x: *const volatile [N]u8 = a;
     const y: *const volatile [N]u8 = b;

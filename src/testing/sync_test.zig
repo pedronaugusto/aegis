@@ -264,19 +264,19 @@ test "A6 logical-task rank checks before base lock waiting and reservation acros
     var high = O.Ordered(a.BlockingGuarded(u32), 1).init(.init(2));
     var equal = O.Ordered(a.BlockingGuarded(u32), 0).init(.init(3));
     var held = try low.acquireOrdered(t.io, &ctx);
-    if (builtin.mode == .debug) {
+    if (builtin.optimize == .debug) {
         try t.expectError(error.SameOwner, ctx.check(&low, 0));
         try t.expectError(error.Unordered, ctx.check(&equal, 0));
         try t.expectError(error.Unordered, ctx.check(&high, 2));
     }
     var child = try high.acquireOrdered(t.io, &ctx);
     try t.expectEqual(@as(u32, 2), child.value().*);
-    if (builtin.mode == .debug) try t.expectError(error.Inversion, ctx.check(&equal, 0));
+    if (builtin.optimize == .debug) try t.expectError(error.Inversion, ctx.check(&equal, 0));
     child.deinit(t.io);
     var condition = a.Condition.initLimit(0);
     try t.expectError(error.WaiterLimit, condition.wait(t.io, &held, .none));
     held.deinit(t.io);
-    if (builtin.mode != .debug) try t.expectEqual(@as(usize, 0), @sizeOf(O.Context));
+    if (builtin.optimize != .debug) try t.expectEqual(@as(usize, 0), @sizeOf(O.Context));
 }
 
 test "A6 Confined identity access and explicit synchronized handoff" {
@@ -286,7 +286,7 @@ test "A6 Confined identity access and explicit synchronized handoff" {
     value.value(first).* = 8;
     value.handOff(first, next);
     try t.expectEqual(@as(u64, 8), value.valueConst(next).*);
-    if (builtin.mode == .fast or builtin.mode == .small) try t.expectEqual(@sizeOf(u64), @sizeOf(@TypeOf(value)));
+    if (builtin.optimize == .fast or builtin.optimize == .small) try t.expectEqual(@sizeOf(u64), @sizeOf(@TypeOf(value)));
 }
 
 const Native = struct {

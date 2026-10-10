@@ -136,12 +136,16 @@ pub fn Machine(comptime S: type, comptime E: type, comptime spec: Spec(S, E)) ty
         /// The state `event` leads to from `from`, or null when no edge is declared: one load from a table
         /// validated when the machine was analyzed, with no branch on the state or the event.
         pub inline fn next(from: S, event: E) ?S {
-            // safe: both positions come from valid enum values and the cell from the validated table, so
-            // the bounds and range checks cannot fail; Debug keeps them
-            @setRuntimeSafety(builtin.mode == .debug);
+            // Both positions come from valid enum values and the cell from the validated table, so the bounds
+            // and range checks cannot fail; Debug keeps them, so the one body is written once for each.
+            if (comptime builtin.optimize == .debug) {
+                const cell = cells[position(S, from)][position(E, event)];
+                if (cell == none) return null;
+                return if (comptime dense(S)) @fromBackingInt(@as(@typeInfo(S).@"enum".tag_type, @intCast(cell))) else members[cell];
+            }
+            @setRuntimeSafety(false); // safe: valid enum positions index the validated table, and a cell is a state's position
             const cell = cells[position(S, from)][position(E, event)];
             if (cell == none) return null;
-            // safe: the cell is a state's position, which is its value in a dense enum, so it fits the tag
             return if (comptime dense(S)) @fromBackingInt(@as(@typeInfo(S).@"enum".tag_type, @intCast(cell))) else members[cell];
         }
 
@@ -155,8 +159,9 @@ pub fn Machine(comptime S: type, comptime E: type, comptime spec: Spec(S, E)) ty
         pub inline fn isTerminal(value: S) bool {
             if (comptime spec.terminal.len == 0) return false;
             if (comptime spec.terminal.len == 1) return value == spec.terminal[0];
-            // safe: the position comes from a valid enum value, so the bounds check cannot fail; Debug keeps it
-            @setRuntimeSafety(builtin.mode == .debug);
+            // The position comes from a valid enum value, so the bounds check cannot fail; Debug keeps it.
+            if (comptime builtin.optimize == .debug) return ends[position(S, value)];
+            @setRuntimeSafety(false); // safe: the position of a valid enum value indexes the terminal table
             return ends[position(S, value)];
         }
 

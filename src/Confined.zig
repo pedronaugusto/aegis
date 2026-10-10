@@ -1,6 +1,6 @@
 //! Checked single logical-task ownership for otherwise reachable shared state.
 const builtin = @import("builtin");
-const checked = builtin.mode == .debug or builtin.mode == .safe;
+const checked = builtin.optimize == .debug or builtin.optimize == .safe;
 
 /// Caller issues stable unique identities for logical tasks. No threadlocal identity.
 /// External synchronization establishes quiescent handoff; this is not a lock.

@@ -102,10 +102,10 @@ pub fn Checked(comptime Repr: type) type {
             return init(@intCast(result)); // safe: exact wider shift checked against both repr bounds
         }
 
-        pub inline fn toBytes(self: Self, endian: std.builtin.Endian) scalar.Bytes(Repr) {
+        pub inline fn toBytes(self: Self, endian: std.lang.Endian) scalar.Bytes(Repr) {
             return scalar.encode(Repr, self.value, endian);
         }
-        pub inline fn fromBytes(data: scalar.Bytes(Repr), endian: std.builtin.Endian) Self {
+        pub inline fn fromBytes(data: scalar.Bytes(Repr), endian: std.lang.Endian) Self {
             return init(scalar.decode(Repr, data, endian));
         }
     };
@@ -155,10 +155,10 @@ pub fn Saturating(comptime Repr: type) type {
             return init(checked.raw());
         }
 
-        pub inline fn toBytes(self: Self, endian: std.builtin.Endian) scalar.Bytes(Repr) {
+        pub inline fn toBytes(self: Self, endian: std.lang.Endian) scalar.Bytes(Repr) {
             return scalar.encode(Repr, self.value, endian);
         }
-        pub inline fn fromBytes(data: scalar.Bytes(Repr), endian: std.builtin.Endian) Self {
+        pub inline fn fromBytes(data: scalar.Bytes(Repr), endian: std.lang.Endian) Self {
             return init(scalar.decode(Repr, data, endian));
         }
     };
@@ -204,10 +204,10 @@ pub fn Ranged(comptime Repr: type, comptime min: Repr, comptime max: Repr) type 
         pub fn shl(self: Self, amount: anytype) ShlError!Self {
             return init((try Checked(Repr).init(@backingInt(self)).shl(amount)).raw());
         }
-        pub fn toBytes(self: Self, endian: std.builtin.Endian) scalar.Bytes(Repr) {
+        pub fn toBytes(self: Self, endian: std.lang.Endian) scalar.Bytes(Repr) {
             return scalar.encode(Repr, @backingInt(self), endian);
         }
-        pub fn fromBytes(data: scalar.Bytes(Repr), endian: std.builtin.Endian) InitError!Self {
+        pub fn fromBytes(data: scalar.Bytes(Repr), endian: std.lang.Endian) InitError!Self {
             return init(scalar.decode(Repr, data, endian));
         }
     };

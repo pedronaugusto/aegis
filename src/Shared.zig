@@ -3,7 +3,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const interior = @import("interior.zig");
 const move = @import("move.zig");
-const diagnostics = builtin.mode == .debug;
+const diagnostics = builtin.optimize == .debug;
 
 /// One allocated `T` and an atomic count of the handles that own it; the last `release` runs `cleanup`
 /// once and frees the block. Cleanup is static, infallible and nonblocking, and runs on whichever task

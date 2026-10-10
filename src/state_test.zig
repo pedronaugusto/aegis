@@ -46,7 +46,7 @@ test "A10 the table answers every state and event exactly as the declared edges"
 
 test "A10 a stage is its payload outside Debug and costs one flag inside" {
     const Open = Link.At(.open, u64);
-    if (builtin.mode == .debug) try t.expect(@sizeOf(Open) >= @sizeOf(u64)) else {
+    if (builtin.optimize == .debug) try t.expect(@sizeOf(Open) >= @sizeOf(u64)) else {
         try t.expectEqual(@sizeOf(u64), @sizeOf(Open));
         try t.expectEqual(@alignOf(u64), @alignOf(Open));
         try t.expectEqual(0, @sizeOf(Link.At(.closed, void)));

@@ -10,7 +10,7 @@ inline fn chosen(comptime wrapped: bool, a: *const [1]u8, b: *const [1]u8) if (w
 inline fn equal(comptime wrapped: bool, comptime N: usize, a: *const [N]u8, b: *const [N]u8) u32 {
     return if (wrapped) @intFromBool(s.equal(N, a, b).declassify("fixture completed equality verdict")) else (base.equal(a, b) catch unreachable).value; // unreachable: both fixed arrays have identical public lengths
 }
-pub inline fn run(comptime name: []const u8, comptime wrapped: bool, out: *[512]u8, a: *const [512]u8, b: *const [512]u8, len: usize, endian: std.builtin.Endian) u64 {
+pub inline fn run(comptime name: []const u8, comptime wrapped: bool, out: *[512]u8, a: *const [512]u8, b: *const [512]u8, len: usize, endian: std.lang.Endian) u64 {
     @setRuntimeSafety(true);
     inline for (.{ 0, 1, 32, 48, 512 }) |N| {
         if (comptime std.mem.eql(u8, name, std.fmt.comptimePrint("equal{d}", .{N}))) return equal(wrapped, N, a[0..N], b[0..N]);

@@ -1,7 +1,7 @@
 //! A lock-free cell for one scalar of a distinct domain: ids, counts, byte counts, durations, instants and plain
 //! enums, read and written whole and never as the integer behind them.
 const std = @import("std");
-const Order = std.builtin.AtomicOrder;
+const Order = std.lang.AtomicOrder;
 
 fn Backing(comptime T: type) type {
     const Repr = switch (@typeInfo(T)) {

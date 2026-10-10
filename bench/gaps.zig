@@ -48,7 +48,7 @@ noinline fn measure(comptime wrapped: bool, comptime name: []const u8, io: Io, c
     var churn: Churn(wrapped) = .{ .handle = if (wrapped) .{ .block = @ptrCast(&block) } else .{ .block = &block } }; // safe: Handle's block is the same one-pointer layout as the hand-written block, asserted by the parity gate
     block.count.store(1 << 20, .monotonic);
     if (comptime std.mem.eql(u8, name, "lazy_ready")) _ = try gaps.lazyCold(wrapped, io, &lazy, 5);
-    const hardware = comptime std.mem.indexOf(u8, name, "vs_hardware") != null;
+    const hardware = comptime std.mem.find(u8, name, "vs_hardware") != null;
     var adding: Adding(wrapped, hardware) = .{ .cell = if (wrapped) .init(.fromRaw(0)) else .init(0) };
     const threads: usize = if (comptime std.mem.endsWith(u8, name, "_4")) 4 else 1;
     const start = Io.Clock.awake.now(io);

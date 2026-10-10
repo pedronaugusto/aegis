@@ -1,6 +1,5 @@
 //! A8/A9 portable compilation and strict paired release instruction/layout gate.
 const std = @import("std");
-const builtin = @import("builtin");
 const emitted = @import("codegen.zig");
 const names = [_][]const u8{ "handle_get", "handle_insert", "handle_remove", "handle_index", "input_parse", "context_push", "input_diagnostics", "dense_sum" };
 pub fn main(init: std.process.Init) !void {

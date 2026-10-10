@@ -151,7 +151,7 @@ test "A3 whole-byte widths other than a power of two round-trip their bytes in b
         const high = D.fromRaw(std.math.maxInt(Repr));
         const low = D.fromRaw(std.math.minInt(Repr));
         comptime std.debug.assert(@typeInfo(@TypeOf(high.encode(.little))).array.len == @bitSizeOf(Repr) / 8);
-        inline for (.{ std.builtin.Endian.little, std.builtin.Endian.big }) |endian| {
+        inline for (.{ std.lang.Endian.little, std.lang.Endian.big }) |endian| {
             try t.expectEqual(high, D.decode(high.encode(endian), endian));
             try t.expectEqual(low, D.decode(low.encode(endian), endian));
         }

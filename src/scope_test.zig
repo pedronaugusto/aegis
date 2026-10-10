@@ -4,7 +4,7 @@ const shake = @import("shakedown");
 const a = @import("root.zig");
 const scope = a.scope;
 const t = std.testing;
-const checked = builtin.mode == .debug or builtin.mode == .safe;
+const checked = builtin.optimize == .debug or builtin.optimize == .safe;
 
 const Request = struct {};
 const Connection = struct {};

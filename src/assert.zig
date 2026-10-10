@@ -26,11 +26,11 @@ pub inline fn never(comptime message: []const u8) noreturn {
 /// Optional Debug diagnostic; argument evaluation still belongs to the caller.
 // ziglint-ignore: Z023 condition then static message is the specified scalar contract
 pub fn debug(condition: bool, comptime message: []const u8) void {
-    if (builtin.mode == .debug) invariant(condition, message);
+    if (builtin.optimize == .debug) invariant(condition, message);
 }
 /// Optional predicate call itself disappears in both release modes.
 pub fn debugCheck(comptime predicate: anytype, context: anytype) void {
-    if (builtin.mode == .debug) invariant(predicate(context), "aegis debug predicate");
+    if (builtin.optimize == .debug) invariant(predicate(context), "aegis debug predicate");
 }
 /// Deliberately possible true or false; use only side-effect-free expressions.
 pub fn maybe(condition: bool) void {

@@ -6,7 +6,7 @@ pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(a);
     if (args.len != 2) return error.ZigExecutableRequired;
     for ([_][]const u8{ "ReleaseSafe", "ReleaseFast" }) |mode| {
-        const binary = try a.print(".zig-cache/contract-{s}{s}", .{ mode, if (builtin.os.tag == .windows) ".exe" else "" });
+        const binary = try a.print(".zig-cache/contract-{s}{s}", .{ mode, if (builtin.target.os.tag == .windows) ".exe" else "" });
         const result = try std.process.run(init.gpa, init.io, .{ .argv = &.{ args[1], "build-exe", try a.print("-O{s}", .{mode}), "--dep", "aegis", "-Mroot=ci/contract.zig", "-Maegis=src/root.zig", try a.print("-femit-bin={s}", .{binary}) }, .stderr_limit = .limited(16384) });
         defer init.gpa.free(result.stdout);
         defer init.gpa.free(result.stderr);

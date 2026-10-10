@@ -5,7 +5,7 @@ const a = @import("aegis");
 const Request = struct {};
 const Slots = a.scope.Table(Request);
 comptime {
-    if (builtin.mode == .fast or builtin.mode == .small) {
+    if (builtin.optimize == .fast or builtin.optimize == .small) {
         std.debug.assert(@sizeOf(a.scope.Ref(Request, *u32)) == @sizeOf(*u32));
         std.debug.assert(@sizeOf(a.scope.Ref(Request, []u8)) == @sizeOf([]u8));
         std.debug.assert(@sizeOf(Slots) == 0 and @sizeOf(Slots.Slot) == 0 and @sizeOf(Slots.Scope) == 0);

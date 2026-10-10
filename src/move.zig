@@ -66,7 +66,7 @@ test "move: a type without moveInto is copied and only the poisoning form clears
     var other: [3]u16 = .{ 4, 5, 6 };
     intoPoisoning([3]u16, &other, &destination);
     try std.testing.expectEqualSlices(u16, &.{ 4, 5, 6 }, &destination);
-    if (builtin.mode == .debug) {
+    if (builtin.optimize == .debug) {
         // Debug fills `undefined` with 0xaa bytes.
         for (other) |word| try std.testing.expectEqual(@as(u16, 0xaaaa), word);
     }

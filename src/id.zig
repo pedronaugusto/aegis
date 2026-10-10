@@ -95,10 +95,10 @@ fn Identity(comptime Tag: type, comptime Repr: type, comptime nonzero: bool) typ
         pub inline fn hash(self: Self) u64 {
             return std.hash.Wyhash.hash(0, &self.toBytes(.little));
         }
-        pub inline fn toBytes(self: Self, endian: std.builtin.Endian) scalar.Bytes(Repr) {
+        pub inline fn toBytes(self: Self, endian: std.lang.Endian) scalar.Bytes(Repr) {
             return scalar.encode(Repr, @backingInt(self), endian);
         }
-        pub inline fn fromBytes(data: scalar.Bytes(Repr), endian: std.builtin.Endian) if (nonzero) FromBytesError!Self else Self {
+        pub inline fn fromBytes(data: scalar.Bytes(Repr), endian: std.lang.Endian) if (nonzero) FromBytesError!Self else Self {
             return fromRaw(scalar.decode(Repr, data, endian));
         }
     };

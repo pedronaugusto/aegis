@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 const std = @import("std");
 
 /// Scope checks follow Zig's runtime safety: on in Debug and ReleaseSafe, absent from ReleaseFast and ReleaseSmall.
-pub const checked = builtin.mode == .debug or builtin.mode == .safe;
+pub const checked = builtin.optimize == .debug or builtin.optimize == .safe;
 
 /// One past the last usable generation. A slot that reaches it is retired and never opens a scope again.
 pub const retired: u64 = std.math.maxInt(u64);
@@ -19,10 +19,10 @@ pub const Plain = struct {
     pub fn init(value: u64) Plain {
         return .{ .raw = value };
     }
-    pub fn load(self: *const Plain, _: std.builtin.AtomicOrder) u64 {
+    pub fn load(self: *const Plain, _: std.lang.AtomicOrder) u64 {
         return self.raw;
     }
-    pub fn store(self: *Plain, value: u64, _: std.builtin.AtomicOrder) void {
+    pub fn store(self: *Plain, value: u64, _: std.lang.AtomicOrder) void {
         self.raw = value;
     }
 };

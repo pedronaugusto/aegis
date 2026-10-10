@@ -20,7 +20,7 @@ pub fn main(init: std.process.Init) !void {
 
 fn modes(run: Run) !void {
     for ([_][]const u8{ "Debug", "ReleaseSafe", "ReleaseFast", "ReleaseSmall" }) |mode| {
-        const binary = try run.arena.print(".zig-cache/a10/contracts-{s}{s}", .{ mode, if (builtin.os.tag == .windows) ".exe" else "" });
+        const binary = try run.arena.print(".zig-cache/a10/contracts-{s}{s}", .{ mode, if (builtin.target.os.tag == .windows) ".exe" else "" });
         const compiled = try std.process.run(run.gpa, run.io, .{ .argv = &.{ run.zig, "build-exe", try run.arena.print("-O{s}", .{mode}), "--dep", "aegis", "-Mroot=ci/a10_contract.zig", "-Maegis=src/root.zig", try run.arena.print("-femit-bin={s}", .{binary}) }, .stderr_limit = .limited(16384) });
         defer run.gpa.free(compiled.stdout);
         defer run.gpa.free(compiled.stderr);

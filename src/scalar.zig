@@ -37,11 +37,11 @@ pub fn Bytes(comptime R: type) type {
     if (@bitSizeOf(R) % 8 != 0) @compileError("encoding requires a whole-byte representation");
     return [@bitSizeOf(R) / 8]u8;
 }
-pub fn encode(comptime R: type, value: R, endian: std.builtin.Endian) Bytes(R) {
+pub fn encode(comptime R: type, value: R, endian: std.lang.Endian) Bytes(R) {
     var out: Bytes(R) = undefined;
     std.mem.writeInt(R, &out, value, endian);
     return out;
 }
-pub fn decode(comptime R: type, value: Bytes(R), endian: std.builtin.Endian) R {
+pub fn decode(comptime R: type, value: Bytes(R), endian: std.lang.Endian) R {
     return std.mem.readInt(R, &value, endian);
 }

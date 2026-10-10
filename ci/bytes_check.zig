@@ -7,7 +7,7 @@ pub fn main(init: std.process.Init) !void {
     const dir = std.Io.Dir.cwd();
     try dir.createDirPath(init.io, ".zig-cache/a4-proof");
     for ([_][]const u8{ "Debug", "ReleaseSafe", "ReleaseFast" }) |mode| {
-        const binary = try a.print(".zig-cache/a4-proof/move-{s}{s}", .{ mode, if (builtin.os.tag == .windows) ".exe" else "" });
+        const binary = try a.print(".zig-cache/a4-proof/move-{s}{s}", .{ mode, if (builtin.target.os.tag == .windows) ".exe" else "" });
         const compiled = try std.process.run(init.gpa, init.io, .{ .argv = &.{ args[1], "build-exe", try a.print("-O{s}", .{mode}), "--dep", "aegis", "-Mroot=ci/bytes_contract.zig", "-Maegis=src/root.zig", try a.print("-femit-bin={s}", .{binary}) }, .stderr_limit = .limited(16384) });
         defer init.gpa.free(compiled.stdout);
         defer init.gpa.free(compiled.stderr);

@@ -3,7 +3,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const a = @import("aegis");
 
-const checked = builtin.mode == .debug or builtin.mode == .safe;
+const checked = builtin.optimize == .debug or builtin.optimize == .safe;
 const none = std.math.maxInt(usize);
 const Brand = struct {};
 

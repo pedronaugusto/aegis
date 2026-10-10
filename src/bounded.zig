@@ -2,7 +2,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const move = @import("move.zig");
-const diagnostics = builtin.mode == .debug;
+const diagnostics = builtin.optimize == .debug;
 
 /// Initialized prefix; success transfers input, failure preserves it.
 pub fn Array(comptime T: type, comptime N: usize) type {

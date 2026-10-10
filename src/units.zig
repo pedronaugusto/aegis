@@ -204,10 +204,10 @@ pub fn Count(comptime Tag: type, comptime Repr: type) type {
             if (comptime scalar.lossless(Repr, Target)) return Count(Tag, Target).fromRaw(converted);
             return Count(Tag, Target).fromRaw(try converted);
         }
-        pub inline fn encode(self: Self, endian: std.builtin.Endian) scalar.Bytes(Repr) {
+        pub inline fn encode(self: Self, endian: std.lang.Endian) scalar.Bytes(Repr) {
             return scalar.encode(Repr, @backingInt(self), endian);
         }
-        pub inline fn decode(data: scalar.Bytes(Repr), endian: std.builtin.Endian) Self {
+        pub inline fn decode(data: scalar.Bytes(Repr), endian: std.lang.Endian) Self {
             return fromRaw(scalar.decode(Repr, data, endian));
         }
     };
@@ -255,10 +255,10 @@ pub fn Bytes(comptime Repr: type) type {
         pub inline fn toBits(self: Self) ToBitsError!Bits(Repr) {
             return Bits(Repr).fromRaw(try scaled(Repr, 8, 1, @backingInt(self), .exact));
         }
-        pub inline fn encode(self: Self, endian: std.builtin.Endian) scalar.Bytes(Repr) {
+        pub inline fn encode(self: Self, endian: std.lang.Endian) scalar.Bytes(Repr) {
             return scalar.encode(Repr, @backingInt(self), endian);
         }
-        pub inline fn decode(data: scalar.Bytes(Repr), endian: std.builtin.Endian) Self {
+        pub inline fn decode(data: scalar.Bytes(Repr), endian: std.lang.Endian) Self {
             return fromRaw(scalar.decode(Repr, data, endian));
         }
     };
@@ -310,10 +310,10 @@ pub fn Bits(comptime Repr: type) type {
         pub inline fn toBytesRounded(self: Self, rounding: Rounding) ToBytesRoundedError!Bytes(Repr) {
             return Bytes(Repr).fromRaw(try scaled(Repr, 1, 8, @backingInt(self), rounding));
         }
-        pub inline fn encode(self: Self, endian: std.builtin.Endian) scalar.Bytes(Repr) {
+        pub inline fn encode(self: Self, endian: std.lang.Endian) scalar.Bytes(Repr) {
             return scalar.encode(Repr, @backingInt(self), endian);
         }
-        pub inline fn decode(data: scalar.Bytes(Repr), endian: std.builtin.Endian) Self {
+        pub inline fn decode(data: scalar.Bytes(Repr), endian: std.lang.Endian) Self {
             return fromRaw(scalar.decode(Repr, data, endian));
         }
     };
@@ -387,10 +387,10 @@ pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
             if (comptime ErrorOf(Converted(i96, Repr, 1, unit.nanoseconds(), rounding)) == error{}) return fromRaw(converted);
             return fromRaw(try converted);
         }
-        pub inline fn encode(self: Self, endian: std.builtin.Endian) scalar.Bytes(Repr) {
+        pub inline fn encode(self: Self, endian: std.lang.Endian) scalar.Bytes(Repr) {
             return scalar.encode(Repr, @backingInt(self), endian);
         }
-        pub inline fn decode(data: scalar.Bytes(Repr), endian: std.builtin.Endian) Self {
+        pub inline fn decode(data: scalar.Bytes(Repr), endian: std.lang.Endian) Self {
             return fromRaw(scalar.decode(Repr, data, endian));
         }
     };
@@ -492,10 +492,10 @@ pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: t
             if (comptime ErrorOf(Converted(i96, Repr, 1, unit.nanoseconds(), rounding)) == error{}) return fromTimestamp(value.raw, rounding);
             return try fromTimestamp(value.raw, rounding);
         }
-        pub inline fn encode(self: Self, endian: std.builtin.Endian) scalar.Bytes(Repr) {
+        pub inline fn encode(self: Self, endian: std.lang.Endian) scalar.Bytes(Repr) {
             return scalar.encode(Repr, @backingInt(self), endian);
         }
-        pub inline fn decode(data: scalar.Bytes(Repr), endian: std.builtin.Endian) Self {
+        pub inline fn decode(data: scalar.Bytes(Repr), endian: std.lang.Endian) Self {
             return fromRaw(scalar.decode(Repr, data, endian));
         }
     };

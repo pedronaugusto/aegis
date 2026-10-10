@@ -4,14 +4,14 @@ const builtin = @import("builtin");
 const a = @import("aegis");
 fn cleanup(_: *u64) void {}
 comptime {
-    if (builtin.mode != .debug) {
+    if (builtin.optimize != .debug) {
         std.debug.assert(@sizeOf(a.own.Owned(u64, cleanup)) == @sizeOf(u64));
         std.debug.assert(@alignOf(a.own.Owned(u64, cleanup)) == @alignOf(u64));
         std.debug.assert(@sizeOf(a.own.MustUse(u64, "read")) == @sizeOf(u64));
         std.debug.assert(@sizeOf(a.InitContext) == 0);
         std.debug.assert(@sizeOf(a.Order(&.{.{ .name = "root" }}).Context) == 0);
     }
-    if (builtin.mode == .fast or builtin.mode == .small) std.debug.assert(@sizeOf(a.Confined(u64)) == @sizeOf(u64));
+    if (builtin.optimize == .fast or builtin.optimize == .small) std.debug.assert(@sizeOf(a.Confined(u64)) == @sizeOf(u64));
 }
 export fn pure(seed: u64) u64 {
     var array: a.bounded.Array(u64, 3) = .init;
