@@ -1,4 +1,5 @@
 //! Typestate machines against their hand-written tables and nested switches, and the stages against plain moves.
+//! Explicit non-inline calls keep each operation inside the measured boundary.
 const std = @import("std");
 const ab = @import("ab");
 const c = @import("state");
@@ -23,26 +24,28 @@ noinline fn measure(comptime wrapped: bool, comptime name: []const u8, io: Io, c
         stream = advance(stream);
         const s: c.State = @fromBackingInt(@as(u8, @truncate(stream >> 33)) % 4); // safe: four states
         const e: c.Event = @fromBackingInt(@as(u8, @truncate(stream >> 41)) % 4); // safe: four events
+        const ws: c.Handshake.State = @fromBackingInt(@as(u8, @truncate(stream >> 33)) % 8); // safe: eight states
+        const we: c.Handshake.Event = @fromBackingInt(@as(u8, @truncate(stream >> 41)) % 7); // safe: seven events
         if (comptime std.mem.eql(u8, name, "next")) {
-            accumulator +%= c.next(wrapped, s, e);
+            accumulator +%= @call(.never_inline, c.next, .{ wrapped, s, e });
         } else if (comptime std.mem.eql(u8, name, "next_wide")) {
-            accumulator +%= c.nextWide(wrapped, @fromBackingInt(@as(u8, @truncate(stream >> 33)) % 8), @fromBackingInt(@as(u8, @truncate(stream >> 41)) % 7)); // safe: eight states and seven events
+            accumulator +%= @call(.never_inline, c.nextWide, .{ wrapped, ws, we });
         } else if (comptime std.mem.eql(u8, name, "next_switch")) {
-            accumulator +%= c.nextSwitch(wrapped, s, e);
+            accumulator +%= @call(.never_inline, c.nextSwitch, .{ wrapped, s, e });
         } else if (comptime std.mem.eql(u8, name, "next_wide_switch")) {
-            accumulator +%= c.nextWideSwitch(wrapped, @fromBackingInt(@as(u8, @truncate(stream >> 33)) % 8), @fromBackingInt(@as(u8, @truncate(stream >> 41)) % 7)); // safe: eight states and seven events
+            accumulator +%= @call(.never_inline, c.nextWideSwitch, .{ wrapped, ws, we });
         } else if (comptime std.mem.eql(u8, name, "step")) {
-            const result = c.step(wrapped, &machine, e);
+            const result = @call(.never_inline, c.step, .{ wrapped, &machine, e });
             accumulator +%= result;
             if (machine.state == .closed) machine.state = .idle;
         } else if (comptime std.mem.eql(u8, name, "plan_commit")) {
-            const result = c.planCommit(wrapped, &machine, e);
+            const result = @call(.never_inline, c.planCommit, .{ wrapped, &machine, e });
             accumulator +%= result;
             if (machine.state == .closed) machine.state = .idle;
         } else {
             const fresh: c.Key = .init(@splat(@truncate(stream)));
             idle = if (wrapped) .init(fresh) else fresh;
-            c.transition(wrapped, &idle, &dialing);
+            @call(.never_inline, c.transition, .{ wrapped, &idle, &dialing });
             std.mem.doNotOptimizeAway(&dialing);
         }
     }
