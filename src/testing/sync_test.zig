@@ -126,7 +126,6 @@ test "A6 condition signal, cancel and deadline end clean in every order within t
     inline for (.{ WaitState.signal, WaitState.cancel, WaitState.timeout }) |run| {
         const searched = try shake.explore(t.allocator, {}, searchedWait(run), .{ .spurious_wakes = 1 });
         try t.expect(searched.complete);
-        std.debug.print("aegis search: {any}\n", .{searched});
     }
 }
 
