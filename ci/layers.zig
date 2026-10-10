@@ -1,5 +1,4 @@
 const gantry = @import("gantry");
-const family = @import("preflight_rules");
 pub const layers: []const gantry.rules.Layer = &.{
     .{ .name = "base", .patterns = &.{ "src/scalar.zig", "src/int.zig", "src/id.zig", "src/units.zig", "src/assert.zig", "src/move.zig" } },
     .{ .name = "secret", .patterns = &.{ "src/secret.zig", "src/secret/**" } },
@@ -15,5 +14,25 @@ pub const required = [_][]const u8{ "src/root.zig", "src/secret.zig", "src/secre
 pub const entries: []const []const u8 = &.{"src/root.zig"};
 pub const modules: []const gantry.NamedModule = &.{ .{ .name = "shakedown", .path = "" }, .{ .name = "material", .path = "" } };
 const leaf = [_]gantry.rules.ReferenceRule{.{ .name = "std-only leaf", .unresolved_only = true, .except_targets = &.{ "std", "builtin", "shakedown", "material" } }};
-pub const references: []const gantry.rules.ReferenceRule = &(leaf ++ family.shakedown);
-pub const owned: []const gantry.rules.TokenRule = &(family.durability ++ family.no_async);
+pub const references: []const gantry.rules.ReferenceRule = &leaf;
+pub const owned: []const gantry.rules.TokenRule = &(durability ++ no_async);
+
+/// Durable writes go through airlock.
+const durability = [_]gantry.rules.TokenRule{.{
+    .name = "durability belongs to airlock",
+    .sequences = &.{
+        &.{ ".", "sync", "(" },
+        &.{ ".", "syncFile", "(" },
+        &.{ ".", "syncDir", "(" },
+        &.{ "createFileAtomic", "(" },
+        &.{ "fsync", "(" },
+        &.{ "fdatasync", "(" },
+        &.{ "FlushFileBuffers", "(" },
+    },
+}};
+
+/// The caller owns asynchronous work.
+const no_async = [_]gantry.rules.TokenRule{.{
+    .name = "async belongs to the caller",
+    .sequences = &.{&.{ "io", ".", "async", "(" }},
+}};
