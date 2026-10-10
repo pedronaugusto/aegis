@@ -1,5 +1,8 @@
 const std = @import("std");
 pub fn build(b: *std.Build) void {
+    // lazyImport compares every package of the dependency tree at comptime;
+    // a large tree runs past the default quota of 1000 branches.
+    @setEvalBranchQuota(100_000);
     const target = b.standardTargetOptions(.{ .default_target = .{ .cpu_model = .baseline } });
     const optimize = b.standardOptimizeOption(.{});
     const tsan = b.option(bool, "thread-sanitizer", "Instrument native thread contention on Linux") orelse false;
