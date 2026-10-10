@@ -105,6 +105,31 @@ test "A6 condition simulated signal cancel deadline and spurious wake cleanup" {
     }
 }
 
+/// The three condition scenarios as properties `explore` searches: every
+/// order of the waiter, the signaller or canceller and the deadline within
+/// two preemptions and one spurious wake, on the baton executor.
+fn searchedWait(comptime run: fn (*WaitState, Io) anyerror!void) fn (void, *shake.Case) anyerror!void {
+    return struct {
+        fn body(_: void, c: *shake.Case) anyerror!void {
+            const sim = try c.sim(.{ .executor = .threads });
+            var state: WaitState = .{};
+            switch (sim.run(run, .{ &state, sim.io() })) {
+                .finished => {},
+                .failed => |err| return err,
+                else => return error.Unfinished,
+            }
+        }
+    }.body;
+}
+
+test "A6 condition signal, cancel and deadline end clean in every order within the bound" {
+    inline for (.{ WaitState.signal, WaitState.cancel, WaitState.timeout }) |run| {
+        const searched = try shake.explore(t.allocator, {}, searchedWait(run), .{ .spurious_wakes = 1 });
+        try t.expect(searched.complete);
+        std.debug.print("aegis search: {any}\n", .{searched});
+    }
+}
+
 test "A6 condition waiter ceiling preserves held guard" {
     var owner = a.BlockingGuarded(u32).init(1);
     var changed = a.Condition.initLimit(0);
