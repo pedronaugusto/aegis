@@ -121,6 +121,54 @@ export fn baselineGapsWideRoundTrip(stamp: *const std.Io.Timestamp, out: *std.Io
 export fn wrapperGapsWideRoundTrip(stamp: *const std.Io.Timestamp, out: *std.Io.Timestamp) void {
     c.wideRoundTrip(true, stamp, out);
 }
+export fn baselineGapsIsHeld(owner: *const c.Owner(false)) bool {
+    return c.isHeld(false, owner);
+}
+export fn wrapperGapsIsHeld(owner: *const c.Owner(true)) bool {
+    return c.isHeld(true, owner);
+}
+export fn baselineGapsSaturatingAdd(x: u64, y: u64) u64 {
+    return c.saturatingAdd(false, x, y);
+}
+export fn wrapperGapsSaturatingAdd(x: u64, y: u64) u64 {
+    return c.saturatingAdd(true, x, y);
+}
+export fn baselineGapsSaturatingSub(x: i64, y: i64) i64 {
+    return c.saturatingSub(false, x, y);
+}
+export fn wrapperGapsSaturatingSub(x: i64, y: i64) i64 {
+    return c.saturatingSub(true, x, y);
+}
+export fn baselineGapsSaturatingSpan(from: u64, to: u64) u64 {
+    return c.saturatingSpan(false, from, to);
+}
+export fn wrapperGapsSaturatingSpan(from: u64, to: u64) u64 {
+    return c.saturatingSpan(true, from, to);
+}
+export fn baselineGapsIdSuccessor(x: u64) u64 {
+    return c.idSuccessor(false, x) catch std.math.maxInt(u64);
+}
+export fn wrapperGapsIdSuccessor(x: u64) u64 {
+    return c.idSuccessor(true, x) catch std.math.maxInt(u64);
+}
+export fn baselineGapsIdAdvance(x: u64, n: u64) u64 {
+    return c.idAdvance(false, x, n) catch std.math.maxInt(u64);
+}
+export fn wrapperGapsIdAdvance(x: u64, n: u64) u64 {
+    return c.idAdvance(true, x, n) catch std.math.maxInt(u64);
+}
+export fn baselineGapsIdRetreat(x: u64, n: u64) u64 {
+    return c.idRetreat(false, x, n) catch std.math.maxInt(u64);
+}
+export fn wrapperGapsIdRetreat(x: u64, n: u64) u64 {
+    return c.idRetreat(true, x, n) catch std.math.maxInt(u64);
+}
+export fn baselineGapsIdDistance(x: u64, y: u64) u64 {
+    return c.idDistance(false, x, y) catch std.math.maxInt(u64);
+}
+export fn wrapperGapsIdDistance(x: u64, y: u64) u64 {
+    return c.idDistance(true, x, y) catch std.math.maxInt(u64);
+}
 comptime {
     std.debug.assert(@sizeOf(c.DirectSpin) == @sizeOf(c.Owner(true)));
     std.debug.assert(@sizeOf(c.DirectLazy) == @sizeOf(a.Lazy(u64)));

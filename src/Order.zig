@@ -81,6 +81,10 @@ pub fn Order(comptime ranks: []const Rank) type {
                 pub fn teardown(self: *Self) @typeInfo(@TypeOf(LockType.teardown)).@"fn".return_type.? {
                     return self.base.teardown();
                 }
+                /// As the base lock's `isHeld`, for the locks that have one.
+                pub fn isHeld(self: *const Self) bool {
+                    return self.base.isHeld();
+                }
                 fn wrap(self: *Self, context: *Context, base: anytype) Capability(@TypeOf(base), Context) {
                     context.push(self, rank);
                     return .{ .base = base, .context = if (diagnostics) context else {} };

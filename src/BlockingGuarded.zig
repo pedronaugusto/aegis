@@ -23,6 +23,11 @@ pub fn BlockingGuarded(comptime T: type) type {
             self.mutex.lockUncancelable(io);
             return .{ .owner = self };
         }
+        /// Whether some task holds the mutex at this instant, read without taking it: a snapshot for tests and
+        /// diagnostics, with no word on who holds it.
+        pub fn isHeld(self: *const Self) bool {
+            return self.mutex.state.load(.acquire) != .unlocked;
+        }
         pub fn tryAcquire(self: *Self) ?Guard {
             if (!self.mutex.tryLock()) return null;
             return .{ .owner = self };

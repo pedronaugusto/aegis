@@ -201,3 +201,49 @@ pub fn wideRoundTrip(comptime wrapped: bool, stamp: *const Io.Timestamp, out: *I
     }
     out.* = .fromNanoseconds(stamp.nanoseconds);
 }
+
+/// A lock read is one acquire load of the flag, taken or not.
+pub fn isHeld(comptime wrapped: bool, owner: *const Owner(wrapped)) bool {
+    if (wrapped) return owner.isHeld();
+    return owner.lock.load(.acquire);
+}
+pub fn saturatingAdd(comptime wrapped: bool, x: u64, y: u64) u64 {
+    if (wrapped) return a.units.Duration(.nanosecond, u64).fromRaw(x).saturatingAdd(.fromRaw(y)).raw();
+    return x +| y;
+}
+pub fn saturatingSub(comptime wrapped: bool, x: i64, y: i64) i64 {
+    if (wrapped) return a.units.Instant(.real, .microsecond, i64).fromRaw(x).saturatingSub(.fromRaw(y)).raw();
+    return x -| y;
+}
+/// A clock that stepped back: the span is zero, not an error.
+pub fn saturatingSpan(comptime wrapped: bool, from: u64, to: u64) u64 {
+    if (wrapped) {
+        const Awake = a.units.Instant(.awake, .nanosecond, u64);
+        return Awake.fromRaw(from).saturatingDurationTo(Awake.fromRaw(to)).raw();
+    }
+    return to -| from;
+}
+const Seq64 = a.id.Id(Tag, u64);
+pub fn idSuccessor(comptime wrapped: bool, x: u64) error{IdExhausted}!u64 {
+    if (wrapped) return (try Seq64.fromRaw(x).successor()).raw();
+    const sum = @addWithOverflow(x, 1);
+    if (sum[1] != 0) return error.IdExhausted;
+    return sum[0];
+}
+pub fn idAdvance(comptime wrapped: bool, x: u64, n: u64) error{IdExhausted}!u64 {
+    if (wrapped) return (try Seq64.fromRaw(x).advance(.fromRaw(n))).raw();
+    const sum = @addWithOverflow(x, n);
+    if (sum[1] != 0) return error.IdExhausted;
+    return sum[0];
+}
+pub fn idRetreat(comptime wrapped: bool, x: u64, n: u64) error{IdUnderflow}!u64 {
+    if (wrapped) return (try Seq64.fromRaw(x).retreat(.fromRaw(n))).raw();
+    const below = @subWithOverflow(x, n);
+    if (below[1] != 0) return error.IdUnderflow;
+    return below[0];
+}
+pub fn idDistance(comptime wrapped: bool, x: u64, y: u64) error{Backwards}!u64 {
+    if (wrapped) return (try Seq64.fromRaw(x).distanceTo(Seq64.fromRaw(y))).raw();
+    if (y < x) return error.Backwards;
+    return y - x;
+}

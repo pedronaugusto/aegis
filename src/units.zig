@@ -332,6 +332,16 @@ pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
         pub inline fn mul(self: Self, rhs: Repr) MulError!Self {
             return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).mul(rhs)).raw());
         }
+        /// Clamped at the representation's bounds instead of failing, for a clock that saturates on purpose.
+        pub inline fn saturatingAdd(self: Self, rhs: Self) Self {
+            return fromRaw(@backingInt(self) +| @backingInt(rhs));
+        }
+        pub inline fn saturatingSub(self: Self, rhs: Self) Self {
+            return fromRaw(@backingInt(self) -| @backingInt(rhs));
+        }
+        pub inline fn saturatingMul(self: Self, rhs: Repr) Self {
+            return fromRaw(@backingInt(self) *| rhs);
+        }
         pub inline fn convert(self: Self, comptime target: Unit, comptime Target: type, rounding: Rounding) ConvertError!Duration(target, Target) {
             return Duration(target, Target).fromRaw(try scaled(Target, unit.nanoseconds(), target.nanoseconds(), @backingInt(self), rounding));
         }
@@ -399,6 +409,19 @@ pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: t
         }
         pub inline fn durationTo(self: Self, other: Self) DurationToError!Duration(unit, Repr) {
             return Duration(unit, Repr).fromRaw((try ints.Checked(Repr).init(@backingInt(other)).sub(@backingInt(self))).raw());
+        }
+        /// Clamped at the representation's bounds instead of failing, for a clock that saturates on purpose.
+        pub inline fn saturatingAdd(self: Self, span: Duration(unit, Repr)) Self {
+            return fromRaw(@backingInt(self) +| span.raw());
+        }
+        pub inline fn saturatingSub(self: Self, span: Duration(unit, Repr)) Self {
+            return fromRaw(@backingInt(self) -| span.raw());
+        }
+        /// The span from this instant to `other`, clamped at the representation's bounds. For an unsigned
+        /// representation an `other` that is earlier gives a zero span: the answer for a clock that stepped back
+        /// between two readings, where `durationTo` reports `error.Underflow`.
+        pub inline fn saturatingDurationTo(self: Self, other: Self) Duration(unit, Repr) {
+            return Duration(unit, Repr).fromRaw(@backingInt(other) -| @backingInt(self));
         }
         pub inline fn convert(self: Self, comptime target: Unit, comptime Target: type, rounding: Rounding) ConvertError!Instant(ClockTag, target, Target) {
             return Instant(ClockTag, target, Target).fromRaw(try scaled(Target, unit.nanoseconds(), target.nanoseconds(), @backingInt(self), rounding));

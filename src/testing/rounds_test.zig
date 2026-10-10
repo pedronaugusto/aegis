@@ -3,6 +3,7 @@
 //! relations, uncancelable ordered waits, conversions that cannot fail, budget reads and control accounting,
 //! container capacity and atomic cells of distinct domains.
 const std = @import("std");
+const builtin = @import("builtin");
 const shake = @import("shakedown");
 const a = @import("../root.zig");
 const Io = std.Io;
@@ -156,4 +157,177 @@ test "A3 whole-byte widths other than a power of two round-trip their bytes in b
         }
         try t.expect(high.compare(low) == .gt);
     }
+}
+
+test "A6 isHeld reads a lock without taking it, for the spin guard, the blocking guard and an ordered one" {
+    var spin = a.Guarded(u32).init(1);
+    try t.expect(!spin.isHeld());
+    var held = spin.acquire();
+    try t.expect(spin.isHeld());
+    try t.expect(spin.tryAcquire() == null);
+    held.deinit();
+    try t.expect(!spin.isHeld());
+    // Reading did not take the lock: it is still free to take.
+    held = spin.tryAcquire().?;
+    held.deinit();
+
+    var blocking = a.BlockingGuarded(u32).init(2);
+    try t.expect(!blocking.isHeld());
+    var guard = try blocking.acquire(t.io);
+    try t.expect(blocking.isHeld());
+    guard.deinit(t.io);
+    try t.expect(!blocking.isHeld());
+
+    const O = a.Order(&.{.{ .name = "root" }});
+    var ordered = O.Ordered(a.Guarded(u32), 0).init(.init(3));
+    try t.expect(!ordered.isHeld());
+    try t.expect(!ordered.base.isHeld());
+}
+
+fn holdWhile(owner: *a.Guarded(u32), held: *std.atomic.Value(bool), release: *std.atomic.Value(bool)) void {
+    var guard = owner.acquire();
+    held.store(true, .release);
+    while (!release.load(.acquire)) std.atomic.spinLoopHint();
+    guard.deinit();
+}
+
+test "A6 isHeld sees another task's hold and its release" {
+    if (builtin.single_threaded) return error.SkipZigTest;
+    var owner = a.Guarded(u32).init(0);
+    var held: std.atomic.Value(bool) = .init(false);
+    var release: std.atomic.Value(bool) = .init(false);
+    var group: Io.Group = .init;
+    defer group.cancel(t.io);
+    try group.concurrent(t.io, holdWhile, .{ &owner, &held, &release });
+    while (!held.load(.acquire)) std.atomic.spinLoopHint();
+    try t.expect(owner.isHeld());
+    release.store(true, .release);
+    try group.await(t.io);
+    try t.expect(!owner.isHeld());
+}
+
+fn saturatingProperty(_: void, case: *shake.Case) anyerror!void {
+    const U = a.units;
+    inline for (.{ i8, u8, i16, u16 }) |Repr| {
+        const D = U.Duration(.millisecond, Repr);
+        const T = U.Instant(.awake, .millisecond, Repr);
+        const x = shake.gen.int(case.source, Repr);
+        const y = shake.gen.int(case.source, Repr);
+        const low: i64 = std.math.minInt(Repr);
+        const high: i64 = std.math.maxInt(Repr);
+        const sum = std.math.clamp(@as(i64, x) + @as(i64, y), low, high);
+        const difference = std.math.clamp(@as(i64, x) - @as(i64, y), low, high);
+        const product = std.math.clamp(@as(i64, x) * @as(i64, y), low, high);
+        try t.expectEqual(sum, @as(i64, D.fromRaw(x).saturatingAdd(D.fromRaw(y)).raw()));
+        try t.expectEqual(difference, @as(i64, D.fromRaw(x).saturatingSub(D.fromRaw(y)).raw()));
+        try t.expectEqual(product, @as(i64, D.fromRaw(x).saturatingMul(y).raw()));
+        try t.expectEqual(sum, @as(i64, T.fromRaw(x).saturatingAdd(D.fromRaw(y)).raw()));
+        try t.expectEqual(difference, @as(i64, T.fromRaw(x).saturatingSub(D.fromRaw(y)).raw()));
+        // The span from x to y is y - x, clamped.
+        try t.expectEqual(std.math.clamp(@as(i64, y) - @as(i64, x), low, high), @as(i64, T.fromRaw(x).saturatingDurationTo(T.fromRaw(y)).raw()));
+        // Where the checked form succeeds, the saturating form agrees with it.
+        if (T.fromRaw(x).durationTo(T.fromRaw(y))) |span| {
+            try t.expectEqual(span, T.fromRaw(x).saturatingDurationTo(T.fromRaw(y)));
+        } else |_| {}
+    }
+}
+
+test "A3 saturating durations and instants clamp at the representation's bounds and agree with the checked forms" {
+    try shake.check(t.allocator, {}, saturatingProperty, .{ .cases = 1024, .seed = 0xa3b });
+    const D = a.units.Duration(.nanosecond, i96);
+    const T = a.units.Instant(.awake, .nanosecond, i96);
+    try t.expectEqual(@as(i96, std.math.maxInt(i96)), D.fromRaw(std.math.maxInt(i96)).saturatingAdd(D.fromRaw(1)).raw());
+    try t.expectEqual(@as(i96, std.math.minInt(i96)), T.fromRaw(std.math.minInt(i96)).saturatingSub(D.fromRaw(1)).raw());
+    try t.expectEqual(@as(i96, std.math.maxInt(i96)), T.fromRaw(std.math.minInt(i96)).saturatingDurationTo(T.fromRaw(std.math.maxInt(i96))).raw());
+}
+
+test "A3 a clock that steps back gives a zero span saturating and an error checked" {
+    const Awake = a.units.Instant(.awake, .nanosecond, u64);
+    const Span = a.units.Duration(.nanosecond, u64);
+    const earlier = Awake.fromRaw(1_000);
+    const later = Awake.fromRaw(1_750);
+    try t.expectEqual(Span.fromRaw(750), earlier.saturatingDurationTo(later));
+    try t.expectEqual(Span.fromRaw(750), try earlier.durationTo(later));
+    // Read in the wrong order the span is zero, where the checked form reports it.
+    try t.expectEqual(Span.fromRaw(0), later.saturatingDurationTo(earlier));
+    try t.expectError(error.Underflow, later.durationTo(earlier));
+    try t.expectEqual(Span.fromRaw(0), later.saturatingDurationTo(later));
+    try t.expectEqual(Awake.fromRaw(0), earlier.saturatingSub(Span.fromRaw(5_000)));
+    try t.expectEqual(Awake.fromRaw(std.math.maxInt(u64)), later.saturatingAdd(Span.fromRaw(std.math.maxInt(u64))));
+}
+
+const Seq = a.id.Id(struct {}, u64);
+const Record = struct {};
+const Records = a.units.Count(Record, u64);
+const Position = struct {
+    pub const Step = Records;
+};
+const Numbered = a.id.Id(Position, u64);
+const Port = a.id.NonZero(struct {}, u16);
+
+test "A3 ids step, advance, retreat and measure distance without wrapping" {
+    const first = Seq.fromRaw(0);
+    try t.expectEqual(@as(u64, 1), (try first.successor()).raw());
+    try t.expectError(error.IdUnderflow, first.predecessor());
+    try t.expectEqual(@as(u64, 4), (try Seq.fromRaw(5).predecessor()).raw());
+    const last = Seq.fromRaw(std.math.maxInt(u64));
+    try t.expectError(error.IdExhausted, last.successor());
+    try t.expectEqual(@as(u64, std.math.maxInt(u64) - 1), (try last.predecessor()).raw());
+    comptime std.debug.assert(Seq.Step == a.units.Count(Seq.Domain, u64));
+    try t.expectEqual(@as(u64, 15), (try Seq.fromRaw(10).advance(.fromRaw(5))).raw());
+    try t.expectError(error.IdExhausted, last.advance(.fromRaw(1)));
+    try t.expectEqual(@as(u64, std.math.maxInt(u64)), (try Seq.fromRaw(std.math.maxInt(u64) - 3).advance(.fromRaw(3))).raw());
+    try t.expectEqual(@as(u64, 5), (try Seq.fromRaw(10).retreat(.fromRaw(5))).raw());
+    try t.expectEqual(@as(u64, 0), (try Seq.fromRaw(10).retreat(.fromRaw(10))).raw());
+    try t.expectError(error.IdUnderflow, Seq.fromRaw(10).retreat(.fromRaw(11)));
+    try t.expectEqual(@as(u64, 7), (try Seq.fromRaw(3).distanceTo(Seq.fromRaw(10))).raw());
+    try t.expectEqual(@as(u64, 0), (try Seq.fromRaw(3).distanceTo(Seq.fromRaw(3))).raw());
+    try t.expectError(error.Backwards, Seq.fromRaw(10).distanceTo(Seq.fromRaw(3)));
+    try t.expectEqual(@as(u64, std.math.maxInt(u64)), (try first.distanceTo(last)).raw());
+}
+
+test "A3 a NonZero id never steps onto zero and a tag can name the counts its ids are moved by" {
+    const one = try Port.fromRaw(1);
+    try t.expectError(error.IdUnderflow, one.predecessor());
+    try t.expectError(error.IdUnderflow, one.retreat(.fromRaw(1)));
+    try t.expectEqual(@as(u16, 1), (try (try Port.fromRaw(3)).retreat(.fromRaw(2))).raw());
+    try t.expectError(error.IdExhausted, (try Port.fromRaw(std.math.maxInt(u16))).successor());
+    try t.expectEqual(@as(u16, 9), (try one.advance(.fromRaw(8))).raw());
+
+    // The sequence number of a journal moves by counts of records, and by nothing else.
+    comptime std.debug.assert(Numbered.Step == Records);
+    comptime std.debug.assert(Seq.Step != Records);
+    const at = Numbered.fromRaw(100);
+    try t.expectEqual(@as(u64, 130), (try at.advance(Records.fromRaw(30))).raw());
+    try t.expectEqual(Records.fromRaw(30), try at.distanceTo(try at.advance(Records.fromRaw(30))));
+}
+
+fn idProperty(_: void, case: *shake.Case) anyerror!void {
+    inline for (.{ u8, u16, u64 }) |Repr| {
+        const I = a.id.Id(struct {}, Repr);
+        const x = shake.gen.int(case.source, Repr);
+        const n = shake.gen.int(case.source, Repr);
+        const wide: u128 = @as(u128, x) + @as(u128, n);
+        if (x < n) {
+            try t.expectError(error.IdUnderflow, I.fromRaw(x).retreat(.fromRaw(n)));
+            try t.expectError(error.Backwards, I.fromRaw(n).distanceTo(I.fromRaw(x)));
+        } else {
+            try t.expectEqual(@as(u128, x - n), (try I.fromRaw(x).retreat(.fromRaw(n))).raw());
+            try t.expectEqual(@as(u128, x - n), (try I.fromRaw(n).distanceTo(I.fromRaw(x))).raw());
+        }
+        if (wide > std.math.maxInt(Repr)) {
+            try t.expectError(error.IdExhausted, I.fromRaw(x).advance(.fromRaw(n)));
+        } else {
+            const moved = try I.fromRaw(x).advance(.fromRaw(n));
+            try t.expectEqual(wide, moved.raw());
+            // Moving on and measuring back, or moving back and measuring on, close the loop.
+            try t.expectEqual(n, (try I.fromRaw(x).distanceTo(moved)).raw());
+            try t.expectEqual(x, (try moved.retreat(.fromRaw(n))).raw());
+            try t.expectEqual(moved, try I.fromRaw(x).advance(.fromRaw(n)));
+        }
+    }
+}
+
+test "A3 id relations match a wide oracle and close the loop between advance, retreat and distance" {
+    try shake.check(t.allocator, {}, idProperty, .{ .cases = 1024, .seed = 0xa3c });
 }

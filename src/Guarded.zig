@@ -33,6 +33,13 @@ pub fn Guarded(comptime T: type) type {
             return .{ .owner = owner };
         }
 
+        /// Whether some task holds the lock at this instant, read without taking it. A snapshot for tests
+        /// and diagnostics: an unheld lock can be taken a moment later, and a held one says nothing about
+        /// who holds it. Never a substitute for acquiring.
+        pub fn isHeld(owner: *const Self) bool {
+            return owner.lock.load(.acquire);
+        }
+
         /// Exclusive access if the lock is free right now, otherwise null. Never waits.
         pub fn tryAcquire(owner: *Self) ?Guard {
             if (owner.lock.swap(true, .acquire)) return null;
