@@ -20,6 +20,19 @@ fn consume(state: *State) void {
 /// This cannot detect pre-binding copies, reflection or omitted deinit.
 /// Blocking/fallible teardown requires the consumer's explicit finish/join first.
 pub fn Owned(comptime T: type, comptime cleanup: fn (*T) void) type {
+    return Owner(T, false, cleanup);
+}
+
+/// `Owned` for a resource released through `Io`, such as an open file or a socket: `deinit(io)` runs
+/// `cleanup(&payload, io)`. The owner stores no `Io`; the one that releases it passes its own, as every
+/// aegis guard does. Cleanup is still infallible and exactly once, so a release that can fail belongs in
+/// an explicit `finish(io)` first. Everything else is `Owned`'s: the same size, the same Debug witness,
+/// `initFrom`, `borrow`, `borrowMut`, `moveInto` and `take`.
+pub fn OwnedIo(comptime T: type, comptime cleanup: fn (*T, std.Io) void) type {
+    return Owner(T, true, cleanup);
+}
+
+fn Owner(comptime T: type, comptime with_io: bool, comptime cleanup: if (with_io) fn (*T, std.Io) void else fn (*T) void) type {
     return struct {
         const Self = @This();
         /// Private: access only through a live owner.
@@ -59,11 +72,18 @@ pub fn Owned(comptime T: type, comptime cleanup: fn (*T) void) type {
             move.into(T, &self.data, destination);
             consume(&self.state);
         }
-        /// Runs exactly once, without implicit waiting, allocation or unwind on abort.
-        pub fn deinit(self: *Self) void {
+        /// Runs exactly once, without implicit waiting, allocation or unwind on abort. An owner released
+        /// through `Io` takes it here: `deinit(io)`.
+        pub const deinit = if (with_io) deinitIo else deinitPlain;
+        fn deinitPlain(self: *Self) void {
             bind(&self.state, self);
             consume(&self.state);
             cleanup(&self.data);
+        }
+        fn deinitIo(self: *Self, io: std.Io) void {
+            bind(&self.state, self);
+            consume(&self.state);
+            cleanup(&self.data, io);
         }
     };
 }

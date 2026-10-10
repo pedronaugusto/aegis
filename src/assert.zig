@@ -16,6 +16,13 @@ pub fn pre(condition: bool, comptime message: []const u8) void {
 pub fn post(condition: bool, comptime message: []const u8) void {
     invariant(condition, message);
 }
+/// A path that must never run, as a contract: stops with `message` in every build and ends control
+/// flow, so it stands where a value is needed (`else => assert.never("only file slots arrive")`,
+/// `optional orelse assert.never("...")`). Zig's `unreachable` is undefined behavior in ReleaseFast and
+/// ReleaseSmall; this is what to write when the claim should still be checked there.
+pub inline fn never(comptime message: []const u8) noreturn {
+    @panic(message);
+}
 /// Optional Debug diagnostic; argument evaluation still belongs to the caller.
 // ziglint-ignore: Z023 condition then static message is the specified scalar contract
 pub fn debug(condition: bool, comptime message: []const u8) void {

@@ -12,6 +12,14 @@ pub fn abiInteger(comptime T: type) void {
         else => @compileError("aegis ABI scalar requires an 8/16/32/64/128-bit integer representation"),
     }
 }
+/// Clock and duration widths: any whole number of bytes up to 128 bits, which takes in std's i96
+/// nanoseconds. Like the 128-bit widths, not a C ABI promise.
+pub fn wholeByteInteger(comptime T: type) void {
+    integer(T);
+    const bits = @typeInfo(T).int.bits;
+    if (bits % 8 != 0 or bits > 128)
+        @compileError("aegis clock and duration requires a whole-byte integer representation of at most 128 bits");
+}
 pub fn Bytes(comptime R: type) type {
     integer(R);
     if (@bitSizeOf(R) % 8 != 0) @compileError("encoding requires a whole-byte representation");

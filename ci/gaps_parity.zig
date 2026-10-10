@@ -97,6 +97,30 @@ export fn baselineGapsIoNarrow(stamp: *const std.Io.Timestamp) i64 {
 export fn wrapperGapsIoNarrow(stamp: *const std.Io.Timestamp) i64 {
     return c.ioNarrow(true, stamp) catch std.math.minInt(i64);
 }
+export fn baselineGapsNever(code: u8) u8 {
+    return c.never(false, code);
+}
+export fn wrapperGapsNever(code: u8) u8 {
+    return c.never(true, code);
+}
+export fn baselineGapsIndexCompare(x: u32, y: u32) i8 {
+    return c.indexCompare(false, x, y);
+}
+export fn wrapperGapsIndexCompare(x: u32, y: u32) i8 {
+    return c.indexCompare(true, x, y);
+}
+export fn baselineGapsOwnedIo(io: *const std.Io, source: *c.Resource, fail: bool) void {
+    c.ownedIo(false, io, source, fail);
+}
+export fn wrapperGapsOwnedIo(io: *const std.Io, source: *c.Resource, fail: bool) void {
+    c.ownedIo(true, io, source, fail);
+}
+export fn baselineGapsWideRoundTrip(stamp: *const std.Io.Timestamp, out: *std.Io.Timestamp) void {
+    c.wideRoundTrip(false, stamp, out);
+}
+export fn wrapperGapsWideRoundTrip(stamp: *const std.Io.Timestamp, out: *std.Io.Timestamp) void {
+    c.wideRoundTrip(true, stamp, out);
+}
 comptime {
     std.debug.assert(@sizeOf(c.DirectSpin) == @sizeOf(c.Owner(true)));
     std.debug.assert(@sizeOf(c.DirectLazy) == @sizeOf(a.Lazy(u64)));

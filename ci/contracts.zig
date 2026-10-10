@@ -15,7 +15,7 @@ pub fn main(init: std.process.Init) !void {
             try out.interface.writeAll(result.stderr);
             return error.ContractCompilationFailed;
         }
-        for ([_][]const u8{ "pre", "post", "invariant" }) |name| {
+        for ([_][]const u8{ "pre", "post", "invariant", "never" }) |name| {
             const run = try std.process.run(init.gpa, init.io, .{ .argv = &.{ binary, name }, .stderr_limit = .limited(16384) });
             defer init.gpa.free(run.stdout);
             defer init.gpa.free(run.stderr);

@@ -30,6 +30,7 @@ pub fn main(init: std.process.Init) !void {
         .{ "id_repr", "ABI scalar requires" },
         .{ "unit_repr", "ABI scalar requires" },
         .{ "range_repr", "ABI scalar requires" },
+        .{ "clock_width", "whole-byte integer representation" },
     };
     inline for (scalar_cases) |case| {
         const root = try init.arena.allocator().print("-Mroot=ci/negative/{s}.zig", .{case[0]});

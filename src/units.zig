@@ -131,6 +131,8 @@ inline fn scaledFor(comptime Target: type, comptime numerator: u64, comptime den
     const n = Ratio(numerator, denominator).n;
     const d = Ratio(numerator, denominator).d;
     if (comptime fits(Source, Target, numerator, denominator)) {
+        // The same scale is a widening or the identity: the value itself, with no wide product to narrow again.
+        if (comptime n == 1 and d == 1) return value;
         const wide = @Int(.signed, @bitSizeOf(Source) + 65);
         const product = @as(wide, value) * n;
         if (comptime d == 1) return @truncate(product);
@@ -294,7 +296,7 @@ pub fn Bits(comptime Repr: type) type {
 
 /// Signed representations permit negative spans; unsigned conversion rejects negative input.
 pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
-    scalar.abiInteger(Repr);
+    scalar.wholeByteInteger(Repr);
     return enum(Repr) {
         const Self = @This();
         /// Private: use fromRaw/raw.
@@ -358,7 +360,7 @@ pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
 /// Use .real/.awake/.boot (std.Io.Clock tags) for checked Io timestamp adapters.
 // ziglint-ignore: Z023 clock/unit/repr is the consumer contract, matching Duration(unit, repr)
 pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: type) type {
-    scalar.abiInteger(Repr);
+    scalar.wholeByteInteger(Repr);
     return enum(Repr) {
         const Self = @This();
         pub const Clock = ClockTag;

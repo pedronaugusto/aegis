@@ -154,3 +154,50 @@ pub fn ioNarrow(comptime wrapped: bool, stamp: *const Io.Timestamp) error{Overfl
     if (value > std.math.maxInt(i64) or value < std.math.minInt(i64)) return error.Overflow;
     return @intCast(value); // safe: both bounds checked above
 }
+
+/// A contract path that ends control flow, against the hand-written panic it replaces.
+pub fn never(comptime wrapped: bool, code: u8) u8 {
+    return switch (code) {
+        0 => 1,
+        1 => 2,
+        else => if (wrapped) a.assert.never("a code outside the table") else @panic("a code outside the table"),
+    };
+}
+pub fn indexCompare(comptime wrapped: bool, x: u32, y: u32) i8 {
+    if (wrapped) {
+        const I = a.handle.Index(Tag, u32);
+        const left: I = @fromBackingInt(x);
+        const right: I = @fromBackingInt(y);
+        return @backingInt(left.compare(right));
+    }
+    return @backingInt(std.math.order(x, y));
+}
+pub const Resource = struct { sink: *u64, value: u64 };
+/// The cleanup both sides run: it reads the Io it is given, so the Io is really passed.
+fn closeResource(resource: *Resource, io: Io) void {
+    std.mem.doNotOptimizeAway(io.userdata);
+    resource.sink.* +%= resource.value;
+}
+const HeldIo = a.own.OwnedIo(Resource, closeResource);
+pub fn ownedIo(comptime wrapped: bool, io: *const Io, source: *Resource, fail: bool) void {
+    if (wrapped) {
+        var owner = HeldIo.init(source.*);
+        defer owner.deinit(io.*);
+        if (fail) return;
+        owner.borrowMut().value +%= 1;
+    } else {
+        var resource = source.*;
+        defer closeResource(&resource, io.*);
+        if (fail) return;
+        resource.value +%= 1;
+    }
+}
+/// std's i96 nanoseconds into a nanosecond i96 duration and instant and back: no error, no range check.
+pub fn wideRoundTrip(comptime wrapped: bool, stamp: *const Io.Timestamp, out: *Io.Timestamp) void {
+    if (wrapped) {
+        const instant = a.units.Instant(.awake, .nanosecond, i96).fromTimestamp(stamp.*, .exact);
+        out.* = instant.toTimestamp();
+        return;
+    }
+    out.* = .fromNanoseconds(stamp.nanoseconds);
+}
