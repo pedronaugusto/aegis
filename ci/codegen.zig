@@ -6,7 +6,8 @@ const numeric_names = [_][]const u8{ "numeric_add", "numeric_sub", "numeric_mul"
 const bytes_names = [_][]const u8{ "bytes_dead", "bytes_cleanup", "bytes_resize", "bytes_reserve", "bytes_move", "bytes_adopt_dead", "bytes_replace" };
 const a67_names = [_][]const u8{ "a67_mutex", "a67_rw_read", "a67_rw_write", "a67_once_ready", "a67_once_cold", "a67_condition", "a67_array", "a67_queue", "a67_buffer", "a67_budget", "a67_owned", "a67_must_use", "a67_confined", "a67_ordered", "a67_ring_buffer", "a67_limit" };
 const gaps_names = [_][]const u8{ "gaps_try_acquire", "gaps_teardown", "gaps_lazy_ready", "gaps_lazy_cold", "gaps_lazy_infallible", "gaps_shared_retain", "gaps_shared_get", "gaps_shared_release", "gaps_owned_from", "gaps_compare", "gaps_equal", "gaps_last", "gaps_exceeds", "gaps_io_widen", "gaps_io_timestamp", "gaps_io_narrow" };
-const names = owner_names ++ numeric_names ++ bytes_names ++ a67_names ++ gaps_names;
+const state_names = [_][]const u8{ "state_next", "state_next_wide", "state_next_switch", "state_next_wide_switch", "state_terminal", "state_step", "state_plan_commit", "state_transition", "state_transition_with", "state_take" };
+const names = owner_names ++ numeric_names ++ bytes_names ++ a67_names ++ gaps_names ++ state_names;
 pub fn main(init: std.process.Init) !void {
     const a = init.arena.allocator();
     const args = try init.minimal.args.toSlice(a);
@@ -35,19 +36,21 @@ pub fn main(init: std.process.Init) !void {
                 const wrap = try alias(a, ir, try exportName(a, "wrapper", name));
                 const baseline_bytes = try symbolSize(object, try exportName(a, "baseline", name));
                 const wrapper_bytes = try symbolSize(object, try exportName(a, "wrapper", name));
-                if (baseline_bytes != wrapper_bytes) {
+                // A `_switch` row compares against the idiomatic nested switch: the table may be smaller, never larger.
+                const idiom = std.mem.endsWith(u8, name, "_switch");
+                if (if (idiom) wrapper_bytes > baseline_bytes else baseline_bytes != wrapper_bytes) {
                     var failure = std.Io.File.stderr().writer(init.io, &.{});
                     try failure.interface.print("{s} {s} {s}: code size {d}/{d}\n", .{ target, mode, name, baseline_bytes, wrapper_bytes });
                     return error.AbstractionCodeSizeMismatch;
                 }
-                if (std.mem.startsWith(u8, name, "a67_") or std.mem.startsWith(u8, name, "gaps_")) {
+                if (reported(name)) {
                     var numbers = std.Io.File.stdout().writerStreaming(init.io, &.{});
                     try numbers.interface.print("code,{s},{s},{s},{d},{d}\n", .{ name, target, mode, baseline_bytes, wrapper_bytes });
                 }
                 const emitted_base = try assemblyAlias(a, assembly, try exportName(a, "baseline", name));
                 const emitted_wrap = try assemblyAlias(a, assembly, try exportName(a, "wrapper", name));
                 const emitted = try instructions(a, assembly, emitted_base, target);
-                if (!std.mem.eql(u8, emitted_base, emitted_wrap)) {
+                if (!idiom and !std.mem.eql(u8, emitted_base, emitted_wrap)) {
                     const other = try instructions(a, assembly, emitted_wrap, target);
                     if (!std.mem.eql(u8, emitted, other)) {
                         var failure = std.Io.File.stderr().writer(init.io, &.{});
@@ -70,7 +73,7 @@ pub fn main(init: std.process.Init) !void {
                         if (!allocation_wipe) return error.MissingFullCapacityErasure;
                         if (std.mem.eql(u8, name, "bytes_adopt_dead") and std.mem.find(u8, body, "i64 %2, i1 true)") == null) return error.MissingAdoptedCapacityErasure;
                     }
-                } else if (!std.mem.startsWith(u8, name, "numeric_") and !std.mem.startsWith(u8, name, "a67_") and !std.mem.startsWith(u8, name, "gaps_")) {
+                } else if (owner(name)) {
                     const swapped = std.mem.find(u8, body, "atomicrmw xchg") != null and std.mem.find(u8, body, " acquire") != null;
                     const acquire = swapped or (std.mem.find(u8, body, "@llvm.aarch64.ldaxr") != null and std.mem.find(u8, body, "@llvm.aarch64.stxr") != null);
                     if (!acquire or std.mem.find(u8, body, "release") == null) return error.MissingLockOrdering;
@@ -80,6 +83,15 @@ pub fn main(init: std.process.Init) !void {
             if (record) try dir.writeFile(init.io, .{ .sub_path = try a.print(".zig-cache/parity/codegen-{s}-{s}.md", .{ target, mode }), .data = try a.print("{s}\n", .{std.mem.trimEnd(u8, evidence.written(), "\n")}) });
         }
     }
+}
+/// The owner fixtures hold the lock-ordering and erasure contracts; every later family reports code sizes.
+fn owner(name: []const u8) bool {
+    inline for (owner_names) |known| if (std.mem.eql(u8, name, known)) return true;
+    return false;
+}
+fn reported(name: []const u8) bool {
+    inline for (.{ "a67_", "gaps_", "state_" }) |prefix| if (std.mem.startsWith(u8, name, prefix)) return true;
+    return false;
 }
 pub fn alias(a: std.mem.Allocator, ir: []const u8, name: []const u8) ![]const u8 {
     const marker = try a.print("@{s} = alias ", .{name});
@@ -106,6 +118,87 @@ pub fn function(a: std.mem.Allocator, ir: []const u8, name: []const u8) ![]const
         if (std.mem.eql(u8, line, "}")) return body.written();
     }
     return error.MissingEmittedFunction;
+}
+
+/// Writes one operand. A reference to a data label stands for the bytes behind it, so two tables with the
+/// same contents are the same table whatever they are called.
+fn operand(a: std.mem.Allocator, writer: *std.Io.Writer, text: []const u8, token: []const u8) !void {
+    if (std.mem.find(u8, token, ".L")) |at| {
+        var end = at + 2;
+        while (end < token.len and (std.ascii.isAlphanumeric(token[end]) or token[end] == '_' or token[end] == '.' or token[end] == '$')) end += 1;
+        if (try contents(a, text, token[at..end])) |bytes| return writer.print(" {s}<{s}>{s}", .{ token[0..at], bytes, token[end..] });
+    }
+    try writer.print(" {s}", .{token});
+}
+
+/// The bytes of a label that is plain data, written out in hex, or null when it is not.
+fn contents(a: std.mem.Allocator, text: []const u8, label: []const u8) !?[]const u8 {
+    const marker = try a.print("\n{s}:\n", .{label});
+    const start = std.mem.find(u8, text, marker) orelse return null;
+    var bytes: std.ArrayList(u8) = .empty;
+    var lines = std.mem.splitScalar(u8, text[start + marker.len ..], '\n');
+    while (lines.next()) |raw| {
+        const line = std.mem.trim(u8, raw, " \t");
+        if (std.mem.startsWith(u8, line, ".size")) break;
+        if (!try directive(a, &bytes, line)) return null;
+    } else return null;
+    var hex: std.Io.Writer.Allocating = .init(a);
+    for (bytes.items) |byte| try hex.writer.print("{x:0>2}", .{byte});
+    return hex.written();
+}
+
+/// Appends the bytes one data directive stands for; false for anything that is not plain data.
+fn directive(a: std.mem.Allocator, bytes: *std.ArrayList(u8), line: []const u8) !bool {
+    if (line.len == 0 or line[0] != '.') return false;
+    const space = std.mem.findAny(u8, line, " \t") orelse return false;
+    const name = line[0..space];
+    const rest = std.mem.trim(u8, line[space..], " \t");
+    if (std.mem.eql(u8, name, ".ascii") or std.mem.eql(u8, name, ".asciz") or std.mem.eql(u8, name, ".string")) {
+        if (rest.len < 2 or rest[0] != '"' or rest[rest.len - 1] != '"') return false;
+        var i: usize = 1;
+        while (i < rest.len - 1) : (i += 1) {
+            if (rest[i] != '\\') {
+                try bytes.append(a, rest[i]);
+                continue;
+            }
+            i += 1;
+            if (i >= rest.len - 1) return false;
+            if (rest[i] >= '0' and rest[i] <= '7') {
+                var value: u16 = 0;
+                var digits: usize = 0;
+                while (digits < 3 and i < rest.len - 1 and rest[i] >= '0' and rest[i] <= '7') : (digits += 1) {
+                    value = value * 8 + (rest[i] - '0');
+                    i += 1;
+                }
+                i -= 1;
+                try bytes.append(a, @truncate(value));
+            } else try bytes.append(a, switch (rest[i]) {
+                'n' => '\n',
+                't' => '\t',
+                'r' => '\r',
+                'b' => 8,
+                'f' => 12,
+                else => rest[i],
+            });
+        }
+        if (!std.mem.eql(u8, name, ".ascii")) try bytes.append(a, 0);
+        return true;
+    }
+    if (std.mem.eql(u8, name, ".zero") or std.mem.eql(u8, name, ".space") or std.mem.eql(u8, name, ".fill")) {
+        var parts = std.mem.tokenizeAny(u8, rest, ", ");
+        const count = std.fmt.parseInt(usize, parts.next() orelse return false, 0) catch return false;
+        const fill = if (parts.next()) |value| std.fmt.parseInt(u8, value, 0) catch return false else 0;
+        try bytes.appendNTimes(a, fill, count);
+        return true;
+    }
+    const width: usize = if (std.mem.eql(u8, name, ".byte")) 1 else if (std.mem.eql(u8, name, ".short") or std.mem.eql(u8, name, ".hword") or std.mem.eql(u8, name, ".2byte")) 2 else if (std.mem.eql(u8, name, ".long") or std.mem.eql(u8, name, ".word") or std.mem.eql(u8, name, ".4byte")) 4 else if (std.mem.eql(u8, name, ".quad") or std.mem.eql(u8, name, ".xword") or std.mem.eql(u8, name, ".8byte")) 8 else return false;
+    var values = std.mem.tokenizeAny(u8, rest, ", ");
+    while (values.next()) |value| {
+        const number = std.fmt.parseInt(i64, value, 0) catch return false;
+        const bits: u64 = @bitCast(number);
+        for (0..width) |i| try bytes.append(a, @truncate(bits >> @intCast(8 * i)));
+    }
+    return true;
 }
 
 pub fn instructions(a: std.mem.Allocator, text: []const u8, name: []const u8, target: []const u8) ![]const u8 {
@@ -136,7 +229,7 @@ pub fn instructions(a: std.mem.Allocator, text: []const u8, name: []const u8, ta
                     break;
                 }
             }
-            if (!local) try output.writer.print(" {s}", .{token});
+            if (!local) try operand(a, &output.writer, text, token);
         }
         try output.writer.writeByte('\n');
     }

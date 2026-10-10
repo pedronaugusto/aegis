@@ -1,8 +1,8 @@
 # aegis
 
-Explicit safety types for any Zig project: inline and allocated secrets, guarded data and publication, bounded storage/admission, explicit owners, checked scalar arithmetic, audited value kernels, distinct IDs and units, checked generational storage, refined input adapters, bounded public diagnostics, and executable contracts. Runtime code depends only on std; required wiping, locking, arithmetic, range and conversion checks remain enabled in every build.
+Explicit safety types for any Zig project: inline and allocated secrets, guarded data and publication, bounded storage/admission, explicit owners, checked scalar arithmetic, audited value kernels, distinct IDs and units, checked generational storage, refined input adapters, bounded public diagnostics, comptime typestate machines, and executable contracts. Runtime code depends only on std; required wiping, locking, arithmetic, range and conversion checks remain enabled in every build.
 
-Work in progress. Implemented: v0 (`Secret(T)` and spin `Guarded(T)`), A3 numeric/domain foundations, A4 `SecretBytes`, A5 Choice/compare/select value kernels, A6 Io guards/publication/logical-task checks, A7 bounded storage/admission and static owners, and A8/A9 handles, typed indices, checked-input adapters and bounded error context. The full safety catalogue and consumer adoption remain later work.
+Work in progress. Implemented: v0 (`Secret(T)` and spin `Guarded(T)`), A3 numeric/domain foundations, A4 `SecretBytes`, A5 Choice/compare/select value kernels, A6 Io guards/publication/logical-task checks, A7 bounded storage/admission and static owners, A8/A9 handles, typed indices, checked-input adapters and bounded error context, and A10 typestate machines. The full safety catalogue and consumer adoption remain later work.
 
 ## Install
 
@@ -12,7 +12,7 @@ Requires Zig 0.17.0:
 zig fetch --save=aegis git+https://github.com/pedronaugusto/aegis#main
 ```
 
-Add the dependency's `aegis` module, or one standalone namespace such as `aegis.handle`, `aegis.input`, `aegis.err`, `aegis.secret`, `aegis.sync`, `aegis.bounded`, `aegis.own` or `aegis.int`. Wire a namespace with `exe.root_module.addImport("aegis.handle", aegis_dependency.module("aegis.handle"))`. Every implemented namespace is registered separately; root and standalone imports share declaration identities. Consumers fetch neither preflight nor shakedown.
+Add the dependency's `aegis` module, or one standalone namespace such as `aegis.handle`, `aegis.input`, `aegis.err`, `aegis.secret`, `aegis.sync`, `aegis.bounded`, `aegis.own`, `aegis.state` or `aegis.int`. Wire a namespace with `exe.root_module.addImport("aegis.handle", aegis_dependency.module("aegis.handle"))`. Every implemented namespace is registered separately; root and standalone imports share declaration identities. Consumers fetch neither preflight nor shakedown.
 
 ## Usage
 
@@ -35,6 +35,52 @@ const timeout = aegis.units.Duration(.millisecond, i64).fromRaw(250).toIoDuratio
 aegis.assert.post(payload.raw() == 32, "payload fits the record");
 _ = request;
 _ = timeout;
+```
+<!-- END GENERATED -->
+
+## Typestate
+
+<!-- BEGIN GENERATED zig build docs -- state -->
+```zig
+const aegis = @import("aegis");
+
+const Session = aegis.state.Machine(enum { pending, authenticated, closed }, enum { verify, close }, .{
+    .initial = .pending,
+    .terminal = &.{.closed},
+    .edges = &.{
+        .{ .from = .pending, .on = .verify, .to = .authenticated },
+        .{ .from = .authenticated, .on = .close, .to = .closed },
+    },
+});
+const Credentials = struct { token: u64 };
+const Receipt = struct { account: u32 };
+const Pending = Session.At(.pending, Credentials);
+const Authenticated = Session.At(.authenticated, Receipt);
+
+/// The one place a receipt is made: it checks the credentials and fails before anything moves.
+fn verify(expected: u64, credentials: *Credentials, receipt: *Receipt) error{BadToken}!void {
+    if (credentials.token != expected) return error.BadToken;
+    receipt.* = .{ .account = 7 };
+}
+
+/// Takes an authenticated stage, so a pending one does not compile here.
+fn send(session: *Authenticated, message: []const u8) usize {
+    return message.len + session.get().account;
+}
+
+pub fn main() !void {
+    var pending = Pending.init(.{ .token = 42 });
+    var authenticated: Authenticated = undefined;
+    if (pending.transitionWith(.verify, &authenticated, @as(u64, 41), verify)) |_| unreachable else |err| aegis.assert.invariant(err == error.BadToken, "a wrong token is refused");
+    try pending.transitionWith(.verify, &authenticated, @as(u64, 42), verify); // consumes `pending`
+    aegis.assert.post(send(&authenticated, "hello") == 12, "a message is sent on the authenticated stage");
+
+    // Events from a peer arrive at run time: an undeclared one is an error, never a state change.
+    var link = Session.Runtime(u32).init(0);
+    _ = try link.step(.verify);
+    if (link.step(.verify)) |_| unreachable else |err| aegis.assert.invariant(err == error.IllegalEvent, "an undeclared event is refused");
+    aegis.assert.post(link.current() == .authenticated, "the refused event changed nothing");
+}
 ```
 <!-- END GENERATED -->
 
@@ -61,6 +107,8 @@ _ = timeout;
 Zig permits struct copies, field access and escaped pointers. These contracts do not provide a borrow checker, linear types, automatic destructors or universal copied-guard detection. Cleanup is explicit on normal/error returns; abort/process death has no cleanup guarantee. Wipes cover only the specified storage, not old copies, registers, spills, paging, core dumps or hardware side channels. A5 supports only its checked compiler/target boundary; hardware and whole-program constant-time assurance remain unestablished. [Design](https://github.com/pedronaugusto/aegis/blob/main/docs/design.md) defines support, explicit declassification and limits.
 
 ## API
+
+`state.Machine(States, Events, spec)` declares a protocol's shape once: the initial state, the terminal states and one edge per state and event. A mistake in the specification does not compile: a duplicate edge, a terminal state with an edge out, a state with no way out that is not terminal, a state no edge reaches, or an initial state that is terminal. `Machine.At(state, Payload)` stages a payload at one state, and the stage is part of its type, so a function that takes the authenticated stage cannot be called with the pending one. `transition(event, &next)` moves the payload along a declared edge into storage apart from the stage and consumes the stage; `transitionWith(event, &next, context, prepare)` builds a payload of another type, and when `prepare` fails the stage is untouched and the destination unwritten. Only the initial stage is constructed, and a payload leaves only a terminal stage by `take`. Zig still lets a caller copy a stage and keep using the old one: Debug reports a stage used after its payload moved on, and no build mode claims more. Outside Debug a stage is exactly its payload. `Machine.Runtime(Payload)` pairs a payload with its current state for events that arrive at run time. `step(event)` checks the table in every build mode, answers an event the state does not declare with `error.IllegalEvent` and changes nothing; `plan` and `commit` split the step around work that can fail or suspend, and `commit` returns `error.Stale` once the machine has left the state the plan was made in. The table is one byte load, as small as a hand-written table. That an event is genuine, ordered or authorized is the caller's check; one driver owns a runtime machine.
 
 `bounded.Array(T, N)` has checked initialized-prefix append/at/pop/items. `Queue(T, N)`/`Ring(T, N)` have checked FIFO push/pop/peek and explicit overwrite with a returned displaced owner; zero ring capacity is rejected, arbitrary nonzero capacity is supported. `Buffer(T)` and `QueueBuffer(T)`/`RingBuffer(T)` accept caller-backed storage or explicitly allocated finite capacity/maximum. Reserve is explicit; OOM leaves storage/owners valid. Entries with `moveInto` transfer through that capability; other T values transfer by caller-disciplined assignment. Full preserves input, Empty preserves destination, mutation ends borrows. Clear/deinit needs a static infallible nonblocking cleanup. Containers are single-owner, without atomics or hidden allocation/growth.
 
@@ -94,7 +142,7 @@ No reference counting, protocol parsers, stored deleter vtables, hidden workers,
 
 ## Testing
 
-Run A8/A9 cases with `zig build test-handles-input -Dtest-filter=A8 -Dtest-filter=A9`. Run targeted cases with `zig build test -Dtest-filter=A3`, `-Dtest-filter=Secret`, `-Dtest-filter=A4`, `-Dtest-filter=A5`, `-Dtest-filter=Guarded` or `-Dtest-filter=Consumer`. `zig build lint` checks source, docs and structure. `zig build contracts` runs the negative-compilation, consumer-isolation, strict codegen parity and release-mode gates named below; hosted CI runs its three groups, `contracts-values`, `contracts-choices` and `contracts-published`, as separate jobs. `zig build check` compiles the suite; `zig build bench` runs own-operation A/B manually. The `test-secret-bytes` and `check-secret-bytes` gates exercise release cleanup and portable byte-owner contracts. The `check-choices` and `check-choices-negative` gates audit enclosing callers and disclosure/support contracts. The `test-scalars` and `check-contracts` gates retain release-mode failures; `check-negative` rejects cross-domain use. `test-a67` executes both release modes; `check-a67` retains the identity/diagnostic mode matrix and portable value profiles. The A6 race cases use shakedown’s portable baton-thread executor with deterministic seeded scheduling and virtual time. CI smoke-checks benchmark programs without timing gates. `check-handles-input` compiles A8/A9 in all four modes on the configured hosts plus 32-bit, wasm and freestanding; its Fast/Small gate compares handwritten instruction/layout pairs and intended-reason compiler rejections. The hosted merge includes targeted Linux TSan.
+Run A8/A9 cases with `zig build test-handles-input -Dtest-filter=A8 -Dtest-filter=A9`. Run targeted cases with `zig build test -Dtest-filter=A3`, `-Dtest-filter=Secret`, `-Dtest-filter=A4`, `-Dtest-filter=A5`, `-Dtest-filter=Guarded` or `-Dtest-filter=Consumer`. `zig build lint` checks source, docs and structure. `zig build contracts` runs the negative-compilation, consumer-isolation, strict codegen parity and release-mode gates named below; hosted CI runs its three groups, `contracts-values`, `contracts-choices` and `contracts-published`, as separate jobs. `zig build check` compiles the suite; `zig build bench` runs own-operation A/B manually. The `test-secret-bytes` and `check-secret-bytes` gates exercise release cleanup and portable byte-owner contracts. The `check-choices` and `check-choices-negative` gates audit enclosing callers and disclosure/support contracts. The `test-scalars` and `check-contracts` gates retain release-mode failures; `check-negative` rejects cross-domain use. `test-a67` executes both release modes; `check-a67` retains the identity/diagnostic mode matrix and portable value profiles. The A6 race cases use shakedown’s portable baton-thread executor with deterministic seeded scheduling and virtual time. CI smoke-checks benchmark programs without timing gates. `check-handles-input` compiles A8/A9 in all four modes on the configured hosts plus 32-bit, wasm and freestanding; its Fast/Small gate compares handwritten instruction/layout pairs and intended-reason compiler rejections. `check-a10` compiles the typestate mode matrix in four modes, 16 intended-reason compiler rejections and the 32-bit, wasm and freestanding profiles; `test-a10` runs its semantics in the three release modes. The hosted merge includes targeted Linux TSan.
 
 ## Licence
 

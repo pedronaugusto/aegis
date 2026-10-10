@@ -12,6 +12,7 @@ const input = @import("aegis.input");
 const err = @import("aegis.err");
 const bounded = @import("aegis.bounded");
 const own = @import("aegis.own");
+const state = @import("aegis.state");
 comptime {
     std.debug.assert(a.Secret == secret.Secret);
     std.debug.assert(a.SecretBytes == secret.SecretBytes);
@@ -36,5 +37,6 @@ comptime {
     std.debug.assert(a.handle.Pool == handle.Pool);
     std.debug.assert(a.input.Untrusted == input.Untrusted);
     std.debug.assert(a.err.Context == err.Context);
+    std.debug.assert(a.state.Machine == state.Machine);
 }
 pub fn main() void {}

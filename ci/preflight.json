@@ -19,6 +19,13 @@
       "imports": [
         "aegis"
       ]
+    },
+    "zig build docs -- state": {
+      "source": "examples/state.zig",
+      "region": "state",
+      "imports": [
+        "aegis"
+      ]
     }
   }
 }

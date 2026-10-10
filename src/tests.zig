@@ -1,5 +1,6 @@
 test {
     _ = @import("handle_test.zig");
+    _ = @import("state_test.zig");
     _ = @import("input_test.zig");
     _ = @import("err_test.zig");
     _ = @import("secret/inline_test.zig");

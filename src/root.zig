@@ -18,6 +18,8 @@ pub const assert = @import("assert");
 pub const bounded = @import("bounded");
 /// Static nonblocking cleanup owners and explicit result obligations.
 pub const own = @import("own");
+/// Comptime typestate machines, staged payloads and a checked runtime transition table.
+pub const state = @import("state");
 /// Exclusive std.Io.Mutex guards, with explicit Io release.
 pub const BlockingGuarded = sync.BlockingGuarded;
 /// Bounded std.Io.RwLock guards with immutable/mutable borrows.
