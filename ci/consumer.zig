@@ -54,6 +54,7 @@ const err = @import("aegis.err");
 const bounded = @import("aegis.bounded");
 const own = @import("aegis.own");
 const state = @import("aegis.state");
+const scope = @import("aegis.scope");
 comptime {
     std.debug.assert(aegis.Secret == secret.Secret);
     std.debug.assert(aegis.SecretBytes == secret.SecretBytes);
@@ -79,4 +80,6 @@ comptime {
     std.debug.assert(aegis.input.Untrusted == input.Untrusted);
     std.debug.assert(aegis.err.Context == err.Context);
     std.debug.assert(aegis.state.Machine == state.Machine);
+    std.debug.assert(aegis.scope.Table == scope.Table);
+    std.debug.assert(aegis.scope.Ref == scope.Ref);
 }

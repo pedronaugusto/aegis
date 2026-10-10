@@ -1,8 +1,8 @@
 # aegis
 
-Explicit safety types for any Zig project: inline and allocated secrets, guarded data and publication, bounded storage/admission, explicit owners, checked scalar arithmetic, audited value kernels, distinct IDs and units, checked generational storage, refined input adapters, bounded public diagnostics, comptime typestate machines, and executable contracts. Runtime code depends only on std; required wiping, locking, arithmetic, range and conversion checks remain enabled in every build.
+Explicit safety types for any Zig project: inline and allocated secrets, guarded data and publication, bounded storage/admission, explicit owners, checked scalar arithmetic, audited value kernels, distinct IDs and units, checked generational storage, refined input adapters, bounded public diagnostics, comptime typestate machines, scope lifetimes, and executable contracts. Runtime code depends only on std; required wiping, locking, arithmetic, range and conversion checks remain enabled in every build.
 
-Work in progress. Implemented: v0 (`Secret(T)` and spin `Guarded(T)`), A3 numeric/domain foundations, A4 `SecretBytes`, A5 Choice/compare/select value kernels, A6 Io guards/publication/logical-task checks, A7 bounded storage/admission and static owners, A8/A9 handles, typed indices, checked-input adapters and bounded error context, and A10 typestate machines. The full safety catalogue and consumer adoption remain later work.
+Work in progress. Implemented: v0 (`Secret(T)` and spin `Guarded(T)`), A3 numeric/domain foundations, A4 `SecretBytes`, A5 Choice/compare/select value kernels, A6 Io guards/publication/logical-task checks, A7 bounded storage/admission and static owners, A8/A9 handles, typed indices, checked-input adapters and bounded error context, A10 typestate machines and A12 scope lifetimes. The full safety catalogue and consumer adoption remain later work.
 
 ## Install
 
@@ -12,7 +12,7 @@ Requires Zig 0.17.0:
 zig fetch --save=aegis git+https://github.com/pedronaugusto/aegis#main
 ```
 
-Add the dependency's `aegis` module, or one standalone namespace such as `aegis.handle`, `aegis.input`, `aegis.err`, `aegis.secret`, `aegis.sync`, `aegis.bounded`, `aegis.own`, `aegis.state` or `aegis.int`. Wire a namespace with `exe.root_module.addImport("aegis.handle", aegis_dependency.module("aegis.handle"))`. Every implemented namespace is registered separately; root and standalone imports share declaration identities. Consumers fetch neither preflight nor shakedown.
+Add the dependency's `aegis` module, or one standalone namespace such as `aegis.handle`, `aegis.input`, `aegis.err`, `aegis.secret`, `aegis.sync`, `aegis.bounded`, `aegis.own`, `aegis.state`, `aegis.scope` or `aegis.int`. Wire a namespace with `exe.root_module.addImport("aegis.handle", aegis_dependency.module("aegis.handle"))`. Every implemented namespace is registered separately; root and standalone imports share declaration identities. Consumers fetch neither preflight nor shakedown.
 
 ## Usage
 
@@ -84,6 +84,40 @@ pub fn main() !void {
 ```
 <!-- END GENERATED -->
 
+## Scope lifetimes
+
+<!-- BEGIN GENERATED zig build docs -- scope -->
+```zig
+const aegis = @import("aegis");
+
+const std = @import("std");
+
+/// The brand: a reference made in a request scope is a different type from one made in any other kind.
+const Request = struct {};
+const Requests = aegis.scope.Table(Request);
+
+pub fn main() !void {
+    // The connection keeps the table. One slot per request that can be open and checked at once.
+    var slots: [4]Requests.Slot = undefined;
+    var requests = Requests.init(&slots);
+    defer requests.deinit();
+
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+
+    const request = try requests.open();
+    const body = try arena.allocator().dupe(u8, "GET /index");
+    const view = request.ref(body); // good while `request` is open
+    aegis.assert.post(view.get().len == 10, "the body is readable while its request is open");
+
+    request.end();
+    _ = arena.reset(.free_all);
+    // `view.get()` from here on stops the program in Debug and ReleaseSafe: its scope ended.
+    // In ReleaseFast and ReleaseSmall nothing is checked and `view` is just the slice.
+}
+```
+<!-- END GENERATED -->
+
 ## Design
 
 `Secret(T)` accepts fixed pointer-free representations and rejects aggregates declaring `deinit`. This checks representation, not the semantic meaning of numeric values; callers must use inline material that owns no external resource. `expose`/`exposeMut` borrow; `moveInto` transfers into uninitialized disjoint storage and securely wipes the source. `deinit` erases the whole representation, including padding, using volatile std erasure. The consumed storage need not be a valid `T`; never read it as `T` afterward. Parser/caller temporaries and displaced values need their own wipes. The direct formatting hook returns `SecretNotFormattable` without writing; std's `{f}` rejects that error set at compile time. Reflection, `{any}`, field access and deliberate exposure can bypass the hook.
@@ -109,6 +143,8 @@ Zig permits struct copies, field access and escaped pointers. These contracts do
 ## API
 
 `state.Machine(States, Events, spec)` declares a protocol's shape once: the initial state, the terminal states and one edge per state and event. A mistake in the specification does not compile: a duplicate edge, a terminal state with an edge out, a state with no way out that is not terminal, a state no edge reaches, or an initial state that is terminal. `Machine.At(state, Payload)` stages a payload at one state, and the stage is part of its type, so a function that takes the authenticated stage cannot be called with the pending one. `transition(event, &next)` moves the payload along a declared edge into storage apart from the stage and consumes the stage; `transitionWith(event, &next, context, prepare)` builds a payload of another type, and when `prepare` fails the stage is untouched and the destination unwritten. Only the initial stage is constructed, and a payload leaves only a terminal stage by `take`. Zig still lets a caller copy a stage and keep using the old one: Debug reports a stage used after its payload moved on, and no build mode claims more. Outside Debug a stage is exactly its payload. `Machine.Runtime(Payload)` pairs a payload with its current state for events that arrive at run time. `step(event)` checks the table in every build mode, answers an event the state does not declare with `error.IllegalEvent` and changes nothing; `plan` and `commit` split the step around work that can fail or suspend, and `commit` returns `error.Stale` once the machine has left the state the plan was made in. The table is one byte load, as small as a hand-written table. That an event is genuine, ordered or authorized is the caller's check; one driver owns a runtime machine.
+
+`scope.Table(Brand)` is what a creator keeps for the scopes it opens: a connection for its requests, a server for its connections. `Brand` is a type naming the kind of scope. The creator owns the table and the slots under it, so the record a check reads is never inside the scope's own memory and is still there after the scope ends. `open()` hands out a scope, `ref(pointer)` makes a `Ref(Brand, P)` for a pointer or slice the scope vouches for, and `end()` moves the scope's generation on. `Ref.get()` returns the pointer and, in Debug and ReleaseSafe, stops the program with a message if the scope has ended, whether or not the slot has been reused since. A reference from one brand is a different type from a reference from another, so the compiler rejects mixing them. A reference moves to another scope only by `reborrow` on that scope, which checks the source first and says in the code that the memory now lives under the new scope. Ending a scope twice, using an ended scope and tearing the table down with a scope open are stopped the same way. The generation is 64 bits, a slot that has used every generation is retired and never reused, and `open` returns `Full` when every slot is open and `Exhausted` when every slot is retired. These checks follow Zig's runtime safety: ReleaseFast and ReleaseSmall keep no table, no generation and no check, a reference is exactly its pointer, and `open` cannot fail there, so a slot count is the number of scopes that can be open and checked, never an admission limit. This catches a use after the scope ended when the reference is used; a raw pointer taken out of `get` and kept, or a reference never used, is not seen. A check that must be handled instead of stopping the program belongs to a handle, which is checked in every mode.
 
 `bounded.Array(T, N)` has checked initialized-prefix append/at/pop/items. `Queue(T, N)`/`Ring(T, N)` have checked FIFO push/pop/peek and explicit overwrite with a returned displaced owner; zero ring capacity is rejected, arbitrary nonzero capacity is supported. `Buffer(T)` and `QueueBuffer(T)`/`RingBuffer(T)` accept caller-backed storage or explicitly allocated finite capacity/maximum. Reserve is explicit; OOM leaves storage/owners valid. Entries with `moveInto` transfer through that capability; other T values transfer by caller-disciplined assignment. Full preserves input, Empty preserves destination, mutation ends borrows. Clear/deinit needs a static infallible nonblocking cleanup. Containers are single-owner, without atomics or hidden allocation/growth.
 
@@ -142,7 +178,7 @@ No reference counting, protocol parsers, stored deleter vtables, hidden workers,
 
 ## Testing
 
-Run A8/A9 cases with `zig build test-handles-input -Dtest-filter=A8 -Dtest-filter=A9`. Run targeted cases with `zig build test -Dtest-filter=A3`, `-Dtest-filter=Secret`, `-Dtest-filter=A4`, `-Dtest-filter=A5`, `-Dtest-filter=Guarded` or `-Dtest-filter=Consumer`. `zig build lint` checks source, docs and structure. `zig build contracts` runs the negative-compilation, consumer-isolation, strict codegen parity and release-mode gates named below; hosted CI runs its three groups, `contracts-values`, `contracts-choices` and `contracts-published`, as separate jobs. `zig build check` compiles the suite; `zig build bench` runs own-operation A/B manually. The `test-secret-bytes` and `check-secret-bytes` gates exercise release cleanup and portable byte-owner contracts. The `check-choices` and `check-choices-negative` gates audit enclosing callers and disclosure/support contracts. The `test-scalars` and `check-contracts` gates retain release-mode failures; `check-negative` rejects cross-domain use. `test-a67` executes both release modes; `check-a67` retains the identity/diagnostic mode matrix and portable value profiles. The A6 race cases use shakedown’s portable baton-thread executor with deterministic seeded scheduling and virtual time. CI smoke-checks benchmark programs without timing gates. `check-handles-input` compiles A8/A9 in all four modes on the configured hosts plus 32-bit, wasm and freestanding; its Fast/Small gate compares handwritten instruction/layout pairs and intended-reason compiler rejections. `check-a10` compiles the typestate mode matrix in four modes, 16 intended-reason compiler rejections and the 32-bit, wasm and freestanding profiles; `test-a10` runs its semantics in the three release modes. The hosted merge includes targeted Linux TSan.
+Run A8/A9 cases with `zig build test-handles-input -Dtest-filter=A8 -Dtest-filter=A9`. Run targeted cases with `zig build test -Dtest-filter=A3`, `-Dtest-filter=Secret`, `-Dtest-filter=A4`, `-Dtest-filter=A5`, `-Dtest-filter=Guarded` or `-Dtest-filter=Consumer`. `zig build lint` checks source, docs and structure. `zig build contracts` runs the negative-compilation, consumer-isolation, strict codegen parity and release-mode gates named below; hosted CI runs its three groups, `contracts-values`, `contracts-choices` and `contracts-published`, as separate jobs. `zig build check` compiles the suite; `zig build bench` runs own-operation A/B manually. The `test-secret-bytes` and `check-secret-bytes` gates exercise release cleanup and portable byte-owner contracts. The `check-choices` and `check-choices-negative` gates audit enclosing callers and disclosure/support contracts. The `test-scalars` and `check-contracts` gates retain release-mode failures; `check-negative` rejects cross-domain use. `test-a67` executes both release modes; `check-a67` retains the identity/diagnostic mode matrix and portable value profiles. The A6 race cases use shakedown’s portable baton-thread executor with deterministic seeded scheduling and virtual time. CI smoke-checks benchmark programs without timing gates. `check-handles-input` compiles A8/A9 in all four modes on the configured hosts plus 32-bit, wasm and freestanding; its Fast/Small gate compares handwritten instruction/layout pairs and intended-reason compiler rejections. `check-a10` compiles the typestate mode matrix in four modes, 16 intended-reason compiler rejections and the 32-bit, wasm and freestanding profiles; `test-a10` runs its semantics in the three release modes; `check-a12` and `test-a12` do the same for scopes, with the stop and no-stop outcome of each violation required per mode. The hosted merge includes targeted Linux TSan.
 
 ## Licence
 

@@ -26,6 +26,13 @@
       "imports": [
         "aegis"
       ]
+    },
+    "zig build docs -- scope": {
+      "source": "examples/scope.zig",
+      "region": "scope",
+      "imports": [
+        "aegis"
+      ]
     }
   }
 }

@@ -20,6 +20,8 @@ pub const bounded = @import("bounded");
 pub const own = @import("own");
 /// Comptime typestate machines, staged payloads and a checked runtime transition table.
 pub const state = @import("state");
+/// Scope lifetimes: a brand and a generation that catch a reference used after its scope ended.
+pub const scope = @import("scope");
 /// Exclusive std.Io.Mutex guards, with explicit Io release.
 pub const BlockingGuarded = sync.BlockingGuarded;
 /// Bounded std.Io.RwLock guards with immutable/mutable borrows.

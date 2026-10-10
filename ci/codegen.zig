@@ -7,7 +7,8 @@ const bytes_names = [_][]const u8{ "bytes_dead", "bytes_cleanup", "bytes_resize"
 const a67_names = [_][]const u8{ "a67_mutex", "a67_rw_read", "a67_rw_write", "a67_once_ready", "a67_once_cold", "a67_condition", "a67_array", "a67_queue", "a67_buffer", "a67_budget", "a67_owned", "a67_must_use", "a67_confined", "a67_ordered", "a67_ring_buffer", "a67_limit" };
 const gaps_names = [_][]const u8{ "gaps_try_acquire", "gaps_teardown", "gaps_lazy_ready", "gaps_lazy_cold", "gaps_lazy_infallible", "gaps_shared_retain", "gaps_shared_get", "gaps_shared_release", "gaps_owned_from", "gaps_compare", "gaps_equal", "gaps_last", "gaps_exceeds", "gaps_io_widen", "gaps_io_timestamp", "gaps_io_narrow" };
 const state_names = [_][]const u8{ "state_next", "state_next_wide", "state_next_switch", "state_next_wide_switch", "state_terminal", "state_step", "state_plan_commit", "state_transition", "state_transition_with", "state_take" };
-const names = owner_names ++ numeric_names ++ bytes_names ++ a67_names ++ gaps_names ++ state_names;
+const scope_names = [_][]const u8{ "scope_get", "scope_get_slice", "scope_make", "scope_reborrow", "scope_open", "scope_end", "scope_cycle" };
+const names = owner_names ++ numeric_names ++ bytes_names ++ a67_names ++ gaps_names ++ state_names ++ scope_names;
 pub fn main(init: std.process.Init) !void {
     const a = init.arena.allocator();
     const args = try init.minimal.args.toSlice(a);
@@ -90,7 +91,7 @@ fn owner(name: []const u8) bool {
     return false;
 }
 fn reported(name: []const u8) bool {
-    inline for (.{ "a67_", "gaps_", "state_" }) |prefix| if (std.mem.startsWith(u8, name, prefix)) return true;
+    inline for (.{ "a67_", "gaps_", "state_", "scope_" }) |prefix| if (std.mem.startsWith(u8, name, prefix)) return true;
     return false;
 }
 pub fn alias(a: std.mem.Allocator, ir: []const u8, name: []const u8) ![]const u8 {
@@ -137,10 +138,14 @@ fn contents(a: std.mem.Allocator, text: []const u8, label: []const u8) !?[]const
     const start = std.mem.find(u8, text, marker) orelse return null;
     var bytes: std.ArrayList(u8) = .empty;
     var lines = std.mem.splitScalar(u8, text[start + marker.len ..], '\n');
+    // Data ends at its `.size`, or for a constant-pool entry at the first line that is not data.
     while (lines.next()) |raw| {
         const line = std.mem.trim(u8, raw, " \t");
         if (std.mem.startsWith(u8, line, ".size")) break;
-        if (!try directive(a, &bytes, line)) return null;
+        if (!try directive(a, &bytes, line)) {
+            if (bytes.items.len == 0) return null;
+            break;
+        }
     } else return null;
     var hex: std.Io.Writer.Allocating = .init(a);
     for (bytes.items) |byte| try hex.writer.print("{x:0>2}", .{byte});

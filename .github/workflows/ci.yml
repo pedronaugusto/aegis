@@ -101,4 +101,4 @@ jobs:
           build-key: aegis-tsan
           build-args: -Dthread-sanitizer=true -Dci-lint=false
       - name: Check native mutual exclusion and Job races
-        run: zig build test -Dtest-filter="Guarded native" -Dtest-filter="Consumer Job" -Dtest-filter="A6 native" -Dthread-sanitizer=true -Dci-lint=false
+        run: zig build test -Dtest-filter="Guarded native" -Dtest-filter="Consumer Job" -Dtest-filter="A6 native" -Dtest-filter="A12 native" -Dthread-sanitizer=true -Dci-lint=false

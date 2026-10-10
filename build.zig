@@ -30,7 +30,7 @@ pub fn build(b: *std.Build) void {
         .imports = &.{.{ .name = "aegis", .module = b.modules.get("aegis").? }},
     }) });
     test_step.dependOn(&b.addRunArtifact(example).step);
-    for ([_][]const u8{"state"}) |name| {
+    for ([_][]const u8{ "state", "scope" }) |name| {
         const worked = b.addExecutable(.{ .name = b.fmt("aegis-example-{s}", .{name}), .root_module = b.createModule(.{
             .root_source_file = b.path(b.fmt("examples/{s}.zig", .{name})),
             .target = target,
@@ -40,7 +40,7 @@ pub fn build(b: *std.Build) void {
         test_step.dependOn(&b.addRunArtifact(worked).step);
     }
     preflight.addCi(b, .{ .tests = test_step, .portable_tests = true, .bench = .{
-        .programs = &.{ .{ .name = "owners", .source = "bench/owners.zig" }, .{ .name = "numeric", .source = "bench/numeric.zig" }, .{ .name = "choices", .source = "bench/choices.zig" }, .{ .name = "bytes", .source = "bench/bytes.zig" }, .{ .name = "guarded-bounded", .source = "bench/a67.zig" }, .{ .name = "handles-input", .source = "bench/handles_input.zig" }, .{ .name = "gaps", .source = "bench/gaps.zig" }, .{ .name = "state", .source = "bench/state.zig" } },
+        .programs = &.{ .{ .name = "owners", .source = "bench/owners.zig" }, .{ .name = "numeric", .source = "bench/numeric.zig" }, .{ .name = "choices", .source = "bench/choices.zig" }, .{ .name = "bytes", .source = "bench/bytes.zig" }, .{ .name = "guarded-bounded", .source = "bench/a67.zig" }, .{ .name = "handles-input", .source = "bench/handles_input.zig" }, .{ .name = "gaps", .source = "bench/gaps.zig" }, .{ .name = "state", .source = "bench/state.zig" }, .{ .name = "scope", .source = "bench/scope.zig" } },
         .imports = benchImports,
         .target = target,
         .optimize = optimize,
@@ -157,6 +157,17 @@ pub fn build(b: *std.Build) void {
         const release_tests = b.addTest(.{ .root_module = release_module, .filters = &.{"A10"}, .use_llvm = true });
         a10_tests.dependOn(&b.addRunArtifact(release_tests).step);
     }
+    const a12 = b.addExecutable(.{ .name = "aegis-a12-contracts", .root_module = b.createModule(.{ .root_source_file = b.path("ci/a12_check.zig"), .target = b.graph.host, .optimize = .safe }) });
+    const run_a12 = b.addRunArtifact(a12);
+    run_a12.addArg(b.graph.zig_exe);
+    run_a12.setCwd(b.path("."));
+    b.step("check-a12", "Require scope mode-matrix contracts, intended-reason rejections and portable profiles").dependOn(&run_a12.step);
+    const a12_tests = b.step("test-a12", "Run A12 scope semantics in the three release modes");
+    for ([_]std.lang.Optimize{ .safe, .fast, .small }) |mode| {
+        const release_module = testModule(b, namespaceGraph(b, b.graph.host, mode), shake.module("shakedown"), material, b.graph.host, mode);
+        const release_tests = b.addTest(.{ .root_module = release_module, .filters = &.{"A12"}, .use_llvm = true });
+        a12_tests.dependOn(&b.addRunArtifact(release_tests).step);
+    }
     contractGroups(b);
 }
 
@@ -166,7 +177,7 @@ fn contractGroups(b: *std.Build) void {
     const groups = [_]struct { name: []const u8, description: []const u8, steps: []const []const u8 }{
         .{ .name = "contracts-values", .description = "Run the A3 to A5 value and owner contracts", .steps = &.{ "check-negative", "check-parity", "check-contracts", "test-scalars", "check-secret-bytes", "test-secret-bytes" } },
         .{ .name = "contracts-choices", .description = "Run the A5 choice contracts", .steps = &.{ "check-choices", "check-choices-negative" } },
-        .{ .name = "contracts-published", .description = "Run the A6 to A10 contracts and the published-module gates", .steps = &.{ "check-a67", "test-a67", "check-handles-input", "test-handles-input-modes", "check-a10", "test-a10", "check-namespaces", "check-consumer" } },
+        .{ .name = "contracts-published", .description = "Run the A6 to A12 contracts and the published-module gates", .steps = &.{ "check-a67", "test-a67", "check-handles-input", "test-handles-input-modes", "check-a10", "test-a10", "check-a12", "test-a12", "check-namespaces", "check-consumer" } },
     };
     const all = b.step("contracts", "Run every contract group");
     for (groups) |group| {
@@ -189,7 +200,8 @@ fn benchImports(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.l
     const gaps = b.createModule(.{ .root_source_file = b.path("ci/gaps.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     const ab = b.createModule(.{ .root_source_file = b.path("ci/ab.zig"), .target = target, .optimize = optimize });
     const state = b.createModule(.{ .root_source_file = b.path("ci/state.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
-    return b.allocator.dupe(std.Build.Module.Import, &.{ .{ .name = "ab", .module = ab }, .{ .name = "state", .module = state }, .{ .name = "aegis", .module = aegis }, .{ .name = "cases", .module = cases }, .{ .name = "numeric", .module = numeric }, .{ .name = "choices", .module = choices }, .{ .name = "shakedown", .module = shake.module("shakedown") }, .{ .name = "bytes", .module = bytes }, .{ .name = "a67", .module = a67 }, .{ .name = "gaps", .module = gaps }, .{ .name = "material", .module = material }, .{ .name = "safety", .module = safety } }) catch @panic("out of memory configuring benchmarks");
+    const scope = b.createModule(.{ .root_source_file = b.path("ci/scope.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
+    return b.allocator.dupe(std.Build.Module.Import, &.{ .{ .name = "ab", .module = ab }, .{ .name = "state", .module = state }, .{ .name = "scope", .module = scope }, .{ .name = "aegis", .module = aegis }, .{ .name = "cases", .module = cases }, .{ .name = "numeric", .module = numeric }, .{ .name = "choices", .module = choices }, .{ .name = "shakedown", .module = shake.module("shakedown") }, .{ .name = "bytes", .module = bytes }, .{ .name = "a67", .module = a67 }, .{ .name = "gaps", .module = gaps }, .{ .name = "material", .module = material }, .{ .name = "safety", .module = safety } }) catch @panic("out of memory configuring benchmarks");
 }
 
 fn choiceBenchmarkLlvm(b: *std.Build, step: *std.Build.Step, seen: *std.AutoHashMapUnmanaged(*std.Build.Step, void)) void {
@@ -201,7 +213,7 @@ fn choiceBenchmarkLlvm(b: *std.Build, step: *std.Build.Step, seen: *std.AutoHash
     for (step.dependencies.items) |dependency| choiceBenchmarkLlvm(b, dependency, seen);
 }
 
-const namespace_names = .{ "int", "id", "units", "assert", "secret", "sync", "handle", "input", "err", "bounded", "own", "state" };
+const namespace_names = .{ "int", "id", "units", "assert", "secret", "sync", "handle", "input", "err", "bounded", "own", "state", "scope" };
 const Graph = struct {
     root: *std.Build.Module,
     int: *std.Build.Module,
@@ -216,6 +228,7 @@ const Graph = struct {
     bounded: *std.Build.Module,
     own: *std.Build.Module,
     state: *std.Build.Module,
+    scope: *std.Build.Module,
 };
 fn namespaceGraph(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize) Graph {
     const scalar = b.createModule(.{ .root_source_file = b.path("src/scalar.zig"), .target = target, .optimize = optimize });
