@@ -30,7 +30,7 @@ permissions:
   actions: read
 jobs:
   gate:
-    uses: pedronaugusto/preflight/.github/workflows/zig.yml@2734bc4840a7d721b5be7c08fa280d77e4fdc711
+    uses: pedronaugusto/preflight/.github/workflows/zig.yml@5a2d7c3f8efb70ead532a923ebb411a6324f2581
     # Only the job that lands a green merge run writes (`land` in ci/workflow.json), and only to move main.
     permissions:
       contents: write
@@ -38,7 +38,7 @@ jobs:
     with:
       tier: ${{ github.event_name == 'workflow_dispatch' && inputs.tier || github.event_name == 'schedule' && 'release' || 'merge' }}
       working-directory: "."
-      preflight-ref: 2734bc4840a7d721b5be7c08fa280d77e4fdc711
+      preflight-ref: 5a2d7c3f8efb70ead532a923ebb411a6324f2581
       attest: ${{ github.event_name == 'push' || inputs.status-only }}
       land: ${{ github.event_name == 'workflow_dispatch' && inputs.land }}
       fast-matrix: >-
@@ -57,16 +57,8 @@ jobs:
         {"include":[{"os":"macos-latest","name":"test (macos-latest, Debug)","step":"ci-run","args":"-Doptimize=debug -Dci-lint=false -Dci-timings=true","shard":"","setup":true,"job_timeout":20,"cache_key":"5e8fa00b7a5af603","artifact":"preflight-5e8fa00b7a5af603","operation":"replay","targets":""},{"os":"macos-latest","name":"test (macos-latest, ReleaseSafe)","step":"ci-run","args":"-Doptimize=safe -Dci-lint=false -Dci-timings=true","shard":"","setup":true,"job_timeout":20,"cache_key":"8578852dbcbcd0ad","artifact":"preflight-8578852dbcbcd0ad","operation":"replay","targets":""},{"os":"windows-latest","name":"test (windows-latest, Debug)","step":"ci-run","args":"-Doptimize=debug -Dci-lint=false -Dci-timings=true","shard":"","setup":true,"job_timeout":20,"cache_key":"2eb54dd910cd14ec","artifact":"preflight-2eb54dd910cd14ec","operation":"replay","targets":""},{"os":"windows-latest","name":"test (windows-latest, ReleaseSafe)","step":"ci-run","args":"-Doptimize=safe -Dci-lint=false -Dci-timings=true","shard":"","setup":true,"job_timeout":20,"cache_key":"b1dcb0c96e60df05","artifact":"preflight-b1dcb0c96e60df05","operation":"replay","targets":""}]}
       windows-git-latest: false
       compile-once: true
-  skip:
-    if: github.event_name != 'push' && !inputs.status-only
-    uses: pedronaugusto/preflight/.github/workflows/skip.yml@e3d81b9e477c1c690f1ce03506511935d16035c3
-    with:
-      tier: ${{ github.event_name == 'workflow_dispatch' && inputs.tier || 'merge' }}
-      preflight-ref: e3d81b9e477c1c690f1ce03506511935d16035c3
-      working-directory: "."
   contracts:
-    needs: skip
-    if: needs.skip.result == 'success' && needs.skip.outputs.docs-only != 'true'
+    if: github.event_name != 'push'
     name: Contracts (${{ matrix.group }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -81,7 +73,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: pedronaugusto/preflight
-          ref: e3d81b9e477c1c690f1ce03506511935d16035c3
+          ref: 5a2d7c3f8efb70ead532a923ebb411a6324f2581
           path: .preflight
       - uses: ./.preflight/.github/actions/setup
         with:
@@ -90,8 +82,7 @@ jobs:
         run: zig build contracts-${{ matrix.group }}
 
   tsan:
-    needs: skip
-    if: needs.skip.result == 'success' && needs.skip.outputs.docs-only != 'true' && (github.event_name != 'workflow_dispatch' || inputs.tier != 'fast')
+    if: github.event_name != 'push' && (github.event_name != 'workflow_dispatch' || inputs.tier != 'fast')
     name: Linux targeted thread sanitizer
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -102,7 +93,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: pedronaugusto/preflight
-          ref: e3d81b9e477c1c690f1ce03506511935d16035c3
+          ref: 5a2d7c3f8efb70ead532a923ebb411a6324f2581
           path: .preflight
       - uses: ./.preflight/.github/actions/setup
         with:
