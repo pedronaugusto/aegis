@@ -9,9 +9,9 @@ pub fn build(b: *std.Build) void {
     const preflight = b.lazyImport(@This(), "preflight") orelse return;
     const test_step = b.step("test", "Run focused ownership and synchronization tests");
     const check = b.step("check", "Compile all tests without execution");
-    const shake = b.dependencyLazy("shakedown", .{ .target = target, .optimize = optimize }) catch return;
-    const material = b.createModule(.{ .root_source_file = b.path("src/testing/Material.zig"), .target = target, .optimize = optimize });
-    const m = testModule(b, shake.module("shakedown"), material, target, optimize);
+    // Fetched before any test module is made, so a first pass that must fetch it makes none.
+    _ = b.dependencyLazy("shakedown", .{ .target = target, .optimize = optimize, .aegis = .consumer }) catch return;
+    const m = testModule(b, target, optimize);
     if (tsan) aegis.sanitize_thread = true;
     m.sanitize_thread = tsan;
     if (tsan) m.link_libc = true;
@@ -112,7 +112,7 @@ pub fn build(b: *std.Build) void {
     }
     const modes = b.step("test-handles-input-modes", "Run A8/A9 semantic contracts in all release modes");
     for ([_]std.lang.Optimize{ .safe, .fast, .small }) |mode| {
-        const mode_module = testModule(b, shake.module("shakedown"), material, b.graph.host, mode);
+        const mode_module = testModule(b, b.graph.host, mode);
         const mode_tests = b.addTest(.{ .root_module = mode_module, .filters = &.{ "A8", "A9" }, .use_llvm = true });
         modes.dependOn(&b.addRunArtifact(mode_tests).step);
     }
@@ -125,7 +125,7 @@ pub fn build(b: *std.Build) void {
     const bytes_tests = b.step("test-secret-bytes", "Run A4 ownership contracts in both release modes");
     const scalar_tests = b.step("test-scalars", "Run A3 contracts in both release modes");
     for ([_]std.lang.Optimize{ .safe, .fast }) |mode| {
-        const scalar_module = testModule(b, shake.module("shakedown"), material, b.graph.host, mode);
+        const scalar_module = testModule(b, b.graph.host, mode);
         const release_tests = b.addTest(.{ .root_module = scalar_module, .filters = &.{"A3"} });
         scalar_tests.dependOn(&b.addRunArtifact(release_tests).step);
         const a67_release_tests = b.addTest(.{ .root_module = scalar_module, .filters = &.{ "A6", "A7" } });
@@ -140,7 +140,7 @@ pub fn build(b: *std.Build) void {
     b.step("check-a10", "Require typestate mode-matrix contracts, intended-reason rejections and portable profiles").dependOn(&run_a10.step);
     const a10_tests = b.step("test-a10", "Run A10 typestate semantics in the three release modes");
     for ([_]std.lang.Optimize{ .safe, .fast, .small }) |mode| {
-        const release_module = testModule(b, shake.module("shakedown"), material, b.graph.host, mode);
+        const release_module = testModule(b, b.graph.host, mode);
         const release_tests = b.addTest(.{ .root_module = release_module, .filters = &.{"A10"}, .use_llvm = true });
         a10_tests.dependOn(&b.addRunArtifact(release_tests).step);
     }
@@ -151,7 +151,7 @@ pub fn build(b: *std.Build) void {
     b.step("check-a12", "Require scope mode-matrix contracts, intended-reason rejections and portable profiles").dependOn(&run_a12.step);
     const a12_tests = b.step("test-a12", "Run A12 scope semantics in the three release modes");
     for ([_]std.lang.Optimize{ .safe, .fast, .small }) |mode| {
-        const release_module = testModule(b, shake.module("shakedown"), material, b.graph.host, mode);
+        const release_module = testModule(b, b.graph.host, mode);
         const release_tests = b.addTest(.{ .root_module = release_module, .filters = &.{"A12"}, .use_llvm = true });
         a12_tests.dependOn(&b.addRunArtifact(release_tests).step);
     }
@@ -174,13 +174,25 @@ fn contractGroups(b: *std.Build) void {
     }
 }
 
+/// One set of modules per target and mode, as shakedown fetched for them is one dependency, bound to one aegis.
 fn benchImports(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize) []const std.Build.Module.Import {
-    const material = b.createModule(.{ .root_source_file = b.path("src/testing/Material.zig"), .target = target, .optimize = optimize });
-    const aegis = b.createModule(.{ .root_source_file = b.path("src/root.zig"), .target = target, .optimize = optimize });
+    const key = b.fmt("{s}-{t}", .{ target.query.zigTriple(b.allocator) catch @panic("OOM"), optimize });
+    if (bench_imports.get(key)) |imports| return imports;
+    const imports = makeBenchImports(b, target, optimize);
+    bench_imports.put(b.allocator, key, imports) catch @panic("OOM");
+    return imports;
+}
+
+var bench_imports: std.StringHashMapUnmanaged([]const std.Build.Module.Import) = .empty;
+
+fn makeBenchImports(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize) []const std.Build.Module.Import {
+    // The tests' module: shakedown, fetched once per target and mode, is bound to it.
+    const aegis = testModule(b, target, optimize);
+    const material = aegis.import_table.get("material").?;
     const cases = b.createModule(.{ .root_source_file = b.path("ci/cases.zig"), .target = target, .optimize = optimize, .imports = &.{ .{ .name = "aegis", .module = aegis }, .{ .name = "material", .module = material } } });
     const numeric = b.createModule(.{ .root_source_file = b.path("ci/numeric.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     const choices = b.createModule(.{ .root_source_file = b.path("ci/choice_callers.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
-    const shake = b.dependencyLazy("shakedown", .{ .target = target, .optimize = optimize }) catch @panic("shakedown unavailable for A5 benchmark");
+    const shake = b.dependencyLazy("shakedown", .{ .target = target, .optimize = optimize, .aegis = .consumer }) catch @panic("shakedown unavailable for A5 benchmark");
     const safety = b.createModule(.{ .root_source_file = b.path("ci/safety_parity.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     const bytes = b.createModule(.{ .root_source_file = b.path("ci/bytes.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     const a67 = b.createModule(.{ .root_source_file = b.path("ci/a67.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
@@ -200,9 +212,20 @@ fn choiceBenchmarkLlvm(b: *std.Build, step: *std.Build.Step, seen: *std.AutoHash
     for (step.dependencies.items) |dependency| choiceBenchmarkLlvm(b, dependency, seen);
 }
 
-fn testModule(b: *std.Build, shake: *std.Build.Module, material: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize) *std.Build.Module {
-    const module = b.createModule(.{ .root_source_file = b.path("src/tests.zig"), .target = target, .optimize = optimize });
-    module.addImport("shakedown", shake);
+/// The module the tests run in and the benchmarks import: aegis itself, from
+/// src/root.zig, with shakedown bound to it, so a binary links one aegis. One per
+/// target and mode, since shakedown fetched for them is one dependency, bound once.
+fn testModule(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize) *std.Build.Module {
+    const key = b.fmt("{s}-{t}", .{ target.query.zigTriple(b.allocator) catch @panic("OOM"), optimize });
+    if (test_modules.get(key)) |module| return module;
+    const shake = b.dependencyLazy("shakedown", .{ .target = target, .optimize = optimize, .aegis = .consumer }) catch @panic("shakedown is fetched before the first test module");
+    const material = b.createModule(.{ .root_source_file = b.path("src/testing/Material.zig"), .target = target, .optimize = optimize });
+    const module = b.createModule(.{ .root_source_file = b.path("src/root.zig"), .target = target, .optimize = optimize });
+    module.addImport("shakedown", shake.module("shakedown"));
     module.addImport("material", material);
+    shake.module("shakedown").addImport("aegis", module);
+    test_modules.put(b.allocator, key, module) catch @panic("OOM");
     return module;
 }
+
+var test_modules: std.StringHashMapUnmanaged(*std.Build.Module) = .empty;
