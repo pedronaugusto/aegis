@@ -191,7 +191,7 @@ fn holdWhile(owner: *a.Guarded(u32), held: *std.atomic.Value(bool), release: *st
     guard.deinit();
 }
 
-test "A6 isHeld sees another task's hold and its release" {
+test "A6 native isHeld sees another task's hold and its release" {
     if (builtin.single_threaded) return error.SkipZigTest;
     var owner = a.Guarded(u32).init(0);
     var held: std.atomic.Value(bool) = .init(false);
@@ -732,7 +732,7 @@ const Counting = struct {
     }
 };
 
-test "A6 Atomic checked adds race to exactly the maximum and never past it" {
+test "A6 native Atomic checked adds race to exactly the maximum and never past it" {
     if (builtin.single_threaded) return error.SkipZigTest;
     for (0..8) |_| {
         var state: Counting = .{};
