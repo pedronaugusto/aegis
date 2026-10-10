@@ -4,11 +4,29 @@ const scalar = @import("scalar.zig");
 
 /// Failed integer sign/width conversion. Floating point is deliberately excluded.
 pub const CastError = error{Overflow};
-pub inline fn cast(comptime Target: type, source: anytype) CastError!Target {
+
+/// `Value` when every `Source` converts to `Target` on every supported target, else `CastError!Value`: a conversion
+/// that cannot fail carries no error set. `usize` and `isize` count as the narrowest and widest they are anywhere, so
+/// `u32` to `usize` and `usize` to `u64` cannot fail and `u64` to `usize` can, on every target alike.
+pub fn Lifted(comptime Source: type, comptime Target: type, comptime Value: type) type {
+    return if (scalar.lossless(Source, Target)) Value else CastError!Value;
+}
+
+fn CastResult(comptime Target: type, comptime Source: type) type {
+    return switch (@typeInfo(Source)) {
+        .int => Lifted(Source, Target, Target),
+        .comptime_int => CastError!Target,
+        else => @compileError("aegis integer cast requires an integer source"),
+    };
+}
+
+pub inline fn cast(comptime Target: type, source: anytype) CastResult(Target, @TypeOf(source)) {
     scalar.integer(Target);
     switch (@typeInfo(@TypeOf(source))) {
         .int => {
             const Source = @TypeOf(source);
+            // Every value fits: a plain widening, with no range check and no error.
+            if (comptime scalar.lossless(Source, Target)) return @intCast(source); // safe: every source value fits the target
             if (comptime std.math.maxInt(Source) > std.math.maxInt(Target)) {
                 if (source > std.math.maxInt(Target)) return error.Overflow;
             }
@@ -21,7 +39,7 @@ pub inline fn cast(comptime Target: type, source: anytype) CastError!Target {
             if (source < std.math.minInt(Target) or source > std.math.maxInt(Target)) return error.Overflow;
             return source;
         },
-        else => @compileError("aegis integer cast requires an integer source"),
+        else => unreachable, // unreachable: `CastResult` rejects every other source
     }
 }
 
@@ -74,7 +92,7 @@ pub fn Checked(comptime Repr: type) type {
             return init(@rem(self.value, rhs));
         }
         pub inline fn shl(self: Self, amount: anytype) ShlError!Self {
-            const n = cast(usize, amount) catch return error.InvalidShift;
+            const n = std.math.cast(usize, amount) orelse return error.InvalidShift;
             if (n >= @bitSizeOf(Repr)) return error.InvalidShift;
             const shift: std.math.Log2Int(Repr) = @intCast(n); // safe: validated representation width
             const wide = @Int(@typeInfo(Repr).int.signedness, @bitSizeOf(Repr) * 2);

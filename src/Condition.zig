@@ -15,6 +15,8 @@ count: usize = 0,
 limit: usize = 65535,
 const Waiter = struct { next: ?*Waiter, notified: std.atomic.Value(u32) = .init(0) };
 pub const WaitError = Io.Cancelable || Io.Timeout.Error || error{WaiterLimit};
+/// What a wait that cancellation cannot interrupt can still end with.
+pub const UncancelableWaitError = Io.Timeout.Error || error{WaiterLimit};
 
 pub fn init() Condition {
     return .{};
@@ -28,6 +30,19 @@ pub fn initLimit(limit: usize) Condition {
 pub fn wait(self: *Condition, io: Io, guard: anytype, timeout: Io.Timeout) WaitError!void {
     if (@hasDecl(@TypeOf(guard.*), "waitCondition")) return guard.waitCondition(self, io, timeout);
     return self.waitMutex(io, &guard.owner.mutex, timeout);
+}
+
+/// `wait` for a cleanup path that must see the state change it waits for: cancellation is blocked for the wait,
+/// so it returns only on a wake, the timeout or the waiter limit, with the guard held as `wait` leaves it. With
+/// no timeout it waits as long as the predicate needs; the signaling side must be sure to come.
+pub fn waitUncancelable(self: *Condition, io: Io, guard: anytype, timeout: Io.Timeout) UncancelableWaitError!void {
+    const before = io.swapCancelProtection(.blocked);
+    defer _ = io.swapCancelProtection(before);
+    return self.wait(io, guard, timeout) catch |err| switch (err) {
+        error.Canceled => unreachable, // unreachable: cancellation is blocked for the wait
+        error.Timeout => error.Timeout,
+        error.WaiterLimit => error.WaiterLimit,
+    };
 }
 
 /// Internal kernel seam. Caller holds this mutex; no value borrow survives the call.

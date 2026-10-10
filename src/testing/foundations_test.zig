@@ -58,7 +58,7 @@ test "A3 ranged operations and failing casts" {
     try t.expectError(error.OutOfRange, (try R.init(5)).shl(2));
     try t.expectError(error.Overflow, aegis.int.cast(u8, @as(u16, 256)));
     try t.expectError(error.Overflow, aegis.int.cast(u64, @as(i64, -1)));
-    try t.expectEqual(@as(i16, 255), try aegis.int.cast(i16, @as(u8, 255)));
+    try t.expectEqual(@as(i16, 255), aegis.int.cast(i16, @as(u8, 255)));
     try t.expectEqual(@as(u8, 255), try aegis.int.cast(u8, 255));
     try t.expectError(error.Overflow, aegis.int.cast(u8, -1));
     try t.expectEqual(@as(i8, 127), (try aegis.int.Saturating(i8).init(-128).div(-1)).raw());
@@ -83,11 +83,11 @@ test "A3 IDs exhaustion and endian encoding" {
 test "A3 units negative rounding range and byte conversion" {
     const D = aegis.units.Duration(.nanosecond, i64);
     try t.expectError(error.Inexact, D.fromRaw(-1001).convert(.microsecond, i64, .exact));
-    try t.expectEqual(@as(i64, -2), (try D.fromRaw(-1001).convert(.microsecond, i64, .down)).raw());
-    try t.expectEqual(@as(i64, -1), (try D.fromRaw(-1001).convert(.microsecond, i64, .up)).raw());
+    try t.expectEqual(@as(i64, -2), D.fromRaw(-1001).convert(.microsecond, i64, .down).raw());
+    try t.expectEqual(@as(i64, -1), D.fromRaw(-1001).convert(.microsecond, i64, .up).raw());
     try t.expectError(error.Overflow, D.fromRaw(-1000).convert(.microsecond, u64, .exact));
     try t.expectError(error.Overflow, aegis.units.Duration(.second, u64).fromRaw(std.math.maxInt(u64)).convert(.nanosecond, u64, .exact));
-    try t.expectEqual(@as(u64, 213503), (try aegis.units.Duration(.nanosecond, u64).fromRaw(std.math.maxInt(u64)).convert(.day, u32, .down)).raw());
+    try t.expectEqual(@as(u64, 213503), aegis.units.Duration(.nanosecond, u64).fromRaw(std.math.maxInt(u64)).convert(.day, u32, .down).raw());
     const B = aegis.units.Bits(u64);
     try t.expectError(error.Inexact, B.fromRaw(9).toBytes());
     try t.expectEqual(@as(u64, 2), (try B.fromRaw(9).toBytesRounded(.up)).raw());
@@ -96,7 +96,7 @@ test "A3 units negative rounding range and byte conversion" {
     try t.expectError(error.Overflow, aegis.units.Bytes(u8).fromRaw(32).toBits());
     const N = aegis.units.Count(struct {}, u8);
     try t.expectError(error.Overflow, N.fromRaw(255).add(N.fromRaw(1)));
-    try t.expectEqual(@as(u16, 255), (try N.fromRaw(255).convert(u16)).raw());
+    try t.expectEqual(@as(u16, 255), N.fromRaw(255).convert(u16).raw());
 }
 
 test "A3 clock domains correspondence and Io adapters" {
@@ -152,8 +152,8 @@ fn wideProperty(_: void, case: *shake.Case) anyerror!void {
     const q = @divFloor(nanos, 1000);
     const r = @mod(nanos, 1000);
     const D = aegis.units.Duration(.nanosecond, i64);
-    try t.expectEqual(q, (try D.fromRaw(nanos).convert(.microsecond, i64, .down)).raw());
-    try t.expectEqual(q + @intFromBool(r != 0), (try D.fromRaw(nanos).convert(.microsecond, i64, .up)).raw());
+    try t.expectEqual(q, D.fromRaw(nanos).convert(.microsecond, i64, .down).raw());
+    try t.expectEqual(q + @intFromBool(r != 0), D.fromRaw(nanos).convert(.microsecond, i64, .up).raw());
     if (r != 0) try t.expectError(error.Inexact, D.fromRaw(nanos).convert(.microsecond, i64, .exact));
     const count = shake.gen.int(case.source, u64);
     const bits = aegis.units.Bits(u64).fromRaw(count);

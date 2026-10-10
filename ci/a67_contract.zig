@@ -58,7 +58,7 @@ pub fn main(init: std.process.Init) !void {
     } else if (std.mem.eql(u8, name, "budget")) {
         var budget = a.bounded.Budget(u8).init(1);
         var reservation = try budget.reserve(1);
-        budget.used = 0; // Deliberate corrupted admission state, isolates all-mode underflow check.
+        budget.taken = 0; // Deliberate corrupted admission state, isolates all-mode underflow check.
         reservation.release();
     } else if (std.mem.eql(u8, name, "shared-overflow")) {
         var owner = try S.create(std.heap.page_allocator, 1);

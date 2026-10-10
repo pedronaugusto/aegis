@@ -93,6 +93,12 @@ pub fn Order(comptime ranks: []const Rank) type {
                     context.require(self, rank);
                     return self.wrap(context, try self.base.acquire(io));
                 }
+                /// `acquireOrdered` for a cleanup path that cannot take an error: cancellation does not
+                /// interrupt the wait, as the base lock's `acquireUncancelable`. The rank check is the same.
+                pub fn acquireOrderedUncancelable(self: *Self, io: std.Io, context: *Context) Capability(LockType.Guard, Context) {
+                    context.require(self, rank);
+                    return self.wrap(context, self.base.acquireUncancelable(io));
+                }
                 pub fn readOrdered(self: *Self, io: std.Io, context: *Context) LockType.AcquireError!Capability(LockType.ReadGuard, Context) {
                     context.require(self, rank);
                     return self.wrap(context, try self.base.read(io));
@@ -100,6 +106,16 @@ pub fn Order(comptime ranks: []const Rank) type {
                 pub fn writeOrdered(self: *Self, io: std.Io, context: *Context) LockType.AcquireError!Capability(LockType.WriteGuard, Context) {
                     context.require(self, rank);
                     return self.wrap(context, try self.base.write(io));
+                }
+                /// As `readOrdered`, uncancelable; only the admission ceiling can still refuse.
+                pub fn readOrderedUncancelable(self: *Self, io: std.Io, context: *Context) LockType.AdmissionError!Capability(LockType.ReadGuard, Context) {
+                    context.require(self, rank);
+                    return self.wrap(context, try self.base.readUncancelable(io));
+                }
+                /// As `writeOrdered`, uncancelable; only the admission ceiling can still refuse.
+                pub fn writeOrderedUncancelable(self: *Self, io: std.Io, context: *Context) LockType.AdmissionError!Capability(LockType.WriteGuard, Context) {
+                    context.require(self, rank);
+                    return self.wrap(context, try self.base.writeUncancelable(io));
                 }
             };
         }

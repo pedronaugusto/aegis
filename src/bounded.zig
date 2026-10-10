@@ -19,6 +19,14 @@ pub fn Array(comptime T: type, comptime N: usize) type {
         pub fn len(self: *const Self) usize {
             return self.used;
         }
+        /// How many it holds as it stands; a full one fails its next append with `Full`.
+        pub fn capacity(_: *const Self) usize {
+            return N;
+        }
+        /// Whether the next append or push would fail with `Full`.
+        pub fn isFull(self: *const Self) bool {
+            return self.used == N;
+        }
         pub fn items(self: *Self) []T {
             return self.storage[0..self.used];
         }
@@ -66,6 +74,14 @@ pub fn Ring(comptime T: type, comptime N: usize) type {
         pub const PopError = error{Empty};
         pub fn len(self: *const Self) usize {
             return self.used;
+        }
+        /// How many it holds as it stands; a full one fails its next append with `Full`.
+        pub fn capacity(_: *const Self) usize {
+            return N;
+        }
+        /// Whether the next append or push would fail with `Full`.
+        pub fn isFull(self: *const Self) bool {
+            return self.used == N;
         }
         fn index(self: *const Self, offset: usize) usize {
             const remaining = N - self.head;
@@ -132,12 +148,20 @@ pub fn Buffer(comptime T: type) type {
         pub fn initBuffer(storage: []T) Self {
             return .{ .storage = storage, .gpa = null, .maximum = storage.len };
         }
-        pub fn initAllocated(gpa: std.mem.Allocator, capacity: usize, maximum: usize) InitError!Self {
-            if (capacity > maximum or maximum > std.math.maxInt(usize) / @max(1, @sizeOf(T))) return error.CapacityExceeded;
-            return .{ .storage = try gpa.alloc(T, capacity), .gpa = gpa, .maximum = maximum };
+        pub fn initAllocated(gpa: std.mem.Allocator, initial: usize, maximum: usize) InitError!Self {
+            if (initial > maximum or maximum > std.math.maxInt(usize) / @max(1, @sizeOf(T))) return error.CapacityExceeded;
+            return .{ .storage = try gpa.alloc(T, initial), .gpa = gpa, .maximum = maximum };
         }
         pub fn len(self: *const Self) usize {
             return self.used;
+        }
+        /// How many it holds as it stands; a full one fails its next append with `Full`.
+        pub fn capacity(self: *const Self) usize {
+            return self.storage.len;
+        }
+        /// Whether the next append or push would fail with `Full`.
+        pub fn isFull(self: *const Self) bool {
+            return self.used == self.storage.len;
         }
         pub fn items(self: *Self) []T {
             return self.storage[0..self.used];
@@ -157,11 +181,11 @@ pub fn Buffer(comptime T: type) type {
             move.into(T, &self.storage[self.used], destination);
         }
         /// OOM leaves all owners and borrows intact; success moves the prefix without cleanup/copy ownership.
-        pub fn reserve(self: *Self, capacity: usize) ReserveError!void {
-            if (capacity > self.maximum) return error.CapacityExceeded;
-            if (capacity <= self.storage.len) return;
+        pub fn reserve(self: *Self, wanted: usize) ReserveError!void {
+            if (wanted > self.maximum) return error.CapacityExceeded;
+            if (wanted <= self.storage.len) return;
             const gpa = self.gpa orelse return error.CallerBacked;
-            const storage = try gpa.alloc(T, capacity);
+            const storage = try gpa.alloc(T, wanted);
             for (self.items(), storage[0..self.used]) |*source, *destination| move.into(T, source, destination);
             gpa.free(self.storage);
             self.storage = storage;
@@ -196,12 +220,20 @@ pub fn RingBuffer(comptime T: type) type {
             if (storage.len == 0) return error.InvalidCapacity;
             return .{ .storage = storage, .gpa = null, .maximum = storage.len };
         }
-        pub fn initAllocated(gpa: std.mem.Allocator, capacity: usize, maximum: usize) InitError!Self {
-            if (capacity == 0 or capacity > maximum or maximum > std.math.maxInt(usize) / @max(1, @sizeOf(T))) return error.InvalidCapacity;
-            return .{ .storage = try gpa.alloc(T, capacity), .gpa = gpa, .maximum = maximum };
+        pub fn initAllocated(gpa: std.mem.Allocator, initial: usize, maximum: usize) InitError!Self {
+            if (initial == 0 or initial > maximum or maximum > std.math.maxInt(usize) / @max(1, @sizeOf(T))) return error.InvalidCapacity;
+            return .{ .storage = try gpa.alloc(T, initial), .gpa = gpa, .maximum = maximum };
         }
         pub fn len(self: *const Self) usize {
             return self.used;
+        }
+        /// How many it holds as it stands; a full one fails its next append with `Full`.
+        pub fn capacity(self: *const Self) usize {
+            return self.storage.len;
+        }
+        /// Whether the next append or push would fail with `Full`.
+        pub fn isFull(self: *const Self) bool {
+            return self.used == self.storage.len;
         }
         fn index(self: *const Self, offset: usize) usize {
             const remaining = self.storage.len - self.head;
@@ -230,11 +262,11 @@ pub fn RingBuffer(comptime T: type) type {
             return full;
         }
         /// OOM preserves owners, cursors and borrows. Successful reserve linearizes FIFO storage.
-        pub fn reserve(self: *Self, capacity: usize) ReserveError!void {
-            if (capacity > self.maximum) return error.CapacityExceeded;
-            if (capacity <= self.storage.len) return;
+        pub fn reserve(self: *Self, wanted: usize) ReserveError!void {
+            if (wanted > self.maximum) return error.CapacityExceeded;
+            if (wanted <= self.storage.len) return;
             const gpa = self.gpa orelse return error.CallerBacked;
-            const storage = try gpa.alloc(T, capacity);
+            const storage = try gpa.alloc(T, wanted);
             for (0..self.used) |i| move.into(T, &self.storage[self.index(i)], &storage[i]);
             gpa.free(self.storage);
             self.storage = storage;
@@ -291,26 +323,45 @@ pub fn Budget(comptime Repr: type) type {
     return struct {
         const Self = @This();
         /// Private: finite ceiling.
-        maximum: Repr,
-        /// Private: outstanding reservations plus permanently consumed work.
-        used: Repr = 0,
+        ceiling: Repr,
+        /// Private: outstanding reservations plus permanently consumed work; never above the ceiling.
+        taken: Repr = 0,
         pub const ReserveError = error{LimitExceeded};
-        pub fn init(maximum: Repr) Self {
-            return .{ .maximum = maximum };
+        pub fn init(maximum_amount: Repr) Self {
+            return .{ .ceiling = maximum_amount };
         }
         fn charge(self: *Self, amount: Repr) ReserveError!void {
-            if (amount > self.maximum - self.used) return error.LimitExceeded;
-            self.used += amount;
+            if (amount > self.ceiling - self.taken) return error.LimitExceeded;
+            self.taken += amount;
         }
         pub fn reserve(self: *Self, amount: Repr) ReserveError!Reservation {
             try self.charge(amount);
             return .{ .budget = self, .amount = amount };
         }
+        /// An ordinary reservation that leaves at least `kept` unreserved. A path that must still be admitted
+        /// when the ordinary ones have filled the budget, such as the cancellation or termination of work
+        /// already admitted, takes plain `reserve` and finds the room kept for it. The budget never holds more
+        /// than its maximum, so the total stays bounded; the kept amount is part of that maximum.
+        pub fn reserveKeeping(self: *Self, amount: Repr, kept: Repr) ReserveError!Reservation {
+            const free = self.ceiling - self.taken;
+            if (kept > free or amount > free - kept) return error.LimitExceeded;
+            self.taken += amount;
+            return .{ .budget = self, .amount = amount };
+        }
         pub fn consume(self: *Self, amount: Repr) ReserveError!void {
             try self.charge(amount);
         }
+        /// The configured maximum.
+        pub fn maximum(self: *const Self) Repr {
+            return self.ceiling;
+        }
+        /// What reservations hold and consumption has used.
+        pub fn charged(self: *const Self) Repr {
+            return self.taken;
+        }
+        /// What a plain reservation can still take.
         pub fn remaining(self: *const Self) Repr {
-            return self.maximum - self.used;
+            return self.ceiling - self.taken;
         }
         pub const Reservation = struct {
             /// Private: stable borrowed budget.
@@ -324,8 +375,8 @@ pub fn Budget(comptime Repr: type) type {
                     std.debug.assert(self.live);
                     self.live = false;
                 }
-                if (self.amount > self.budget.used) @panic("budget reservation underflow");
-                self.budget.used -= self.amount;
+                if (self.amount > self.budget.taken) @panic("budget reservation underflow");
+                self.budget.taken -= self.amount;
             }
             pub fn moveInto(self: *Reservation, destination: *Reservation) void {
                 if (diagnostics) {

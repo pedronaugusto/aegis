@@ -5,7 +5,7 @@ const aegis = @import("aegis");
 const Io = std.Io;
 const samples = 16;
 const iterations = 5_000_000;
-const names = [_][]const u8{ "try_acquire", "lazy_ready", "lazy_cold", "shared_churn", "shared_churn_4" };
+const names = [_][]const u8{ "try_acquire", "lazy_ready", "lazy_cold", "shared_churn", "shared_churn_4", "atomic_add", "atomic_add_4", "atomic_add_vs_hardware", "atomic_add_vs_hardware_4" };
 const Sample = struct { baseline: f64, wrapper: f64 };
 
 fn Churn(comptime wrapped: bool) type {
@@ -21,6 +21,25 @@ fn Churn(comptime wrapped: bool) type {
     };
 }
 
+/// A counter fed by several tasks. The "vs_hardware" rows put the checked add on the wrapper side against the plain
+/// wrapping instruction, which is what the checked form costs; the others pair the checked add with the
+/// hand-written compare-and-swap loop that does the same.
+fn Adding(comptime wrapped: bool, comptime hardware: bool) type {
+    return struct {
+        cell: gaps.AtomicCell(wrapped),
+        fn add(self: *@This()) void {
+            if (hardware and !wrapped) {
+                std.mem.doNotOptimizeAway(gaps.atomicAddWrapping(false, &self.cell, 1));
+            } else {
+                std.mem.doNotOptimizeAway(gaps.atomicAdd(wrapped, &self.cell, 1) catch unreachable); // unreachable: the count stays far below the maximum
+            }
+        }
+        fn worker(self: *@This(), count: usize) void {
+            for (0..count) |_| self.add();
+        }
+    };
+}
+
 noinline fn measure(comptime wrapped: bool, comptime name: []const u8, io: Io, count: usize) !f64 {
     var accumulator: u64 = 0;
     var owner: gaps.Owner(wrapped) = .{ .data = 0 };
@@ -29,18 +48,24 @@ noinline fn measure(comptime wrapped: bool, comptime name: []const u8, io: Io, c
     var churn: Churn(wrapped) = .{ .handle = if (wrapped) .{ .block = @ptrCast(&block) } else .{ .block = &block } }; // safe: Handle's block is the same one-pointer layout as the hand-written block, asserted by the parity gate
     block.count.store(1 << 20, .monotonic);
     if (comptime std.mem.eql(u8, name, "lazy_ready")) _ = try gaps.lazyCold(wrapped, io, &lazy, 5);
-    const threads: usize = if (comptime std.mem.eql(u8, name, "shared_churn_4")) 4 else 1;
+    const hardware = comptime std.mem.indexOf(u8, name, "vs_hardware") != null;
+    var adding: Adding(wrapped, hardware) = .{ .cell = if (wrapped) .init(.fromRaw(0)) else .init(0) };
+    const threads: usize = if (comptime std.mem.endsWith(u8, name, "_4")) 4 else 1;
     const start = Io.Clock.awake.now(io);
     if (threads > 1) {
         var group: Io.Group = .init;
         defer group.cancel(io);
-        for (0..threads) |_| try group.concurrent(io, Churn(wrapped).worker, .{ &churn, count });
+        if (comptime std.mem.startsWith(u8, name, "atomic")) {
+            for (0..threads) |_| try group.concurrent(io, Adding(wrapped, hardware).worker, .{ &adding, count });
+        } else for (0..threads) |_| try group.concurrent(io, Churn(wrapped).worker, .{ &churn, count });
         try group.await(io);
     } else for (0..count) |i| {
         if (comptime std.mem.eql(u8, name, "try_acquire")) {
             accumulator +%= @intFromBool(gaps.tryAcquire(wrapped, &owner));
         } else if (comptime std.mem.eql(u8, name, "lazy_ready")) {
             accumulator +%= (gaps.lazyReady(wrapped, &lazy)).?.*;
+        } else if (comptime std.mem.startsWith(u8, name, "atomic")) {
+            adding.add();
         } else if (comptime std.mem.eql(u8, name, "lazy_cold")) {
             lazy.state.store(.empty, .monotonic);
             accumulator +%= (try gaps.lazyCold(wrapped, io, &lazy, i + 1)).*;
@@ -58,7 +83,7 @@ pub fn main(init: std.process.Init) !void {
     var out = std.Io.File.stdout().writer(init.io, &buffer);
     const writer = &out.interface;
     inline for (names) |name| {
-        const rounds: usize = if (comptime std.mem.eql(u8, name, "shared_churn_4")) iterations / 10 else iterations;
+        const rounds: usize = if (comptime std.mem.endsWith(u8, name, "_4")) iterations / 10 else iterations;
         if (smoke) {
             _ = try measure(false, name, init.io, 2);
             _ = try measure(true, name, init.io, 2);

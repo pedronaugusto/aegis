@@ -82,7 +82,7 @@ pub fn operation(comptime name: []const u8, comptime wrapped: bool, x: u64, y: u
     }
     if (comptime std.mem.eql(u8, name, "rounding")) {
         const sx: i64 = @bitCast(x); // safe: every input bit pattern denotes an i64
-        if (wrapped) return @bitCast((a.units.Duration(.nanosecond, i64).fromRaw(sx).convert(.microsecond, i64, .down) catch return 0).raw()); // safe: preserve signed representation
+        if (wrapped) return @bitCast(a.units.Duration(.nanosecond, i64).fromRaw(sx).convert(.microsecond, i64, .down).raw()); // safe: preserve signed representation
         return @bitCast(@divFloor(sx, 1000)); // safe: preserve signed representation
     }
     if (comptime std.mem.eql(u8, name, "instant")) {

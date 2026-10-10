@@ -2,6 +2,7 @@
 const std = @import("std");
 const a = @import("aegis");
 const Io = std.Io;
+const base = @import("a67.zig");
 
 /// The hand-written spin owner: a lock beside its data.
 pub const DirectSpin = struct { lock: std.atomic.Value(bool) = .init(false), data: usize };
@@ -246,4 +247,128 @@ pub fn idDistance(comptime wrapped: bool, x: u64, y: u64) error{Backwards}!u64 {
     if (wrapped) return (try Seq64.fromRaw(x).distanceTo(Seq64.fromRaw(y))).raw();
     if (y < x) return error.Backwards;
     return y - x;
+}
+
+/// A widening cast cannot fail, so it is the value and nothing else.
+pub fn castWiden(comptime wrapped: bool, x: u32) u64 {
+    if (wrapped) return a.int.cast(u64, x);
+    return x;
+}
+/// Into usize from 32 bits cannot fail on any supported target.
+pub fn castUsize(comptime wrapped: bool, x: u32) usize {
+    if (wrapped) return a.int.cast(usize, x);
+    return x;
+}
+pub fn countConvert(comptime wrapped: bool, x: u16) u32 {
+    if (wrapped) return a.units.Count(Tag, u16).fromRaw(x).convert(u32).raw();
+    return x;
+}
+/// Milliseconds of an i32 into nanoseconds of an i64 always fit: no range check.
+pub fn durationWiden(comptime wrapped: bool, x: i32) i64 {
+    if (wrapped) return a.units.Duration(.millisecond, i32).fromRaw(x).convert(.nanosecond, i64, .exact).raw();
+    return @as(i64, x) * 1_000_000;
+}
+/// Whole days of a u64 nanosecond count always fit a u32: a division and a narrowing, no range check.
+pub fn durationCoarse(comptime wrapped: bool, x: u64) u32 {
+    if (wrapped) return a.units.Duration(.nanosecond, u64).fromRaw(x).convert(.day, u32, .down).raw();
+    return @truncate(x / 86_400_000_000_000);
+}
+
+pub fn bufferCapacity(comptime wrapped: bool, owner: if (wrapped) *const a.bounded.Buffer(u64) else *const base.DirectBuffer) usize {
+    if (wrapped) return owner.capacity();
+    return owner.storage.len;
+}
+pub fn bufferFull(comptime wrapped: bool, owner: if (wrapped) *const a.bounded.Buffer(u64) else *const base.DirectBuffer) bool {
+    if (wrapped) return owner.isFull();
+    return owner.used == owner.storage.len;
+}
+/// An ordinary admission that keeps room for the control path; the reservation it grants is dropped unreleased,
+/// as the hand-written count is.
+pub fn budgetKeeping(comptime wrapped: bool, owner: if (wrapped) *a.bounded.Budget(u64) else *base.DirectBudget, amount: u64, kept: u64) bool {
+    if (wrapped) {
+        _ = owner.reserveKeeping(amount, kept) catch return false;
+        return true;
+    }
+    const free = owner.maximum - owner.used;
+    if (kept > free or amount > free - kept) return false;
+    owner.used += amount;
+    return true;
+}
+pub fn budgetCharged(comptime wrapped: bool, owner: if (wrapped) *const a.bounded.Budget(u64) else *const base.DirectBudget) u64 {
+    if (wrapped) return owner.charged() +% owner.maximum();
+    return owner.used +% owner.maximum;
+}
+pub fn orderedUncancelable(comptime wrapped: bool, io: *const Io, owner: if (wrapped) *base.Ordered else *base.DirectMutex) u64 {
+    if (wrapped) {
+        var task: base.Policy.Context = .{};
+        var guard = owner.acquireOrderedUncancelable(io.*, &task);
+        defer guard.deinit(io.*);
+        guard.value().* +%= 1;
+        return guard.value().*;
+    }
+    owner.mutex.lockUncancelable(io.*);
+    defer owner.mutex.unlock(io.*);
+    owner.data +%= 1;
+    return owner.data;
+}
+pub fn waitUncancelable(comptime wrapped: bool, io: *const Io, changed: if (wrapped) *a.Condition else *base.DirectCondition, owner: if (wrapped) *a.BlockingGuarded(u64) else *base.DirectMutex, timeout: Io.Timeout) a.Condition.UncancelableWaitError!u64 {
+    if (wrapped) {
+        var guard = owner.acquireUncancelable(io.*);
+        defer guard.deinit(io.*);
+        try changed.waitUncancelable(io.*, &guard, timeout);
+        return guard.value().*;
+    }
+    owner.mutex.lockUncancelable(io.*);
+    defer owner.mutex.unlock(io.*);
+    try directWaitUncancelable(io.*, changed, &owner.mutex, timeout);
+    return owner.data;
+}
+/// The hand-written wait that cancellation cannot interrupt: the same blocked protection around the same kernel.
+fn directWaitUncancelable(io: Io, changed: *base.DirectCondition, mutex: *Io.Mutex, timeout: Io.Timeout) a.Condition.UncancelableWaitError!void {
+    const before = io.swapCancelProtection(.blocked);
+    defer _ = io.swapCancelProtection(before);
+    return changed.waitMutex(io, mutex, timeout) catch |err| switch (err) {
+        error.Canceled => unreachable, // unreachable: cancellation is blocked for the wait
+        error.Timeout => error.Timeout,
+        error.WaiterLimit => error.WaiterLimit,
+    };
+}
+
+pub const Hits = a.units.Count(Tag, u32);
+pub fn AtomicCell(comptime wrapped: bool) type {
+    return if (wrapped) a.Atomic(Hits) else std.atomic.Value(u32);
+}
+pub fn atomicLoad(comptime wrapped: bool, cell: *const AtomicCell(wrapped)) u32 {
+    if (wrapped) return cell.load(.acquire).raw();
+    return cell.load(.acquire);
+}
+pub fn atomicStore(comptime wrapped: bool, cell: *AtomicCell(wrapped), value: u32) void {
+    if (wrapped) return cell.store(.fromRaw(value), .release);
+    cell.store(value, .release);
+}
+pub fn atomicSwap(comptime wrapped: bool, cell: *AtomicCell(wrapped), value: u32) u32 {
+    if (wrapped) return cell.swap(.fromRaw(value), .acq_rel).raw();
+    return cell.swap(value, .acq_rel);
+}
+pub fn atomicCompareExchange(comptime wrapped: bool, cell: *AtomicCell(wrapped), expected: u32, value: u32) bool {
+    if (wrapped) return cell.cmpxchgStrong(.fromRaw(expected), .fromRaw(value), .acq_rel, .acquire) == null;
+    return cell.cmpxchgStrong(expected, value, .acq_rel, .acquire) == null;
+}
+pub fn atomicMax(comptime wrapped: bool, cell: *AtomicCell(wrapped), value: u32) u32 {
+    if (wrapped) return cell.fetchMax(.fromRaw(value), .monotonic).raw();
+    return cell.fetchMax(value, .monotonic);
+}
+pub fn atomicAddWrapping(comptime wrapped: bool, cell: *AtomicCell(wrapped), value: u32) u32 {
+    if (wrapped) return cell.fetchAddWrapping(.fromRaw(value), .monotonic).raw();
+    return cell.fetchAdd(value, .monotonic);
+}
+/// The checked add is a weak compare-and-swap loop in both, with the overflow answered before anything is written.
+pub fn atomicAdd(comptime wrapped: bool, cell: *AtomicCell(wrapped), value: u32) error{ Overflow, Underflow }!u32 {
+    if (wrapped) return (try cell.fetchAdd(.fromRaw(value), .acq_rel)).raw();
+    var seen = cell.load(.monotonic);
+    while (true) {
+        const sum = @addWithOverflow(seen, value);
+        if (sum[1] != 0) return error.Overflow;
+        seen = cell.cmpxchgWeak(seen, sum[0], .acq_rel, .monotonic) orelse return seen;
+    }
 }

@@ -47,6 +47,11 @@ fn Ratio(comptime numerator: u64, comptime denominator: u64) type {
     };
 }
 
+/// `ints.cast` as an error union whatever the ranges, for the generic scaling kernel below.
+inline fn fallible(comptime Target: type, value: anytype) ints.CastError!Target {
+    return ints.cast(Target, value);
+}
+
 // Wide exact intermediate avoids falsely rejecting a representable quotient.
 // Every accepted scale is u64; input bits + 65 includes product and sign.
 inline fn scaled(comptime Target: type, comptime numerator: u64, comptime denominator: u64, value: anytype, rounding: Rounding) ScaleError!Target {
@@ -59,7 +64,7 @@ inline fn scaled(comptime Target: type, comptime numerator: u64, comptime denomi
     const n = Ratio(numerator, denominator).n;
     const d = Ratio(numerator, denominator).d;
     if (comptime d == 1 and n <= std.math.maxInt(Target)) {
-        const input = try ints.cast(Target, value);
+        const input = try fallible(Target, value);
         const product = @mulWithOverflow(input, @as(Target, n));
         if (product[1] != 0) return error.Overflow;
         return product[0];
@@ -74,7 +79,7 @@ inline fn scaled(comptime Target: type, comptime numerator: u64, comptime denomi
             .down => quotient,
             .up => quotient + @intFromBool(remainder != 0), // remainder implies divisor > 1, so quotient has room
         };
-        return ints.cast(Target, result);
+        return fallible(Target, result);
     }
 
     const wide = @Int(.signed, @bitSizeOf(Source) + 65);
@@ -85,7 +90,7 @@ inline fn scaled(comptime Target: type, comptime numerator: u64, comptime denomi
         .down => @divFloor(product, d),
         .up => @divFloor(product, d) + @intFromBool(remainder != 0),
     };
-    return ints.cast(Target, result);
+    return fallible(Target, result);
 }
 
 /// Whether every `Source` value scaled by numerator/denominator fits `Target` under any rounding,
@@ -94,16 +99,25 @@ fn fits(comptime Source: type, comptime Target: type, comptime numerator: u64, c
     if (@typeInfo(Target).int.signedness == .unsigned and @typeInfo(Source).int.signedness == .signed) return false;
     const n: comptime_int = Ratio(numerator, denominator).n;
     const d: comptime_int = Ratio(numerator, denominator).d;
-    const low = @divFloor(std.math.minInt(Source) * n, d);
-    const high = -@divFloor(-(std.math.maxInt(Source) * n), d);
-    return low >= std.math.minInt(Target) and high <= std.math.maxInt(Target);
+    if (Source == Target and n == 1 and d == 1) return true;
+    // usize and isize are the widest as a source and the narrowest as a target that any supported target has.
+    const source_min = if (Source == isize) std.math.minInt(i64) else std.math.minInt(Source);
+    const source_max = if (Source == usize) std.math.maxInt(u64) else if (Source == isize) std.math.maxInt(i64) else std.math.maxInt(Source);
+    const target_min = if (Target == isize) std.math.minInt(i32) else std.math.minInt(Target);
+    const target_max = if (Target == usize) std.math.maxInt(u32) else if (Target == isize) std.math.maxInt(i32) else std.math.maxInt(Target);
+    const low = @divFloor(source_min * n, d);
+    const high = -@divFloor(-(source_max * n), d);
+    return low >= target_min and high <= target_max;
 }
 
 /// What converting a `Source` to `Target` by numerator/denominator can fail with, decided at compile
 /// time: `Target` itself when every value converts exactly, otherwise only the errors that can occur.
-fn Converted(comptime Source: type, comptime Target: type, comptime numerator: u64, comptime denominator: u64) type {
+fn Converted(comptime Source: type, comptime Target: type, comptime numerator: u64, comptime denominator: u64, comptime rounding: Rounding) type {
+    // A caller's inline loop over many scales and widths shares one evaluation; each scale is reduced once.
+    @setEvalBranchQuota(20_000);
     const overflow = !fits(Source, Target, numerator, denominator);
-    const inexact = Ratio(numerator, denominator).d != 1;
+    // Only an exact conversion can be inexact: rounding down or up always has an answer.
+    const inexact = Ratio(numerator, denominator).d != 1 and rounding == .exact;
     if (!overflow and !inexact) return Target;
     const Overflow = if (overflow) error{Overflow} else error{};
     const Inexact = if (inexact) error{Inexact} else error{};
@@ -126,14 +140,16 @@ fn Wrapped(comptime Err: type, comptime Value: type) type {
 /// `scaled` with its result narrowed to what the ranges allow: no error branch and no range check
 /// where the source always fits, which is what lets a std timestamp widen into a wide enough
 /// representation for free. A conversion that can lose data keeps its checks.
-inline fn scaledFor(comptime Target: type, comptime numerator: u64, comptime denominator: u64, value: anytype, rounding: Rounding) Converted(@TypeOf(value), Target, numerator, denominator) {
+inline fn scaledFor(comptime Target: type, comptime numerator: u64, comptime denominator: u64, comptime rounding: Rounding, value: anytype) Converted(@TypeOf(value), Target, numerator, denominator, rounding) {
     const Source = @TypeOf(value);
     const n = Ratio(numerator, denominator).n;
     const d = Ratio(numerator, denominator).d;
     if (comptime fits(Source, Target, numerator, denominator)) {
         // The same scale is a widening or the identity: the value itself, with no wide product to narrow again.
         if (comptime n == 1 and d == 1) return value;
-        const wide = @Int(.signed, @bitSizeOf(Source) + 65);
+        // The wide type has the target's signedness, so the narrowing is a plain truncate: an unsigned target
+        // only ever takes an unsigned source here.
+        const wide = @Int(@typeInfo(Target).int.signedness, @bitSizeOf(Source) + 65);
         const product = @as(wide, value) * n;
         if (comptime d == 1) return @truncate(product);
         const remainder = @mod(product, d);
@@ -145,7 +161,7 @@ inline fn scaledFor(comptime Target: type, comptime numerator: u64, comptime den
     }
     return scaled(Target, numerator, denominator, value, rounding) catch |err| switch (err) {
         error.Overflow => error.Overflow,
-        error.Inexact => if (comptime d == 1) unreachable else error.Inexact, // unreachable: a whole-number scale is never inexact
+        error.Inexact => if (comptime d == 1 or rounding != .exact) unreachable else error.Inexact, // unreachable: only an exact conversion by a fraction is inexact
     };
 }
 
@@ -182,8 +198,11 @@ pub fn Count(comptime Tag: type, comptime Repr: type) type {
         pub inline fn mul(self: Self, rhs: Repr) MulError!Self {
             return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).mul(rhs)).raw());
         }
-        pub inline fn convert(self: Self, comptime Target: type) ConvertError!Count(Tag, Target) {
-            return Count(Tag, Target).fromRaw(try ints.cast(Target, @backingInt(self)));
+        /// No error where every value of this representation fits `Target` on every supported target.
+        pub inline fn convert(self: Self, comptime Target: type) ints.Lifted(Repr, Target, Count(Tag, Target)) {
+            const converted = ints.cast(Target, @backingInt(self));
+            if (comptime scalar.lossless(Repr, Target)) return Count(Tag, Target).fromRaw(converted);
+            return Count(Tag, Target).fromRaw(try converted);
         }
         pub inline fn encode(self: Self, endian: std.builtin.Endian) scalar.Bytes(Repr) {
             return scalar.encode(Repr, @backingInt(self), endian);
@@ -204,7 +223,7 @@ pub fn Bytes(comptime Repr: type) type {
         pub const AddError = ints.Checked(Repr).AddError;
         pub const SubError = ints.Checked(Repr).SubError;
         pub const MulError = ints.Checked(Repr).MulError;
-        pub const ConvertError = error{ Overflow, Inexact };
+        pub const ConvertError = ints.CastError;
         pub inline fn fromRaw(value: Repr) Self {
             return @fromBackingInt(value);
         }
@@ -226,10 +245,13 @@ pub fn Bytes(comptime Repr: type) type {
         pub inline fn mul(self: Self, rhs: Repr) MulError!Self {
             return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).mul(rhs)).raw());
         }
-        pub inline fn convert(self: Self, comptime Target: type) ConvertError!Bytes(Target) {
-            return Bytes(Target).fromRaw(try ints.cast(Target, @backingInt(self)));
+        /// No error where every value of this representation fits `Target` on every supported target.
+        pub inline fn convert(self: Self, comptime Target: type) ints.Lifted(Repr, Target, Bytes(Target)) {
+            const converted = ints.cast(Target, @backingInt(self));
+            if (comptime scalar.lossless(Repr, Target)) return Bytes(Target).fromRaw(converted);
+            return Bytes(Target).fromRaw(try converted);
         }
-        pub const ToBitsError = ConvertError;
+        pub const ToBitsError = error{ Overflow, Inexact };
         pub inline fn toBits(self: Self) ToBitsError!Bits(Repr) {
             return Bits(Repr).fromRaw(try scaled(Repr, 8, 1, @backingInt(self), .exact));
         }
@@ -252,7 +274,7 @@ pub fn Bits(comptime Repr: type) type {
         pub const AddError = ints.Checked(Repr).AddError;
         pub const SubError = ints.Checked(Repr).SubError;
         pub const MulError = ints.Checked(Repr).MulError;
-        pub const ConvertError = error{ Overflow, Inexact };
+        pub const ConvertError = ints.CastError;
         pub inline fn fromRaw(value: Repr) Self {
             return @fromBackingInt(value);
         }
@@ -274,11 +296,14 @@ pub fn Bits(comptime Repr: type) type {
         pub inline fn mul(self: Self, rhs: Repr) MulError!Self {
             return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).mul(rhs)).raw());
         }
-        pub inline fn convert(self: Self, comptime Target: type) ConvertError!Bits(Target) {
-            return Bits(Target).fromRaw(try ints.cast(Target, @backingInt(self)));
+        /// No error where every value of this representation fits `Target` on every supported target.
+        pub inline fn convert(self: Self, comptime Target: type) ints.Lifted(Repr, Target, Bits(Target)) {
+            const converted = ints.cast(Target, @backingInt(self));
+            if (comptime scalar.lossless(Repr, Target)) return Bits(Target).fromRaw(converted);
+            return Bits(Target).fromRaw(try converted);
         }
-        pub const ToBytesError = ConvertError;
-        pub const ToBytesRoundedError = ConvertError;
+        pub const ToBytesError = error{ Overflow, Inexact };
+        pub const ToBytesRoundedError = ToBytesError;
         pub inline fn toBytes(self: Self) ToBytesError!Bytes(Repr) {
             return Bytes(Repr).fromRaw(try scaled(Repr, 1, 8, @backingInt(self), .exact));
         }
@@ -307,10 +332,10 @@ pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
         pub const ConvertError = error{ Overflow, Inexact };
         /// Empty when every duration widens into std's nanoseconds, which is the case for any unit of an
         /// `i64` up to seconds and for every unit of 32-bit and narrower representations.
-        pub const ToIoDurationError = ErrorOf(Converted(Repr, i96, unit.nanoseconds(), 1));
+        pub const ToIoDurationError = ErrorOf(Converted(Repr, i96, unit.nanoseconds(), 1, .exact));
         /// Empty when std's whole nanosecond range fits this representation and unit exactly: a nanosecond
         /// `i128`. Otherwise Overflow for a narrowing and Inexact for a unit coarser than a nanosecond.
-        pub const FromIoDurationError = ErrorOf(Converted(i96, Repr, 1, unit.nanoseconds()));
+        pub const FromIoDurationError = ErrorOf(Converted(i96, Repr, 1, unit.nanoseconds(), .exact));
         pub inline fn fromRaw(value: Repr) Self {
             return @fromBackingInt(value);
         }
@@ -342,19 +367,24 @@ pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
         pub inline fn saturatingMul(self: Self, rhs: Repr) Self {
             return fromRaw(@backingInt(self) *| rhs);
         }
-        pub inline fn convert(self: Self, comptime target: Unit, comptime Target: type, rounding: Rounding) ConvertError!Duration(target, Target) {
-            return Duration(target, Target).fromRaw(try scaled(Target, unit.nanoseconds(), target.nanoseconds(), @backingInt(self), rounding));
+        /// The same value in another unit and representation. It carries no error where every value of this
+        /// representation converts exactly, no range check where none can fail, and only the errors that can
+        /// occur otherwise (`ConvertError` is the widest set).
+        pub inline fn convert(self: Self, comptime target: Unit, comptime Target: type, comptime rounding: Rounding) Wrapped(ErrorOf(Converted(Repr, Target, unit.nanoseconds(), target.nanoseconds(), rounding)), Duration(target, Target)) {
+            const converted = scaledFor(Target, unit.nanoseconds(), target.nanoseconds(), rounding, @backingInt(self));
+            if (comptime ErrorOf(Converted(Repr, Target, unit.nanoseconds(), target.nanoseconds(), rounding)) == error{}) return Duration(target, Target).fromRaw(converted);
+            return Duration(target, Target).fromRaw(try converted);
         }
         /// A failure-free value when `ToIoDurationError` is empty: no error, no range check.
         pub inline fn toIoDuration(self: Self) Wrapped(ToIoDurationError, std.Io.Duration) {
-            const nanoseconds = scaledFor(i96, unit.nanoseconds(), 1, @backingInt(self), .exact);
+            const nanoseconds = scaledFor(i96, unit.nanoseconds(), 1, .exact, @backingInt(self));
             if (comptime ToIoDurationError == error{}) return .fromNanoseconds(nanoseconds);
             return .fromNanoseconds(try nanoseconds);
         }
         /// A failure-free value when `FromIoDurationError` is empty: no error, no range check.
-        pub inline fn fromIoDuration(value: std.Io.Duration, rounding: Rounding) Wrapped(FromIoDurationError, Self) {
-            const converted = scaledFor(Repr, 1, unit.nanoseconds(), value.nanoseconds, rounding);
-            if (comptime FromIoDurationError == error{}) return fromRaw(converted);
+        pub inline fn fromIoDuration(value: std.Io.Duration, comptime rounding: Rounding) Wrapped(ErrorOf(Converted(i96, Repr, 1, unit.nanoseconds(), rounding)), Self) {
+            const converted = scaledFor(Repr, 1, unit.nanoseconds(), rounding, value.nanoseconds);
+            if (comptime ErrorOf(Converted(i96, Repr, 1, unit.nanoseconds(), rounding)) == error{}) return fromRaw(converted);
             return fromRaw(try converted);
         }
         pub inline fn encode(self: Self, endian: std.builtin.Endian) scalar.Bytes(Repr) {
@@ -384,9 +414,9 @@ pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: t
         pub const ConvertError = error{ Overflow, Inexact };
         pub const CorrespondError = AddError || SubError;
         /// Empty when every instant widens into std's nanoseconds, as for a `Duration` of this unit.
-        pub const ToTimestampError = ErrorOf(Converted(Repr, i96, unit.nanoseconds(), 1));
+        pub const ToTimestampError = ErrorOf(Converted(Repr, i96, unit.nanoseconds(), 1, .exact));
         /// Empty when std's whole nanosecond range fits this representation and unit exactly.
-        pub const FromTimestampError = ErrorOf(Converted(i96, Repr, 1, unit.nanoseconds()));
+        pub const FromTimestampError = ErrorOf(Converted(i96, Repr, 1, unit.nanoseconds(), .exact));
         pub const ToIoTimestampError = ToTimestampError;
         pub const FromIoTimestampError = FromTimestampError || error{ClockMismatch};
         pub inline fn fromRaw(value: Repr) Self {
@@ -423,8 +453,10 @@ pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: t
         pub inline fn saturatingDurationTo(self: Self, other: Self) Duration(unit, Repr) {
             return Duration(unit, Repr).fromRaw(@backingInt(other) -| @backingInt(self));
         }
-        pub inline fn convert(self: Self, comptime target: Unit, comptime Target: type, rounding: Rounding) ConvertError!Instant(ClockTag, target, Target) {
-            return Instant(ClockTag, target, Target).fromRaw(try scaled(Target, unit.nanoseconds(), target.nanoseconds(), @backingInt(self), rounding));
+        pub inline fn convert(self: Self, comptime target: Unit, comptime Target: type, comptime rounding: Rounding) Wrapped(ErrorOf(Converted(Repr, Target, unit.nanoseconds(), target.nanoseconds(), rounding)), Instant(ClockTag, target, Target)) {
+            const converted = scaledFor(Target, unit.nanoseconds(), target.nanoseconds(), rounding, @backingInt(self));
+            if (comptime ErrorOf(Converted(Repr, Target, unit.nanoseconds(), target.nanoseconds(), rounding)) == error{}) return Instant(ClockTag, target, Target).fromRaw(converted);
+            return Instant(ClockTag, target, Target).fromRaw(try converted);
         }
         /// Caller supplies simultaneous samples; trust/uncertainty of sampling remains theirs.
         /// Convert scale/representation explicitly before providing the correspondence.
@@ -437,15 +469,15 @@ pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: t
         /// The instant as std's clock-free timestamp, which is what `Io.Clock.now` returns; the clock is this
         /// type's. No error and no range check when `ToTimestampError` is empty.
         pub inline fn toTimestamp(self: Self) Wrapped(ToTimestampError, std.Io.Timestamp) {
-            const nanoseconds = scaledFor(i96, unit.nanoseconds(), 1, @backingInt(self), .exact);
+            const nanoseconds = scaledFor(i96, unit.nanoseconds(), 1, .exact, @backingInt(self));
             if (comptime ToTimestampError == error{}) return .fromNanoseconds(nanoseconds);
             return .fromNanoseconds(try nanoseconds);
         }
         /// An instant of this type's clock from the timestamp `Io.Clock.now` returned, with no clock to
         /// check. No error and no range check when `FromTimestampError` is empty.
-        pub inline fn fromTimestamp(value: std.Io.Timestamp, rounding: Rounding) Wrapped(FromTimestampError, Self) {
-            const converted = scaledFor(Repr, 1, unit.nanoseconds(), value.nanoseconds, rounding);
-            if (comptime FromTimestampError == error{}) return fromRaw(converted);
+        pub inline fn fromTimestamp(value: std.Io.Timestamp, comptime rounding: Rounding) Wrapped(ErrorOf(Converted(i96, Repr, 1, unit.nanoseconds(), rounding)), Self) {
+            const converted = scaledFor(Repr, 1, unit.nanoseconds(), rounding, value.nanoseconds);
+            if (comptime ErrorOf(Converted(i96, Repr, 1, unit.nanoseconds(), rounding)) == error{}) return fromRaw(converted);
             return fromRaw(try converted);
         }
         /// The instant as a timestamp tagged with this type's clock.
@@ -454,10 +486,10 @@ pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: t
             if (comptime ToTimestampError == error{}) return self.toTimestamp().withClock(clock);
             return (try self.toTimestamp()).withClock(clock);
         }
-        pub inline fn fromIoTimestamp(value: std.Io.Clock.Timestamp, rounding: Rounding) FromIoTimestampError!Self {
+        pub inline fn fromIoTimestamp(value: std.Io.Clock.Timestamp, comptime rounding: Rounding) (ErrorOf(Converted(i96, Repr, 1, unit.nanoseconds(), rounding)) || error{ClockMismatch})!Self {
             const clock: std.Io.Clock = ClockTag;
             if (value.clock != clock) return error.ClockMismatch;
-            if (comptime FromTimestampError == error{}) return fromTimestamp(value.raw, rounding);
+            if (comptime ErrorOf(Converted(i96, Repr, 1, unit.nanoseconds(), rounding)) == error{}) return fromTimestamp(value.raw, rounding);
             return try fromTimestamp(value.raw, rounding);
         }
         pub inline fn encode(self: Self, endian: std.builtin.Endian) scalar.Bytes(Repr) {

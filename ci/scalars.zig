@@ -12,5 +12,5 @@ export fn checked(a_raw: usize, b: usize) usize {
     return (a.int.Checked(usize).init(a_raw).add(b) catch return 0).raw();
 }
 export fn unit(a_raw: i64) i64 {
-    return (a.units.Duration(.nanosecond, i64).fromRaw(a_raw).convert(.microsecond, i64, .down) catch return 0).raw();
+    return a.units.Duration(.nanosecond, i64).fromRaw(a_raw).convert(.microsecond, i64, .down).raw();
 }

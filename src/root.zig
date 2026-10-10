@@ -32,6 +32,8 @@ pub const Condition = sync.Condition;
 pub const Once = sync.Once;
 /// Leaf initialization under the election mutex: no task context, the initializer's own errors.
 pub const Lazy = sync.Lazy;
+/// A lock-free cell for one id, count, unit or plain enum, read and written whole.
+pub const Atomic = sync.Atomic;
 /// Counted shared ownership of one allocated value, cleaned by the last release.
 pub const Shared = sync.Shared;
 /// Explicit logical-task initializer stack; zero-sized in release.
