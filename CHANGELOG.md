@@ -4,6 +4,8 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-11
+
 ### Added
 
 - `int.narrow(Target, source) ?Target`: the one checked narrowing for generic code. It is null where `cast` fails with `Overflow` and the value where it fits, whatever the pair of integer types, where `cast` returns a value for a conversion that cannot fail and an error union otherwise.
