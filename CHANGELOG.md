@@ -4,6 +4,10 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Changed
+
+- The benchmarks take shakedown from preflight, which adds the one the package declares, where their imports gave it a second time; the tests' module states that it is shakedown's aegis only while shakedown asks for aegis with the same target and mode.
+
 ## [0.1.2] - 2026-10-12
 
 ### Changed
