@@ -4,6 +4,10 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Changed
+
+- The tests run in aegis's own module, which bay gives shakedown as its aegis, where they built a second module from `src/root.zig` and bound shakedown to it.
+
 ## [0.1.1] - 2026-10-12
 
 ### Changed

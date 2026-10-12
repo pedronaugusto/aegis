@@ -7,7 +7,7 @@ pub fn build(b: *std.Build) void {
 }
 
 /// aegis's development: its tests, examples, contract programs and benchmarks,
-/// under preflight's gate, with shakedown bound to aegis itself. Run through bay.
+/// under preflight's gate. Run through bay.
 pub fn dev(b: *std.Build, tools: type) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .cpu_model = .baseline } });
     const optimize = b.standardOptimizeOption(.{});
@@ -185,7 +185,7 @@ fn contractGroups(b: *std.Build) void {
     }
 }
 
-/// One set of modules per target and mode, as shakedown fetched for them is one dependency, bound to one aegis.
+/// One set of modules per target and mode, as the tests' module is one per target and mode.
 fn benchImports(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize) []const std.Build.Module.Import {
     const key = b.fmt("{s}-{t}", .{ target.query.zigTriple(b.allocator) catch @panic("OOM"), optimize });
     if (bench_imports.get(key)) |imports| return imports;
@@ -198,13 +198,13 @@ var bench_imports: std.StringHashMapUnmanaged([]const std.Build.Module.Import) =
 
 fn makeBenchImports(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize) []const std.Build.Module.Import {
     const p = b.dependency("aegis", .{}).builder;
-    // The tests' module: shakedown, fetched once per target and mode, is bound to it.
+    // The tests' module, which shakedown imports as its aegis.
     const aegis = testModule(b, target, optimize);
     const material = aegis.import_table.get("material").?;
     const cases = b.createModule(.{ .root_source_file = p.path("ci/cases.zig"), .target = target, .optimize = optimize, .imports = &.{ .{ .name = "aegis", .module = aegis }, .{ .name = "material", .module = material } } });
     const numeric = b.createModule(.{ .root_source_file = p.path("ci/numeric.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     const choices = b.createModule(.{ .root_source_file = p.path("ci/choice_callers.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
-    const shake = b.dependency("shakedown", .{ .target = target, .optimize = optimize, .aegis = .consumer });
+    const shake = b.dependency("shakedown", .{ .target = target, .optimize = optimize });
     const safety = b.createModule(.{ .root_source_file = p.path("ci/safety_parity.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     const bytes = b.createModule(.{ .root_source_file = p.path("ci/bytes.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     const a67 = b.createModule(.{ .root_source_file = p.path("ci/a67.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
@@ -224,21 +224,16 @@ fn choiceBenchmarkLlvm(b: *std.Build, step: *std.Build.Step, seen: *std.AutoHash
     for (step.dependencies.items) |dependency| choiceBenchmarkLlvm(b, dependency, seen);
 }
 
-/// The module the tests run in and the benchmarks import: aegis itself, from
-/// src/root.zig, with shakedown bound to it, so a binary links one aegis. One per
-/// target and mode, since shakedown fetched for them is one dependency, bound once.
+/// The module the tests run in and the benchmarks import: aegis's own, with
+/// shakedown and the tests' material imported. bay gives shakedown the aegis
+/// under development, so shakedown's `aegis` is this module and a binary
+/// links one aegis. One per target and mode, as the package is.
 fn testModule(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize) *std.Build.Module {
-    const p = b.dependency("aegis", .{}).builder;
-    const key = b.fmt("{s}-{t}", .{ target.query.zigTriple(b.allocator) catch @panic("OOM"), optimize });
-    if (test_modules.get(key)) |module| return module;
-    const shake = b.dependency("shakedown", .{ .target = target, .optimize = optimize, .aegis = .consumer });
-    const material = b.createModule(.{ .root_source_file = p.path("src/testing/Material.zig"), .target = target, .optimize = optimize });
-    const module = b.createModule(.{ .root_source_file = p.path("src/root.zig"), .target = target, .optimize = optimize });
-    module.addImport("shakedown", shake.module("shakedown"));
+    const package = b.dependency("aegis", .{ .target = target, .optimize = optimize });
+    const module = package.module("aegis");
+    if (module.import_table.get("shakedown") != null) return module;
+    const material = b.createModule(.{ .root_source_file = package.builder.path("src/testing/Material.zig"), .target = target, .optimize = optimize });
+    module.addImport("shakedown", b.dependency("shakedown", .{ .target = target, .optimize = optimize }).module("shakedown"));
     module.addImport("material", material);
-    shake.module("shakedown").addImport("aegis", module);
-    test_modules.put(b.allocator, key, module) catch @panic("OOM");
     return module;
 }
-
-var test_modules: std.StringHashMapUnmanaged(*std.Build.Module) = .empty;
