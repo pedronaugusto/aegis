@@ -20,7 +20,6 @@ pub fn dev(b: *std.Build, tools: type) void {
     const test_step = b.step("test", "Run focused ownership and synchronization tests");
     const check = b.step("check", "Compile all tests without execution");
     const m = testModule(b, target, optimize);
-    if (tsan) aegis.sanitize_thread = true;
     m.sanitize_thread = tsan;
     if (tsan) m.link_libc = true;
     const tests = b.addTest(.{ .root_module = m, .filters = filters, .use_llvm = true });
@@ -204,7 +203,6 @@ fn makeBenchImports(b: *std.Build, target: std.Build.ResolvedTarget, optimize: s
     const cases = b.createModule(.{ .root_source_file = p.path("ci/cases.zig"), .target = target, .optimize = optimize, .imports = &.{ .{ .name = "aegis", .module = aegis }, .{ .name = "material", .module = material } } });
     const numeric = b.createModule(.{ .root_source_file = p.path("ci/numeric.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     const choices = b.createModule(.{ .root_source_file = p.path("ci/choice_callers.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
-    const shake = b.dependency("shakedown", .{ .target = target, .optimize = optimize });
     const safety = b.createModule(.{ .root_source_file = p.path("ci/safety_parity.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     const bytes = b.createModule(.{ .root_source_file = p.path("ci/bytes.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     const a67 = b.createModule(.{ .root_source_file = p.path("ci/a67.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
@@ -212,7 +210,7 @@ fn makeBenchImports(b: *std.Build, target: std.Build.ResolvedTarget, optimize: s
     const ab = b.createModule(.{ .root_source_file = p.path("ci/ab.zig"), .target = target, .optimize = optimize });
     const state = b.createModule(.{ .root_source_file = p.path("ci/state.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
     const scope = b.createModule(.{ .root_source_file = p.path("ci/scope.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "aegis", .module = aegis }} });
-    return b.allocator.dupe(std.Build.Module.Import, &.{ .{ .name = "ab", .module = ab }, .{ .name = "state", .module = state }, .{ .name = "scope", .module = scope }, .{ .name = "aegis", .module = aegis }, .{ .name = "cases", .module = cases }, .{ .name = "numeric", .module = numeric }, .{ .name = "choices", .module = choices }, .{ .name = "shakedown", .module = shake.module("shakedown") }, .{ .name = "bytes", .module = bytes }, .{ .name = "a67", .module = a67 }, .{ .name = "gaps", .module = gaps }, .{ .name = "material", .module = material }, .{ .name = "safety", .module = safety } }) catch @panic("out of memory configuring benchmarks");
+    return b.allocator.dupe(std.Build.Module.Import, &.{ .{ .name = "ab", .module = ab }, .{ .name = "state", .module = state }, .{ .name = "scope", .module = scope }, .{ .name = "aegis", .module = aegis }, .{ .name = "cases", .module = cases }, .{ .name = "numeric", .module = numeric }, .{ .name = "choices", .module = choices }, .{ .name = "bytes", .module = bytes }, .{ .name = "a67", .module = a67 }, .{ .name = "gaps", .module = gaps }, .{ .name = "material", .module = material }, .{ .name = "safety", .module = safety } }) catch @panic("out of memory configuring benchmarks");
 }
 
 fn choiceBenchmarkLlvm(b: *std.Build, step: *std.Build.Step, seen: *std.AutoHashMapUnmanaged(*std.Build.Step, void)) void {
@@ -227,7 +225,9 @@ fn choiceBenchmarkLlvm(b: *std.Build, step: *std.Build.Step, seen: *std.AutoHash
 /// The module the tests run in and the benchmarks import: aegis's own, with
 /// shakedown and the tests' material imported. bay gives shakedown the aegis
 /// under development, so shakedown's `aegis` is this module and a binary
-/// links one aegis. One per target and mode, as the package is.
+/// links one aegis. One per target and mode, as the package is. It is one
+/// module only while shakedown asks for aegis with the target and mode it is
+/// asked with, as its build does: Zig keys a package instance by its options too.
 fn testModule(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.Optimize) *std.Build.Module {
     const package = b.dependency("aegis", .{ .target = target, .optimize = optimize });
     const module = package.module("aegis");
