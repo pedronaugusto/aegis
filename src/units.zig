@@ -261,7 +261,7 @@ fn parseSpan(comptime Repr: type, comptime unit: Unit, text: []const u8) TextErr
     const scale: W = unit.nanoseconds();
     const bound = magnitudeLimit(Repr) * scale;
     const negative = text.len != 0 and text[0] == '-';
-    var rest = text[@intFromBool(negative)..];
+    var rest: []const u8 = text[@intFromBool(negative)..];
     if (rest.len == 0) return error.Malformed;
     var total: W = 0;
     if (!std.mem.eql(u8, rest, "0")) {
@@ -469,6 +469,12 @@ pub fn Bytes(comptime Repr: type) type {
         pub fn parse(text: []const u8) ParseError!Self {
             return fromRaw(try parseSize(Repr, text));
         }
+        /// A size written as `parse` reads it and known at compile time, checked there: for a default or
+        /// a constant, `.literal("64KiB")` where `parse` would need a `catch`. Text `parse` refuses is a
+        /// compile error naming why.
+        pub fn literal(comptime text: []const u8) Self {
+            return comptime parse(text) catch |err| @compileError("not a size of " ++ @typeName(Repr) ++ ": \"" ++ text ++ "\" (" ++ @errorName(err) ++ ")");
+        }
         /// Writes the size as `parse` reads it back: a whole number of the largest unit, binary or decimal,
         /// that divides it (`64MiB`, `1500kB`, `1GB`), else of bytes (`1500B`), and `0B` for zero.
         pub fn format(self: Self, w: *std.Io.Writer) std.Io.Writer.Error!void {
@@ -613,6 +619,12 @@ pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
         /// one in an unsigned representation), `Malformed` for anything else, spaces included.
         pub fn parse(text: []const u8) ParseError!Self {
             return fromRaw(try parseSpan(Repr, unit, text));
+        }
+        /// A duration written as `parse` reads it and known at compile time, checked there: for a default
+        /// or a constant, `.literal("250ms")` where `parse` would need a `catch`. Text `parse` refuses is a
+        /// compile error naming why.
+        pub fn literal(comptime text: []const u8) Self {
+            return comptime parse(text) catch |err| @compileError("not a duration of " ++ @typeName(Repr) ++ ": \"" ++ text ++ "\" (" ++ @errorName(err) ++ ")");
         }
         /// Writes the duration as `parse` reads it back: a component for each unit from days down to
         /// nanoseconds, leaving out the zero ones (`1m30s`, `2d12h`, `-250ms`), and `0s` for zero.

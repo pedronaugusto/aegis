@@ -572,6 +572,27 @@ test "A6 ordered uncancelable acquire takes the lock under a cancellation reques
 
 fn drop(_: *u32) void {}
 
+test "A2 a duration or size literal is read at compile time, exactly as parse reads it" {
+    const Span = a.units.Duration(.nanosecond, u64);
+    try t.expectEqual(@as(u64, 250 * std.time.ns_per_ms), Span.literal("250ms").raw());
+    try t.expectEqual(@as(u64, 90 * std.time.ns_per_s), Span.literal("1m30s").raw());
+    try t.expectEqual(@as(u32, 64 << 10), a.units.Bytes(u32).literal("64KiB").raw());
+    try t.expectEqual(@as(u64, 1500), a.units.Bytes(u64).literal("1.5kB").raw());
+}
+
+test "A7 a bounded array copies a slice in whole or not at all, and shows its prefix through a const view" {
+    var host = try a.bounded.Array(u8, 8).fromSlice("example");
+    try t.expectEqualStrings("example", host.constItems());
+    try t.expectError(error.Full, host.appendSlice("..."));
+    try t.expectEqualStrings("example", host.constItems());
+    try host.appendSlice(".");
+    try t.expect(host.isFull());
+    const copy = host;
+    host.items()[0] = 'E';
+    try t.expectEqualStrings("example.", copy.constItems());
+    try t.expectError(error.Full, a.bounded.Array(u8, 2).fromSlice("abc"));
+}
+
 test "A7 bounded containers read their capacity and fullness exactly where the next element is refused" {
     var array = a.bounded.Array(u32, 2).init;
     try t.expectEqual(@as(usize, 2), array.capacity());

@@ -4,6 +4,11 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Added
+
+- `units.Duration.literal` and `units.Bytes.literal`: a value written in the text form and read at compile time, `.literal("250ms")` or `.literal("64KiB")`, for defaults and constants; text `parse` refuses is a compile error naming why.
+- `bounded.Array.constItems`, the prefix through a `const` array or a copy of one, and `appendSlice` and `fromSlice`, which copy a slice in whole or fail with `Full` and change nothing, for a payload that is copied rather than moved: a value that owns a short string by value, such as a host name.
+
 ## [0.1.4] - 2026-10-13
 
 ### Added

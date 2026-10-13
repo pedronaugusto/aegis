@@ -30,6 +30,24 @@ pub fn Array(comptime T: type, comptime N: usize) type {
         pub fn items(self: *Self) []T {
             return self.storage[0..self.used];
         }
+        /// The initialized prefix, read-only: what a `const` array or a by-value copy of one shows.
+        pub fn constItems(self: *const Self) []const T {
+            return self.storage[0..self.used];
+        }
+        /// Copies `values` after the prefix, or none of them: `Full` leaves the array as it was. Only for
+        /// a payload that is copied, not one that declares `moveInto`, which `append` moves one at a time.
+        pub fn appendSlice(self: *Self, values: []const T) AppendError!void {
+            comptime std.debug.assert(!move.declares(T));
+            if (values.len > N - self.used) return error.Full;
+            @memcpy(self.storage[self.used..][0..values.len], values);
+            self.used += values.len;
+        }
+        /// An array holding a copy of `values`; `Full` when they are more than `N`. As `appendSlice`.
+        pub fn fromSlice(values: []const T) AppendError!Self {
+            var array: Self = .init;
+            try array.appendSlice(values);
+            return array;
+        }
         pub fn append(self: *Self, value: *T) AppendError!void {
             if (N == 0) return error.Full;
             if (self.used == N) return error.Full;

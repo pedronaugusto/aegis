@@ -4,7 +4,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 /// Whether `T` declares its own move.
-inline fn declared(comptime T: type) bool {
+pub inline fn declares(comptime T: type) bool {
     return switch (@typeInfo(T)) {
         .@"struct", .@"union", .@"enum", .@"opaque" => @hasDecl(T, "moveInto"),
         else => false,
@@ -14,7 +14,7 @@ inline fn declared(comptime T: type) bool {
 /// Moves `source` into `destination` through `moveInto` when `T` declares it, else by assignment. A copied
 /// source is left as it was; a payload with `moveInto` leaves its source as that move says.
 pub inline fn into(comptime T: type, source: *T, destination: *T) void {
-    if (comptime declared(T)) {
+    if (comptime declares(T)) {
         source.moveInto(destination);
     } else {
         destination.* = source.*;
@@ -25,7 +25,7 @@ pub inline fn into(comptime T: type, source: *T, destination: *T) void {
 /// payload read after it was handed over shows as garbage in Debug and ReleaseSafe. A payload with
 /// `moveInto` is left to its own move.
 pub inline fn intoPoisoning(comptime T: type, source: *T, destination: *T) void {
-    if (comptime declared(T)) {
+    if (comptime declares(T)) {
         source.moveInto(destination);
     } else {
         destination.* = source.*;
