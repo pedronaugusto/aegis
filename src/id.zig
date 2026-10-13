@@ -31,7 +31,10 @@ fn Identity(comptime Tag: type, comptime Repr: type, comptime nonzero: bool) typ
     scalar.abiInteger(Repr);
     return enum(Repr) {
         const Self = @This();
+        /// The tag that keeps these ids apart from every other domain's.
         pub const Domain = Tag;
+        /// The integer the id is held in.
+        pub const Representation = Repr;
         /// The count type of `advance`, `retreat` and `distanceTo`.
         pub const Step = StepOf(Tag, Repr);
         pub const FromRawError = error{InvalidId};
@@ -109,6 +112,10 @@ pub fn Counter(comptime Tag: type, comptime Repr: type) type {
     if (@typeInfo(Repr).int.signedness != .unsigned) @compileError("aegis Counter requires an unsigned representation");
     return enum(Repr) {
         const Self = @This();
+        /// The domain of the ids it issues.
+        pub const Domain = Tag;
+        /// The integer the last issued id is held in.
+        pub const Representation = Repr;
         /// Private: last successfully issued ID; persists unchanged on exhaustion.
         _,
         pub const NextError = error{IdExhausted};

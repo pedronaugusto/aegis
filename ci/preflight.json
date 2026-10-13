@@ -20,6 +20,7 @@
       "source": "examples/usage.zig",
       "region": "usage",
       "imports": [
+        "std",
         "aegis"
       ]
     },

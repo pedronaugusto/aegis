@@ -55,6 +55,8 @@ pub fn Checked(comptime Repr: type) type {
     scalar.integer(Repr);
     return struct {
         const Self = @This();
+        /// The integer the value is held in.
+        pub const Representation = Repr;
         /// Private: use init/raw; Zig reflection can bypass this contract.
         value: Repr,
         pub const AddError = error{ Overflow, Underflow };
@@ -123,6 +125,8 @@ pub fn Saturating(comptime Repr: type) type {
     scalar.integer(Repr);
     return struct {
         const Self = @This();
+        /// The integer the value is held in.
+        pub const Representation = Repr;
         /// Private: use init/raw.
         value: Repr,
         pub const DivError = error{DivisionByZero};
@@ -177,6 +181,12 @@ pub fn Ranged(comptime Repr: type, comptime min: Repr, comptime max: Repr) type 
     if (min > max) @compileError("aegis ranged integer requires min <= max");
     return enum(Repr) {
         const Self = @This();
+        /// The integer the value is held in.
+        pub const Representation = Repr;
+        /// The smallest value `init` accepts.
+        pub const minimum: Repr = min;
+        /// The largest value `init` accepts.
+        pub const maximum: Repr = max;
         /// Private: use init/raw; foreign construction must validate again.
         _,
         pub const InitError = error{OutOfRange};
@@ -188,6 +198,12 @@ pub fn Ranged(comptime Repr: type, comptime min: Repr, comptime max: Repr) type 
         pub const ShlError = Checked(Repr).ShlError || InitError;
         pub fn init(value: Repr) InitError!Self {
             if (value < min or value > max) return error.OutOfRange;
+            return @fromBackingInt(value);
+        }
+        /// A value known at compile time, checked there: one out of range does not compile. For a default
+        /// or a constant, `.literal(8)` where `init` would need a `catch`.
+        pub fn literal(comptime value: Repr) Self {
+            comptime if (value < min or value > max) @compileError(std.fmt.comptimePrint("{d} is outside the range {d} to {d}", .{ value, min, max }));
             return @fromBackingInt(value);
         }
         pub fn raw(self: Self) Repr {

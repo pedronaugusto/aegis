@@ -25,4 +25,5 @@ test {
     _ = @import("testing/abi_test.zig");
     _ = @import("testing/gaps_test.zig");
     _ = @import("testing/rounds_test.zig");
+    _ = @import("testing/text_test.zig");
 }
