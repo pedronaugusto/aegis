@@ -4,6 +4,8 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-10-13
+
 ### Added
 
 - `secret.scrubStack(bytes)`: zeroes the stack below the caller after a secret computation returns, where the compiler's spills, saved registers and by-value copies of its callees lie and no owner can name them; `secret.stackReach(bytes, function, args)` measures how deep a call writes, to choose the depth with; `secret.scrubbed(bytes, function, args)` runs a secret computation in a frame of its own under `secret.Timing`, then scrubs.
