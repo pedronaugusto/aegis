@@ -4,6 +4,11 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Added
+
+- `secret.scrubStack(bytes)`: zeroes the stack below the caller after a secret computation returns, where the compiler's spills, saved registers and by-value copies of its callees lie and no owner can name them; `secret.stackReach(bytes, function, args)` measures how deep a call writes, to choose the depth with; `secret.scrubbed(bytes, function, args)` runs a secret computation in a frame of its own under `secret.Timing`, then scrubs.
+- `secret.Timing`: data-independent timing for the span of a secret computation (`begin`, `end` in a `defer`, `active`). On AArch64 with FEAT_DIT it sets PSTATE.DIT, under which the architecture guarantees operand-independent timing of data-processing instructions and Apple's cores turn off the data memory-dependent prefetcher; elsewhere it does nothing.
+
 ## [0.1.5] - 2026-10-13
 
 ### Added

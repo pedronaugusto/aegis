@@ -164,6 +164,18 @@ and no consumer adoption is claimed. Choice does not own or erase its inputs;
 secret owners retain their cleanup obligations. It cannot guarantee erasure
 of historical copies, registers or caller-owned temporaries.
 
+`scrubStack(bytes)` reaches what owners cannot name: a noinline frame of `bytes`
+zeroed with volatile stores lies where the caller's finished callees ran, so
+their spills, saved registers and by-value arguments and results are
+overwritten. It is called from the frame that ran the computation, after it
+returns, with a depth `stackReach` measured (a painted window, the call, the
+deepest byte changed); a test that measures and asserts the depth keeps a deeper
+callee from outgrowing it. Live registers, the caller's own frame and a signal
+stack stay out of reach. `Timing` sets data-independent timing where the
+architecture has the control (AArch64 FEAT_DIT, known at compile time from the
+target's features; a generic AArch64 target without it does nothing rather
+than trap on a processor that lacks it).
+
 Hardware constant-time assurance remains unestablished. Native x86 timing, class-resolved cache misses, power, EM, cross-thread leakage and arbitrary whole-program behavior remain outside this checked compiler boundary. Observed secret-class timing differences remain unresolved; passing caller checks does not explain those differences or prove data-independent physical execution.
 
 ## Generational storage and checked input
