@@ -4,6 +4,8 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-10-13
+
 ### Added
 
 - `units.Duration` and `units.Bytes` have a text form, the same for a command line, a configuration file and a log: `parse(text)` and `format` (`{f}`), exact both ways, with `ParseError` (`Malformed`, `Overflow`, `Inexact`) and `max_text_len`. A duration reads `30s`, `1m30s`, `250ms`, `1.5h` or `2d12h` and writes its nonzero components from days down; a size reads `4096`, `64MiB` or `1.5GB`, binary (`KiB`, powers of 1024) and decimal (`kB`, powers of 1000) units spelled exactly, and writes the largest unit that divides it. A value finer than the type holds is `Inexact` and one past the representation `Overflow`, never rounded.
