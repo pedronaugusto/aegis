@@ -4,6 +4,8 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-10-13
+
 ### Added
 
 - `units.Duration.literal` and `units.Bytes.literal`: a value written in the text form and read at compile time, `.literal("250ms")` or `.literal("64KiB")`, for defaults and constants; text `parse` refuses is a compile error naming why.
