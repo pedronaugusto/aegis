@@ -8,7 +8,9 @@ noinline fn victim(fill: u8) void {
 }
 
 /// The longest run of bytes equal to `fill` in the `bytes` below this frame. A run, not a
-/// count: the frame's own words may hold the byte by chance.
+/// count: the frame's own words may hold the byte by chance. Inlined into a test that calls
+/// `@disableInstrumentation()`: a sanitizer's hook for each read runs on the stack below, in the
+/// very bytes being read, and would erase the residue it is looking for.
 inline fn residue(comptime bytes: usize, fill: u8) usize {
     const window: [*]const volatile u8 = @ptrFromInt(@frameAddress() - bytes);
     var longest: usize = 0;
@@ -21,6 +23,7 @@ inline fn residue(comptime bytes: usize, fill: u8) usize {
 }
 
 test "scrubStack zeroes what a finished call left below the caller" {
+    @disableInstrumentation();
     victim(0x5c);
     // The control: without the scrub the dead frame still holds the bytes.
     try std.testing.expect(residue(8192, 0x5c) >= 2048);
@@ -52,6 +55,7 @@ noinline fn secretWork(fill: u8, out: *u8) error{Never}!u8 {
 }
 
 test "scrubbed runs the call under data-independent timing and leaves nothing below" {
+    @disableInstrumentation();
     var out: u8 = 0;
     const result = try machine.scrubbed(8192, secretWork, .{ 0x3c, &out });
     try std.testing.expectEqual(@as(u8, 0x3c), out);

@@ -4,6 +4,10 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- The `secret.scrubStack` and `secret.scrubbed` tests measure the dead stack with instrumentation off: under ThreadSanitizer the hook each read calls ran in the bytes being read and erased the residue the control expects.
+
 ## [0.1.6] - 2026-10-13
 
 ### Added
