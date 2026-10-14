@@ -4,6 +4,8 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-10-14
+
 ### Changed
 
 - Pins preflight 0.5.4, shakedown 0.4.3.
