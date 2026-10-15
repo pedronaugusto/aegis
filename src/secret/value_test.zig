@@ -128,3 +128,17 @@ test "A5 generated properties shrink through shakedown" {
         }
     }.property, .{ .cases = 1024, .seed = 0xa5 });
 }
+
+test "A5 Choice compiles on every build and is audited only on a listed one" {
+    const builtin = @import("builtin");
+    // The self-hosted backends and other compilers are never in the list.
+    if (builtin.zig_backend != .stage2_llvm) try std.testing.expect(!s.Choice.audited);
+    // Every listed profile names a target triple and a CPU `-mcpu` takes.
+    for (s.audited_profiles.all) |profile| {
+        const query = try std.Target.Query.parse(.{ .arch_os_abi = profile.target, .cpu_features = profile.cpu });
+        try std.testing.expect(query.cpu_arch != null and query.os_tag != null);
+    }
+    // The kernels run here either way.
+    const a = [_]u8{ 1, 2, 3 };
+    try std.testing.expect(s.equal(3, &a, &a).declassify("test verdict"));
+}

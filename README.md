@@ -148,7 +148,7 @@ pub fn main() !void {
 
 `Order(&ranks)` checks an acyclic caller-defined `after` relation at comptime. Its nested `Ordered(LockType, rank)` accepts `BlockingGuarded` or `RwGuarded` and adds Debug owner/rank checks before blocking, using a caller-carried logical-task `Context`. Context and rank bookkeeping vanish in both release modes. A condition wait reserves its rank during suspension. A cleanup path that cannot take a cancellation takes `acquireOrderedUncancelable`, `readOrderedUncancelable` or `writeOrderedUncancelable`, which check the same rank and are not interrupted. `Confined(T)` instead accepts explicit `TaskIdentity` values at creation/access/handOff; identity checks remain in Debug and ReleaseSafe, and fast/small stores only T. The caller issues unique identities, ends borrows and externally synchronizes quiescent handoff. Neither type verifies raw aliases or whole-program deadlock freedom.
 
-Zig permits struct copies, field access and escaped pointers. These contracts do not provide a borrow checker, linear types, automatic destructors or universal copied-guard detection. Cleanup is explicit on normal/error returns; abort/process death has no cleanup guarantee. Wipes cover only the specified storage, not old copies, registers, spills, paging, core dumps or hardware side channels. A5 supports only its checked compiler/target boundary; hardware and whole-program constant-time assurance remain unestablished. [Design](https://github.com/pedronaugusto/aegis/blob/main/docs/design.md) defines support, explicit declassification and limits.
+Zig permits struct copies, field access and escaped pointers. These contracts do not provide a borrow checker, linear types, automatic destructors or universal copied-guard detection. Cleanup is explicit on normal/error returns; abort/process death has no cleanup guarantee. Wipes cover only the specified storage, not old copies, registers, spills, paging, core dumps or hardware side channels. A5's kernels compile everywhere and `Choice.audited` says whether this build's lowering is one `check-choices` inspects; hardware and whole-program constant-time assurance remain unestablished. [Design](https://github.com/pedronaugusto/aegis/blob/main/docs/design.md) defines support, explicit declassification and limits.
 
 ## API
 
@@ -182,7 +182,7 @@ Each scalar publishes the parameters it was made from: `Representation` on `int.
 
 ## Scope
 
-`aegis.secret` exposes `Choice`, `equal`, `equalBytes`, `compareUnsigned` and `OrderChoices`; choices offer logic, integer/byte selection and explicit `declassify(comptime reason)`. Public length and overlap validation remain enabled.
+`aegis.secret` exposes `Choice`, `equal`, `equalBytes`, `compareUnsigned` and `OrderChoices`; choices offer logic, integer/byte selection and explicit `declassify(comptime reason)`. `Choice.audited` is true when the build is one of `secret.audited_profiles`, whose lowering `zig build check-choices` inspects. Public length and overlap validation remain enabled.
 
 No reference counting, protocol parsers, stored deleter vtables, hidden workers, automatic destructors or code analysis. Runtime closure is std only. Tags, checks and explicit raw boundaries are API discipline; Zig fields/reflection can bypass them. [Design](https://github.com/pedronaugusto/aegis/blob/main/docs/design.md) records the ownership and foreign-boundary contracts. Glint admission and consumer adoption remain later work. Equal handwritten wipe/locking cost does not mean those operations have zero cost.
 

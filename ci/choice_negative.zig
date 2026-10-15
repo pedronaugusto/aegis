@@ -25,17 +25,28 @@ pub fn main(init: std.process.Init) !void {
             try rejected(init, args[1], path, "aarch64-linux-gnu", "baseline", mode, "-fllvm", case[1]);
         }
     }
+    // Every build compiles the kernels; `Choice.audited` says whether it is one check-choices
+    // inspects. Outside the list (a target, CPU, backend or mitigation level not checked) the
+    // kernels compile and the flag is false.
     const path = ".zig-cache/a5-negative/profile.zig";
-    try dir.writeFile(init.io, .{ .sub_path = path, .data = "const s = @import(\"aegis\").secret; export fn run(a: *const [1]u8,b: *const [1]u8) u64 { return @intFromBool(s.equal(1,a,b).declassify(\"public test verdict\")); }\n" });
-    for ([_][]const u8{ "x86-linux-musl", "wasm32-wasi", "aarch64-freestanding" }) |target| {
-        try rejected(init, args[1], path, target, "baseline", "ReleaseFast", "-fllvm", "aegis Choice kernels:");
+    const body = "const s = @import(\"aegis\").secret; export fn run(a: *const [1]u8,b: *const [1]u8) u64 { return @intFromBool(s.equal(1,a,b).declassify(\"public test verdict\")); }\n";
+    try dir.writeFile(init.io, .{ .sub_path = path, .data = body ++ "comptime { if (s.Choice.audited) @compileError(\"unexpectedly audited\"); }\n" });
+    for ([_][]const u8{ "x86-linux-musl", "wasm32-wasi", "aarch64-freestanding", "riscv64-linux-gnu" }) |target| {
+        try accepted(init, args[1], path, target, "baseline", "ReleaseFast", "-fllvm");
     }
-    try rejected(init, args[1], path, "x86_64-linux-gnu", "x86_64_v3", "ReleaseFast", "-fllvm", "baseline CPU");
-    try rejected(init, args[1], path, "aarch64-linux-gnu", "baseline", "ReleaseFast", "-fno-llvm", "LLVM backend");
-    try dir.writeFile(init.io, .{ .sub_path = path, .data = "const std = @import(\"std\"); pub const std_options: std.Options = .{.side_channels_mitigations=.none}; const s = @import(\"aegis\").secret; export fn run(a: *const [1]u8,b: *const [1]u8) u64 { return @intFromBool(s.equal(1,a,b).declassify(\"public test verdict\")); }\n" });
-    try rejected(init, args[1], path, "aarch64-linux-gnu", "baseline", "ReleaseFast", "-fllvm", "require side-channel mitigations");
+    try accepted(init, args[1], path, "x86_64-linux-gnu", "znver4", "ReleaseFast", "-fllvm");
+    try accepted(init, args[1], path, "aarch64-macos", "apple_m3-sha3", "ReleaseFast", "-fllvm");
+    try accepted(init, args[1], path, "x86_64-linux-gnu", "baseline", "Debug", "-fno-llvm");
+    const none = "const std = @import(\"std\"); pub const std_options: std.Options = .{.side_channels_mitigations=.none}; ";
+    try dir.writeFile(init.io, .{ .sub_path = path, .data = none ++ body ++ "comptime { if (s.Choice.audited) @compileError(\"unexpectedly audited\"); }\n" });
+    try accepted(init, args[1], path, "aarch64-linux-gnu", "baseline", "ReleaseFast", "-fllvm");
+    // Each listed profile is audited.
+    try dir.writeFile(init.io, .{ .sub_path = path, .data = body ++ "comptime { if (!s.Choice.audited) @compileError(\"listed profile not audited\"); }\n" });
+    for (@import("aegis").secret.audited_profiles.all) |profile| {
+        try accepted(init, args[1], path, profile.target, profile.cpu, "ReleaseFast", "-fllvm");
+    }
     var out = std.Io.File.stdout().writer(init.io, &.{});
-    try out.interface.writeAll("A5: 24 compiler-negative contracts passed\n");
+    try out.interface.writeAll("A5: compiler contracts passed (rejections, unaudited builds compile, listed builds audited)\n");
     try out.interface.flush();
 }
 fn rejected(init: std.process.Init, zig: []const u8, path: []const u8, target: []const u8, cpu: []const u8, mode: []const u8, backend: []const u8, message: []const u8) !void {
@@ -49,5 +60,18 @@ fn rejected(init: std.process.Init, zig: []const u8, path: []const u8, target: [
         try err.interface.writeAll(result.stderr);
         try err.interface.flush();
         return error.ChoiceContractNotDiagnosed;
+    }
+}
+fn accepted(init: std.process.Init, zig: []const u8, path: []const u8, target: []const u8, cpu: []const u8, mode: []const u8, backend: []const u8) !void {
+    const a = init.arena.allocator();
+    const result = try std.process.run(init.gpa, init.io, .{ .argv = &.{ zig, "build-obj", try a.print("-O{s}", .{mode}), "-target", target, try a.print("-mcpu={s}", .{cpu}), backend, "--dep", "aegis", try a.print("-Mroot={s}", .{path}), "-Maegis=src/root.zig", "-fno-emit-bin" }, .stdout_limit = .limited(4096), .stderr_limit = .limited(32768) });
+    defer init.gpa.free(result.stdout);
+    defer init.gpa.free(result.stderr);
+    if (result.term != .exited or result.term.exited != 0) {
+        var err = std.Io.File.stderr().writer(init.io, &.{});
+        try err.interface.print("{s} {s} {s} {s}: expected to compile\n", .{ target, cpu, mode, backend });
+        try err.interface.writeAll(result.stderr);
+        try err.interface.flush();
+        return error.ChoiceProfileContract;
     }
 }

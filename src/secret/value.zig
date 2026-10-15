@@ -1,14 +1,20 @@
-//! Audited byte-mask kernels. Support is pinned in docs/design.md.
+//! Byte-mask kernels. They compile for every target; the builds whose lowering
+//! `zig build check-choices` inspects are listed in profiles.zig (docs/design.md).
 const std = @import("std");
 const builtin = @import("builtin");
+const profiles = @import("profiles.zig");
 
 /// Copyable one-bit decision. Explicit casts can bypass this API in Zig.
 pub const Choice = packed struct(u1) {
     bit: u1,
     pub const FromBitError = error{InvalidBit};
+    /// Whether this build is one whose lowering of these kernels `zig build check-choices`
+    /// inspects: Zig 0.17.0's LLVM backend, a listed target and CPU model with that model's
+    /// own features, and side-channel mitigations on. Other builds run the same source,
+    /// without that evidence; a caller that requires it asserts this at compile time.
+    pub const audited: bool = auditedBuild();
     /// The imported bit is PUBLIC; invalid values are rejected in every mode.
     pub inline fn fromBit(bit: u8) FromBitError!Choice {
-        supported();
         if (bit > 1) return error.InvalidBit;
         return fromKernel(bit);
     }
@@ -31,7 +37,6 @@ pub const Choice = packed struct(u1) {
     }
     /// Zero chooses a; one chooses b. Both inputs must already be initialized.
     pub inline fn selectInt(self: Choice, comptime T: type, a: T, b: T) T {
-        supported();
         const info = @typeInfo(T);
         if (info != .int) @compileError("Choice selectInt requires a fixed-width integer");
         const bits = info.int.bits;
@@ -46,7 +51,6 @@ pub const Choice = packed struct(u1) {
         return @bitCast(value); // safe: every same-width integer bit pattern is valid
     }
     pub inline fn selectBytes(self: Choice, comptime N: usize, out: *[N]u8, a: *const [N]u8, b: *const [N]u8) SelectError!void {
-        supported();
         @setRuntimeSafety(true);
         if (partialOverlap(N, out, a) or partialOverlap(N, out, b)) return error.PartialOverlap;
         const mask = barrier(u32, 0 -% @as(u32, self.bit));
@@ -69,12 +73,10 @@ pub const CompareError = error{LengthMismatch};
 pub const SelectError = error{PartialOverlap};
 
 pub inline fn equal(comptime N: usize, a: *const [N]u8, b: *const [N]u8) Choice {
-    supported();
     return equalKernel(a, b);
 }
 /// Lengths and addresses are public. Every byte of the common length is read.
 pub inline fn equalBytes(a: []const u8, b: []const u8) CompareError!Choice {
-    supported();
     @setRuntimeSafety(true);
     if (a.len != b.len) return error.LengthMismatch;
     return equalKernel(a, b);
@@ -90,7 +92,6 @@ inline fn equalKernel(a: []const u8, b: []const u8) Choice {
 }
 /// Endian is PUBLIC. The first unequal most-significant byte determines order.
 pub inline fn compareUnsigned(comptime N: usize, endian: std.lang.Endian, a: *const [N]u8, b: *const [N]u8) OrderChoices {
-    supported();
     @setRuntimeSafety(true);
     const x: *const volatile [N]u8 = a;
     const y: *const volatile [N]u8 = b;
@@ -108,7 +109,6 @@ pub inline fn compareUnsigned(comptime N: usize, endian: std.lang.Endian, a: *co
     return .{ .lt = fromKernel(lt), .eq = fromKernel(eq), .gt = fromKernel(gt) };
 }
 inline fn fromKernel(bit: u32) Choice {
-    supported();
     return .{ .bit = @truncate(barrier(u32, bit)) }; // safe: kernels establish 0/1; truncation never branches
 }
 inline fn barrier(comptime T: type, value: T) T {
@@ -126,13 +126,25 @@ inline fn partialOverlap(comptime N: usize, out: *[N]u8, source: *const [N]u8) b
     // Ordered subtraction avoids address-end overflow, even at the top of usize.
     return if (d > s) d - s < N else s - d < N;
 }
-inline fn supported() void {
-    if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 17 or builtin.zig_version.patch != 0 or builtin.zig_version.pre != null) @compileError("aegis Choice kernels require audited Zig 0.17.0");
-    if (builtin.zig_backend != .stage2_llvm) @compileError("aegis Choice kernels require the audited LLVM backend (-fllvm)");
-    if (builtin.target.cpu.arch != .x86_64 and builtin.target.cpu.arch != .aarch64) @compileError("aegis Choice kernels: target not audited; 32-bit/wasm support is staged");
-    if (builtin.target.os.tag != .linux and builtin.target.os.tag != .macos and builtin.target.os.tag != .windows) @compileError("aegis Choice kernels: OS profile not audited; freestanding support is staged");
-    if ((builtin.target.os.tag == .linux and builtin.target.abi != .gnu and !(builtin.target.cpu.arch == .x86_64 and builtin.target.abi == .musl)) or (builtin.target.os.tag == .windows and builtin.target.abi != .gnu)) @compileError("aegis Choice kernels: ABI profile not audited");
-    const baseline = comptime std.Target.Cpu.baseline(builtin.target.cpu.arch, builtin.target.os);
-    if (comptime !builtin.target.cpu.features.eql(baseline.features) or !std.mem.eql(u8, builtin.target.cpu.model.name, baseline.model.name)) @compileError("aegis Choice kernels require the audited baseline CPU (-mcpu=baseline)");
-    if (std.options.side_channels_mitigations == .none) @compileError("aegis Choice kernels require side-channel mitigations");
+fn auditedBuild() bool {
+    if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 17 or builtin.zig_version.patch != 0 or builtin.zig_version.pre != null) return false;
+    if (builtin.zig_backend != .stage2_llvm) return false;
+    if (std.options.side_channels_mitigations == .none) return false;
+    @setEvalBranchQuota(100_000);
+    for (profiles.all) |profile| {
+        // unreachable: every listed profile parses; the A5 test parses each one.
+        const query = std.Target.Query.parse(.{ .arch_os_abi = profile.target, .cpu_features = profile.cpu }) catch unreachable;
+        const arch = query.cpu_arch.?;
+        const os = query.os_tag.?;
+        if (builtin.target.cpu.arch != arch or builtin.target.os.tag != os) continue;
+        if (query.abi) |abi| if (builtin.target.abi != abi) continue;
+        const cpu = switch (query.cpu_model) {
+            .baseline => std.Target.Cpu.baseline(arch, builtin.target.os),
+            .explicit => |model| model.toCpu(arch),
+            // unreachable: a listed CPU is "baseline" or a model name.
+            else => unreachable,
+        };
+        if (std.mem.eql(u8, builtin.target.cpu.model.name, cpu.model.name) and builtin.target.cpu.features.eql(cpu.features)) return true;
+    }
+    return false;
 }

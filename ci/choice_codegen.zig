@@ -1,6 +1,7 @@
 //! Deterministic A5 enclosing-caller lowering/cost gate. Raw evidence is private.
 const std = @import("std");
 const cases = @import("choice_callers.zig");
+const profiles = @import("aegis").secret.audited_profiles;
 pub fn main(init: std.process.Init) !void {
     const a = init.arena.allocator();
     const dir = std.Io.Dir.cwd();
@@ -9,13 +10,15 @@ pub fn main(init: std.process.Init) !void {
     const destination = if (args.len == 3) args[2] else ".zig-cache/a5-proof";
     try dir.createDirPath(init.io, destination);
     var report = std.Io.Writer.Allocating.init(a);
-    for ([_][]const u8{ "x86_64-linux-gnu", "aarch64-linux-gnu", "x86_64-linux-musl", "x86_64-windows-gnu", "aarch64-windows-gnu", "x86_64-macos", "aarch64-macos" }) |target| {
+    var checked: usize = 0;
+    for (profiles.all) |entry| {
+        const target = entry.target;
         for ([_][]const u8{ "Debug", "ReleaseFast", "ReleaseSafe", "ReleaseSmall" }) |mode| {
             for ([_][]const u8{ "basic", "medium", "full" }) |mitigation| {
                 const profile = try a.print("{s}/profile.zig", .{destination});
                 try dir.writeFile(init.io, .{ .sub_path = profile, .data = try a.print("const std = @import(\"std\");\npub const mitigation: std.crypto.SideChannelsMitigations = .{s};\n", .{mitigation}) });
-                const stem = try a.print("{s}/{s}-{s}-{s}", .{ destination, target, mode, mitigation });
-                const result = try std.process.run(init.gpa, init.io, .{ .argv = &.{ args[1], "build-obj", try a.print("-O{s}", .{mode}), "-target", target, "-mcpu=baseline", "-fllvm", "-fstrip", "--dep", "aegis", "--dep", "profile", "-Mroot=ci/choice_parity.zig", "-Maegis=src/root.zig", try a.print("-Mprofile={s}", .{profile}), try a.print("-femit-llvm-ir={s}.ll", .{stem}), try a.print("-femit-asm={s}.s", .{stem}), "-fno-emit-bin" }, .stdout_limit = .limited(4096), .stderr_limit = .limited(65536) });
+                const stem = try a.print("{s}/{s}-{s}-{s}-{s}", .{ destination, target, entry.cpu, mode, mitigation });
+                const result = try std.process.run(init.gpa, init.io, .{ .argv = &.{ args[1], "build-obj", try a.print("-O{s}", .{mode}), "-target", target, try a.print("-mcpu={s}", .{entry.cpu}), "-fllvm", "-fstrip", "--dep", "aegis", "--dep", "profile", "-Mroot=ci/choice_parity.zig", "-Maegis=src/root.zig", try a.print("-Mprofile={s}", .{profile}), try a.print("-femit-llvm-ir={s}.ll", .{stem}), try a.print("-femit-asm={s}.s", .{stem}), "-fno-emit-bin" }, .stdout_limit = .limited(4096), .stderr_limit = .limited(65536) });
                 defer init.gpa.free(result.stdout);
                 defer init.gpa.free(result.stderr);
                 if (result.term != .exited or result.term.exited != 0) {
@@ -46,25 +49,26 @@ pub fn main(init: std.process.Init) !void {
                     const wi = try instructions(scratch, assembly, wa, target);
                     if (!std.mem.eql(u8, mode, "Debug") and !std.mem.eql(u8, bi, wi)) {
                         var err = std.Io.File.stderr().writer(init.io, &.{});
-                        try err.interface.print("{s} {s} {s} {s}: caller instruction mismatch\n", .{ target, mode, mitigation, name });
+                        try err.interface.print("{s} {s} {s} {s} {s}: caller instruction mismatch\n", .{ target, entry.cpu, mode, mitigation, name });
                         return error.CallerCostMismatch;
                     }
                     // Retain the exact enclosing bodies; semantic taint review is a separate gate.
                     const wb = try function(scratch, ir, try alias(a, ir, wn));
                     audit(scratch, wb) catch |err| {
                         var failure = std.Io.File.stderr().writer(init.io, &.{});
-                        try failure.interface.print("{s} {s} {s} {s}: caller audit {s}\n", .{ target, mode, mitigation, name, @errorName(err) });
+                        try failure.interface.print("{s} {s} {s} {s} {s}: caller audit {s}\n", .{ target, entry.cpu, mode, mitigation, name, @errorName(err) });
                         try failure.interface.flush();
                         return err;
                     };
-                    try report.writer.print("{s} {s} {s} {s} checked-caller bytes-of-normalized-text={d} caller-ir={d}\n", .{ target, mode, mitigation, name, wi.len, wb.len });
+                    try report.writer.print("{s} {s} {s} {s} {s} checked-caller bytes-of-normalized-text={d} caller-ir={d}\n", .{ target, entry.cpu, mode, mitigation, name, wi.len, wb.len });
                 }
+                checked += 1;
             }
         }
     }
     try dir.writeFile(init.io, .{ .sub_path = try a.print("{s}/parity.txt", .{destination}), .data = report.written() });
     var out = std.Io.File.stdout().writer(init.io, &.{});
-    try out.interface.writeAll("A5 caller parity profiles completed\n");
+    try out.interface.print("A5 caller parity: {d} profiles, {d} builds checked\n", .{ profiles.all.len, checked });
 }
 fn alias(a: std.mem.Allocator, ir: []const u8, name: []const u8) ![]const u8 {
     const marker = try a.print("@{s} = alias ", .{name});
@@ -111,7 +115,7 @@ fn instructions(a: std.mem.Allocator, text: []const u8, name: []const u8, target
     var output: std.Io.Writer.Allocating = .init(a);
     lines.reset();
     while (lines.next()) |raw| {
-        const comment = if (std.mem.startsWith(u8, target, "x86")) "#" else "//";
+        const comment = if (std.mem.startsWith(u8, target, "x86") or std.mem.startsWith(u8, target, "wasm")) "#" else "//";
         const at = std.mem.find(u8, raw, comment) orelse raw.len;
         const line = std.mem.trim(u8, raw[0..at], " \t");
         if (line.len == 0 or line[0] == '.' or std.mem.endsWith(u8, line, ":")) continue;

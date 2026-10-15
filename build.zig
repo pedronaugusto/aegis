@@ -95,7 +95,7 @@ pub fn dev(b: *std.Build, tools: type) void {
     run_choices_codegen.setCwd(p.path("."));
     run_choices_codegen.addPassthruArgs();
     b.step("check-choices", "Audit A5 enclosing caller instructions and secret control/address regressions").dependOn(&run_choices_codegen.step);
-    const choices_negative = b.addExecutable(.{ .name = "aegis-choices-negative", .root_module = b.createModule(.{ .root_source_file = p.path("ci/choice_negative.zig"), .target = b.graph.host, .optimize = .safe }) });
+    const choices_negative = b.addExecutable(.{ .name = "aegis-choices-negative", .root_module = b.createModule(.{ .root_source_file = p.path("ci/choice_negative.zig"), .target = b.graph.host, .optimize = .safe, .imports = &.{.{ .name = "aegis", .module = aegis }} }) });
     const run_choices_negative = b.addRunArtifact(choices_negative);
     run_choices_negative.addArg(b.graph.zig_exe);
     run_choices_negative.setCwd(p.path("."));

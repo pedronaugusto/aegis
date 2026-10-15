@@ -113,25 +113,35 @@ secret-dependent work before entering the kernel.
 
 ### Compiler boundary
 
-This batch stages one dispatch: Zig **0.17.0 LLVM**, `-mcpu=baseline`, ordinary
-unmodified baseline feature sets. No target-specific hardware dispatch is
-performed. The enabled profiles are:
+The kernels compile for every target, backend and CPU: the same source, volatile loads, mask
+arithmetic and an empty inline-assembly register barrier, which every LLVM target and the
+self-hosted backends accept. What differs is evidence. `zig build check-choices` inspects the
+lowering of Zig **0.17.0 LLVM** for the profiles in `src/secret/profiles.zig`
+(`aegis.secret.audited_profiles`), each in Debug, ReleaseSafe, ReleaseFast and ReleaseSmall
+and at the `basic`, `medium` and `full` side-channel mitigation levels:
 
-| Target | CPU |
+| Target | CPU models |
 |---|---|
-| x86_64-linux-gnu / x86_64-linux-musl | baseline x86_64 |
-| aarch64-linux-gnu | generic |
-| x86_64-windows-gnu / aarch64-windows-gnu | baseline x86_64 / generic |
-| x86_64-macos / aarch64-macos | baseline x86_64 / apple_m1 |
+| x86_64-linux-gnu | baseline, x86_64_v2, x86_64_v3, x86_64_v4 |
+| x86_64-linux-musl | baseline |
+| aarch64-linux-gnu | baseline (generic), neoverse_n1, neoverse_v2 |
+| x86_64-windows-gnu / aarch64-windows-gnu | baseline |
+| x86_64-macos | baseline |
+| aarch64-macos | baseline (apple_m1), apple_m2, apple_m3, apple_m4 |
+| x86_64-freebsd / openbsd / netbsd / dragonfly | baseline |
+| wasm32-freestanding | baseline (wasm bytecode; the engine's own compilation is not inspected) |
 
-Debug, ReleaseSafe, ReleaseFast and ReleaseSmall are checked. Root
-`std_options.side_channels_mitigations` may be `basic`, `medium` (default), or
-`full`; `none` is rejected. Other compiler versions/backends, custom CPU models
-or features, 32-bit, wasm, freestanding, and unlisted OS/ABI profiles fail when
-a kernel is instantiated. Other aegis modules remain usable on their own
-supported profiles. Importing this lazy module alone does not enable a kernel.
-Consumers must retain their own caller audit after composition, root-option,
-compiler, flag or CPU changes.
+`Choice.audited` is true when the build being compiled is one of them: the same compiler and
+backend, the target, and a CPU model with exactly that model's features, and mitigations not
+`none`. A build outside the list (another compiler, the self-hosted backend, `-mcpu=native`
+on a model not listed or with features added or removed, 32-bit or another architecture)
+compiles and runs the same source without that evidence. Refusing to compile there, as the
+first release did, left a portable consumer such as a TLS library on comparisons with no
+evidence at all; a consumer that requires the evidence asserts
+`comptime std.debug.assert(aegis.secret.Choice.audited)`, and one that ships to unlisted
+builds checks its own binary (cloak times its built binary). Adding a profile is a row in
+`profiles.zig`, which check-choices and the compile contracts then cover. Consumers retain
+their own caller audit after composition, root-option, compiler, flag or CPU changes.
 
 ### Kernels and checks
 

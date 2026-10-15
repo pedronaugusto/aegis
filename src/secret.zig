@@ -3,6 +3,8 @@ pub const Secret = @import("secret/inline.zig").Secret;
 pub const SecretBytes = @import("secret/SecretBytes.zig");
 const value = @import("secret/value.zig");
 pub const Choice = value.Choice;
+/// The builds whose Choice lowering `zig build check-choices` inspects (`Choice.audited`).
+pub const audited_profiles = @import("secret/profiles.zig");
 pub const OrderChoices = value.OrderChoices;
 pub const CompareError = value.CompareError;
 pub const SelectError = value.SelectError;
