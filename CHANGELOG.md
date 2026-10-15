@@ -4,6 +4,8 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-15
+
 ### Breaking
 
 - `secret.Choice` and its kernels compile for every target, backend and CPU instead of failing outside the checked profiles: a build that relied on the compile error to keep unaudited lowering out asserts `secret.Choice.audited` instead.
