@@ -4,6 +4,8 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-10-17
+
 ### Added
 
 - `Guarded(T).Guard.handOff()` and `Guarded(T).Handoff`: the release of a held lock, handed to code that runs it past the holder's frame (a scheduler releasing a lock once the holder's task is parked), released once with `release()`. glint's A003 reads it as a declared transfer, where a guard's address through an erased callback context stayed undecided.
