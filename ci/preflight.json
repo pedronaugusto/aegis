@@ -38,5 +38,6 @@
         "aegis"
       ]
     }
-  }
+  },
+  "extra_checks": [["zig", "build", "check-timing"]]
 }

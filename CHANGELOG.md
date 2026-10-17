@@ -4,6 +4,10 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- `secret.Timing` compiles for every architecture again: 0.1.10's AArch64 instructions reached an unoptimized build's assembler on x86_64 (and any architecture without the mode), which refused `mrs`, so a Debug build of any program using `Timing` failed outside AArch64. They are now behind a compile-time check, and `zig build check-timing` (in the gate) builds `Timing`'s span as an object for x86_64, AArch64 and wasm32, Debug and ReleaseFast.
+
 ## [0.1.10] - 2026-10-17
 
 ### Fixed

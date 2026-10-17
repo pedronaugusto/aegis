@@ -72,6 +72,9 @@ pub const Timing = struct {
 
     /// Turns the mode on; pair with `end` in a `defer`.
     pub inline fn begin() Timing {
+        // At compile time first: the AArch64 instructions below must not reach another
+        // architecture's assembler, which an unoptimized build would otherwise give them.
+        if (comptime !available) return .{ .previous = 0 };
         if (!supported()) return .{ .previous = 0 };
         // DIT is S3_3_C4_C2_5, its bit 24 the mode; spelled as the register number so no
         // assembler feature is needed beyond what the target already has.
@@ -87,6 +90,7 @@ pub const Timing = struct {
 
     /// Restores the mode `begin` found.
     pub inline fn end(timing: Timing) void {
+        if (comptime !available) return;
         if (!supported()) return;
         asm volatile ("msr s3_3_c4_c2_5, %[value]"
             :
@@ -96,6 +100,7 @@ pub const Timing = struct {
 
     /// Whether the mode is on now (false where the processor has none).
     pub fn active() bool {
+        if (comptime !available) return false;
         if (!supported()) return false;
         const value = asm volatile ("mrs %[value], s3_3_c4_c2_5"
             : [value] "=r" (-> u64),

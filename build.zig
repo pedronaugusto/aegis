@@ -109,6 +109,26 @@ pub fn dev(b: *std.Build, tools: type) void {
     run_bytes_contracts.addArg(b.graph.zig_exe);
     run_bytes_contracts.setCwd(p.path("."));
     b.step("check-secret-bytes", "Require all-mode move rejection and portable byte owner compilation").dependOn(&run_bytes_contracts.step);
+    // Timing's AArch64 instructions are compiled only where they can run: an object of its span
+    // for each architecture, unoptimized too, where nothing else removes the dead branch.
+    const timing_step = b.step("check-timing", "Compile secret.Timing's span for every architecture, a no-op where there is no mode");
+    for ([_]std.Target.Query{
+        .{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .gnu },
+        .{ .cpu_arch = .x86_64, .os_tag = .macos },
+        .{ .cpu_arch = .x86_64, .os_tag = .windows, .abi = .gnu },
+        .{ .cpu_arch = .aarch64, .os_tag = .linux, .abi = .gnu },
+        .{ .cpu_arch = .aarch64, .os_tag = .macos },
+        .{ .cpu_arch = .wasm32, .os_tag = .freestanding },
+    }) |query| {
+        const timing_target = b.resolveTargetQuery(query);
+        for ([_]std.lang.Optimize{ .debug, .fast }) |mode| {
+            const timing_module = b.createModule(.{ .root_source_file = p.path("ci/timing.zig"), .target = timing_target, .optimize = mode, .imports = &.{.{ .name = "aegis", .module = b.dependency("aegis", .{ .target = timing_target, .optimize = mode }).module("aegis") }} });
+            const timing_object = b.addObject(.{ .name = "aegis-timing", .root_module = timing_module });
+            // The object itself, not only its analysis: the assembler is what refuses.
+            _ = timing_object.getEmittedBin();
+            timing_step.dependOn(&timing_object.step);
+        }
+    }
     const focus = b.step("test-handles-input", "Run selected A8/A9 cases without unrelated tooling");
     const focused = b.addTest(.{ .root_module = m, .filters = filters, .use_llvm = true });
     focus.dependOn(&b.addRunArtifact(focused).step);
