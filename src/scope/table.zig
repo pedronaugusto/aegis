@@ -83,8 +83,8 @@ fn ScopeOf(comptime Brand: type) type {
         /// A reference to `pointer` that is good while this scope is open. The scope vouches for the memory:
         /// the creator frees or resets it when the scope ends.
         pub fn ref(self: Self, pointer: anytype) refs.Ref(Brand, @TypeOf(pointer)) {
-            if (!checked) return .{ .ptr = pointer, .slot = {}, .generation = {} };
-            return .{ .ptr = pointer, .slot = self.record("scope used after it ended"), .generation = self.generation };
+            if (!checked) return .{ .pointer = pointer, .slot = {}, .generation = {} };
+            return .{ .pointer = pointer, .slot = self.record("scope used after it ended"), .generation = self.generation };
         }
 
         /// Binds a reference made in another scope, of any brand, to this one. This is the one way a
