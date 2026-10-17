@@ -4,6 +4,8 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+## [0.1.14] - 2026-10-17
+
 ### Changed
 
 - `scope.Ref`'s private pointer is the field `pointer`, no longer `ptr`: a slice's own member has that name, so a read of `x.ptr` in generic code could not be told from a reference's private state. Reach the pointer through `get` as before.
