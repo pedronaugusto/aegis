@@ -43,7 +43,7 @@ test "Timing turns data-independent timing on for its span and restores it" {
     {
         const timing = machine.Timing.begin();
         defer timing.end();
-        try std.testing.expectEqual(machine.Timing.available, machine.Timing.active());
+        try std.testing.expectEqual(machine.Timing.supported(), machine.Timing.active());
     }
     try std.testing.expectEqual(before, machine.Timing.active());
 }
@@ -51,7 +51,7 @@ test "Timing turns data-independent timing on for its span and restores it" {
 noinline fn secretWork(fill: u8, out: *u8) error{Never}!u8 {
     victim(fill);
     out.* = fill;
-    return if (machine.Timing.available) @intFromBool(machine.Timing.active()) else fill;
+    return if (machine.Timing.supported()) @intFromBool(machine.Timing.active()) else fill;
 }
 
 test "scrubbed runs the call under data-independent timing and leaves nothing below" {
@@ -59,6 +59,6 @@ test "scrubbed runs the call under data-independent timing and leaves nothing be
     var out: u8 = 0;
     const result = try machine.scrubbed(8192, secretWork, .{ 0x3c, &out });
     try std.testing.expectEqual(@as(u8, 0x3c), out);
-    if (machine.Timing.available) try std.testing.expectEqual(@as(u8, 1), result);
+    if (machine.Timing.supported()) try std.testing.expectEqual(@as(u8, 1), result);
     try std.testing.expect(residue(8192, 0x3c) < 8);
 }

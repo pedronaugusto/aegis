@@ -50,17 +50,29 @@ noinline fn paint(comptime bytes: usize) void {
 
 /// Data-independent timing for the span of a secret computation. On AArch64 with FEAT_DIT the
 /// architecture then guarantees that data-processing instructions take a time independent of
-/// their operands, and Apple's cores turn off the data memory-dependent prefetcher (GoFetch,
-/// 2024). Where the target has no such control it does nothing.
+/// their operands, and Apple's cores from the M3 on turn off the data memory-dependent
+/// prefetcher (GoFetch, 2024). Where the processor has no such control it does nothing.
 pub const Timing = struct {
     previous: u64,
 
-    /// Whether this target sets the processor's data-independent timing mode.
-    pub const available = builtin.cpu.arch == .aarch64 and std.Target.aarch64.featureSetHas(builtin.cpu.features, .dit);
+    const in_target = builtin.cpu.arch == .aarch64 and std.Target.aarch64.featureSetHas(builtin.cpu.features, .dit);
+
+    /// Whether this build can set the processor's data-independent timing mode: an AArch64
+    /// target that has FEAT_DIT, or AArch64 Linux, where the kernel says at run time whether the
+    /// processor has it (a baseline AArch64 build runs on processors with and without it).
+    pub const available = builtin.cpu.arch == .aarch64 and (in_target or builtin.os.tag == .linux);
+
+    /// Whether this processor has the mode: known at compile time where the target has it, asked
+    /// of the kernel once otherwise (HWCAP_DIT), since setting it on a processor without it traps.
+    pub fn supported() bool {
+        if (!available) return false;
+        if (in_target) return true;
+        return detected();
+    }
 
     /// Turns the mode on; pair with `end` in a `defer`.
     pub inline fn begin() Timing {
-        if (!available) return .{ .previous = 0 };
+        if (!supported()) return .{ .previous = 0 };
         // DIT is S3_3_C4_C2_5, its bit 24 the mode; spelled as the register number so no
         // assembler feature is needed beyond what the target already has.
         const previous = asm volatile ("mrs %[value], s3_3_c4_c2_5"
@@ -75,19 +87,35 @@ pub const Timing = struct {
 
     /// Restores the mode `begin` found.
     pub inline fn end(timing: Timing) void {
-        if (!available) return;
+        if (!supported()) return;
         asm volatile ("msr s3_3_c4_c2_5, %[value]"
             :
             : [value] "r" (timing.previous),
             : .{ .memory = true });
     }
 
-    /// Whether the mode is on now (false where it is not available).
+    /// Whether the mode is on now (false where the processor has none).
     pub fn active() bool {
-        if (!available) return false;
+        if (!supported()) return false;
         const value = asm volatile ("mrs %[value], s3_3_c4_c2_5"
             : [value] "=r" (-> u64),
         );
         return value & (1 << 24) != 0;
+    }
+
+    /// The kernel's answer, asked once per process: 0 not yet asked, 1 absent, 2 present. Racing
+    /// first callers ask alike and store alike.
+    var detection: std.atomic.Value(u8) = .init(0);
+
+    fn detected() bool {
+        switch (detection.load(.monotonic)) {
+            1 => return false,
+            2 => return true,
+            else => {},
+        }
+        const hwcap = if (builtin.link_libc) std.c.getauxval(std.elf.AT.HWCAP) else std.os.linux.getauxval(std.elf.AT.HWCAP);
+        const present = hwcap & std.os.linux.HWCAP.DIT != 0;
+        detection.store(if (present) 2 else 1, .monotonic);
+        return present;
     }
 };

@@ -4,6 +4,10 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- `secret.Timing` sets data-independent timing on AArch64 Linux too: it was decided at compile time from the target's features, so a baseline AArch64 build (Linux distributions' default) never set it on a processor that has it. Where the target does not say, `Timing.supported()` asks the kernel once (HWCAP_DIT); the mode is set only where the processor has it, since setting it on one without traps. `Timing.available` now says the build can set it, `supported()` that this processor does. cloak's timing campaign found std's X25519 timed apart by its secret on an Apple M3 without the mode.
+
 ## [0.1.9] - 2026-10-15
 
 The change tagged v0.2.0 the same day, released on the 0.1 line: it breaks no caller (only builds that failed to compile now compile), and a family resolves aegis within one line, so a new minor would have split every package that also reaches aegis through shakedown. Use 0.1.9; v0.2.0 is withdrawn.
