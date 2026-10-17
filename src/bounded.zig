@@ -396,6 +396,15 @@ pub fn Budget(comptime Repr: type) type {
                 if (self.amount > self.budget.taken) @panic("budget reservation underflow");
                 self.budget.taken -= self.amount;
             }
+            /// Ends the reservation with its amount kept as consumed work, as `Budget.consume`
+            /// charges it: what it was reserved for was done, and the budget never takes it back.
+            /// An allocation charged before it is made keeps its charge this way once it succeeds.
+            pub fn consume(self: *Reservation) void {
+                if (diagnostics) {
+                    std.debug.assert(self.live);
+                    self.live = false;
+                }
+            }
             pub fn moveInto(self: *Reservation, destination: *Reservation) void {
                 if (diagnostics) {
                     std.debug.assert(self.live);

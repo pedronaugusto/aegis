@@ -4,6 +4,10 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Added
+
+- `Budget.Reservation.consume()`: ends a reservation with its amount kept as consumed work. A charge taken before an allocation is released if the allocation fails and consumed once it succeeds; before, a successful path could only drop the live reservation (strand's `Context.alloc`). glint's A003 reads it as the reservation's discharge.
+
 ## [0.1.12] - 2026-10-17
 
 ### Added

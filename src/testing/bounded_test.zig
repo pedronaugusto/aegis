@@ -82,6 +82,11 @@ test "A7 reservations transfer reap rollback and permanent consumption" {
     try bytes.consume(1);
     transferred.release();
     try t.expectEqual(@as(u8, 254), bytes.remaining());
+    // A reservation consumed keeps its charge: the work it reserved was done.
+    var done = try bytes.reserve(4);
+    done.consume();
+    try t.expectEqual(@as(u8, 250), bytes.remaining());
+    try t.expectEqual(@as(u8, 5), bytes.charged());
     try t.expectError(error.LimitExceeded, b.Limit(u8).init(0).check(1));
     try b.Limit(u8).init(0).check(0);
 }
