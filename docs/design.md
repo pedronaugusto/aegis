@@ -185,8 +185,11 @@ deepest byte changed); a test that measures and asserts the depth keeps a deeper
 callee from outgrowing it. Live registers, the caller's own frame and a signal
 stack stay out of reach. `Timing` sets data-independent timing where the
 architecture has the control (AArch64 FEAT_DIT, known at compile time from the
-target's features; a generic AArch64 target without it does nothing rather
-than trap on a processor that lacks it).
+target's features or, on AArch64 Linux, asked of the kernel at run time; a
+processor without it is left alone rather than trapped). A `Choice` and its
+kernels are constant-time on the hardware only under `Timing`: their lowering
+has no secret-dependent branch or load, but on AArch64 without DIT set an
+instruction's time can depend on its operands, and a comparison's did.
 
 Hardware constant-time assurance remains unestablished. Native x86 timing, class-resolved cache misses, power, EM, cross-thread leakage and arbitrary whole-program behavior remain outside this checked compiler boundary. Observed secret-class timing differences remain unresolved; passing caller checks does not explain those differences or prove data-independent physical execution.
 

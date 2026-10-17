@@ -8,6 +8,10 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 - `Guarded(T).Guard.handOff()` and `Guarded(T).Handoff`: the release of a held lock, handed to code that runs it past the holder's frame (a scheduler releasing a lock once the holder's task is parked), released once with `release()`. glint's A003 reads it as a declared transfer, where a guard's address through an erased callback context stayed undecided.
 
+### Changed
+
+- The docs say that a `Choice` is constant-time on the hardware only under `secret.Timing`: on AArch64 without DIT set, a comparison's time depends on its operands (cloak road A's finding).
+
 ## [0.1.11] - 2026-10-17
 
 ### Fixed

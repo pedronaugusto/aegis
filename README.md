@@ -182,7 +182,7 @@ Each scalar publishes the parameters it was made from: `Representation` on `int.
 
 ## Scope
 
-`aegis.secret` exposes `Choice`, `equal`, `equalBytes`, `compareUnsigned` and `OrderChoices`; choices offer logic, integer/byte selection and explicit `declassify(comptime reason)`. `Choice.audited` is true when the build is one of `secret.audited_profiles`, whose lowering `zig build check-choices` inspects. Public length and overlap validation remain enabled.
+`aegis.secret` exposes `Choice`, `equal`, `equalBytes`, `compareUnsigned` and `OrderChoices`; choices offer logic, integer/byte selection and explicit `declassify(comptime reason)`. `Choice.audited` is true when the build is one of `secret.audited_profiles`, whose lowering `zig build check-choices` inspects. A choice's lowering is free of secret-dependent branches and loads; its time on the hardware is independent of the data only inside `secret.Timing` (`Timing.begin()`/`end`), where the processor has a data-independent mode: on AArch64 without FEAT_DIT set, a comparison's time depends on its operands (cloak's timing campaign). Public length and overlap validation remain enabled.
 
 No reference counting, protocol parsers, stored deleter vtables, hidden workers, automatic destructors or code analysis. Runtime closure is std only. Tags, checks and explicit raw boundaries are API discipline; Zig fields/reflection can bypass them. [Design](https://github.com/pedronaugusto/aegis/blob/main/docs/design.md) records the ownership and foreign-boundary contracts. Glint admission and consumer adoption remain later work. Equal handwritten wipe/locking cost does not mean those operations have zero cost.
 
