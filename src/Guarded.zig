@@ -110,6 +110,26 @@ pub fn Guarded(comptime T: type) type {
             pub fn deinit(guard: *Guard) void {
                 guard.owner.lock.store(false, .release);
             }
+
+            /// Consume this capability, the lock still held, and give its release to the
+            /// returned value: for a release that runs past this frame, on code the holder
+            /// hands it to, as a scheduler releases a lock once the holder's task is off its
+            /// stack. The guard is not used again; the hand-off is released exactly once.
+            pub fn handOff(guard: *Guard) Handoff {
+                return .{ .owner = guard.owner };
+            }
+        };
+
+        /// The release of a held lock, handed past the frame that acquired it
+        /// (`Guard.handOff`). It borrows no data: the holder's sections are done.
+        pub const Handoff = struct {
+            /// Private: valid only until release.
+            owner: *Self,
+
+            /// Release with publication ordering and consume the hand-off.
+            pub fn release(handoff: *Handoff) void {
+                handoff.owner.lock.store(false, .release);
+            }
         };
     };
 }

@@ -74,3 +74,34 @@ test "Guarded scheduling acquire keeps mutual exclusion and sees a held lock" {
     try std.testing.expectEqual(@as(usize, 4 * 2000), held.value().count);
     try std.testing.expectEqual(@as(usize, 4 * 2000 * 17), held.value().checksum);
 }
+
+/// What a scheduler runs once the holder is off its stack: the release, through an erased context.
+fn releaseHandedOff(context: *anyopaque) void {
+    const handoff: *Guarded(Shared).Handoff = @ptrCast(@alignCast(context)); // safe: the test passes its hand-off
+    handoff.release();
+}
+
+fn releaseOnThread(handoff: *Guarded(Shared).Handoff) void {
+    releaseHandedOff(handoff);
+}
+
+test "Guarded hand-off keeps the lock held until the code it is handed to releases it" {
+    var owner = Guarded(Shared).init(.{});
+    var held = owner.acquire();
+    held.value().count = 1;
+    var handoff = held.handOff();
+    try std.testing.expect(owner.isHeld());
+    try std.testing.expect(owner.tryAcquire() == null);
+    releaseHandedOff(&handoff);
+    try std.testing.expect(!owner.isHeld());
+
+    // Released on another thread: what the holder wrote is published with it.
+    held = owner.acquire();
+    held.value().count = 2;
+    handoff = held.handOff();
+    const thread = try std.Thread.spawn(.{}, releaseOnThread, .{&handoff});
+    var after = owner.acquire();
+    defer after.deinit();
+    thread.join();
+    try std.testing.expectEqual(@as(usize, 2), after.value().count);
+}
