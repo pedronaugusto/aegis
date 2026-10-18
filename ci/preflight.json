@@ -3,7 +3,8 @@
     "src"
   ],
   "glint": {
-    "rules": [{"id": "P001", "level": "gate"}, {"id": "P003", "level": "gate"}, {"id": "Z026", "level": "gate"}]
+    "rules": [{"id": "P001", "level": "gate"}, {"id": "P003", "level": "gate"}, {"id": "Z026", "level": "gate"}],
+    "disallowed": [{"source": "std", "declaration": "Io.async", "reason": "the caller owns asynchronous work", "replacement": "return the work and let the caller start it"}]
   },
   "test_roots": [
     "src/root.zig"

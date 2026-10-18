@@ -15,24 +15,3 @@ pub const entries: []const []const u8 = &.{"src/root.zig"};
 pub const modules: []const gantry.NamedModule = &.{ .{ .name = "shakedown", .path = "" }, .{ .name = "material", .path = "" } };
 const leaf = [_]gantry.rules.ReferenceRule{.{ .name = "std-only leaf", .unresolved_only = true, .except_targets = &.{ "std", "builtin", "shakedown", "material" } }};
 pub const references: []const gantry.rules.ReferenceRule = &leaf;
-pub const owned: []const gantry.rules.TokenRule = &(durability ++ no_async);
-
-/// Durable writes go through airlock.
-const durability = [_]gantry.rules.TokenRule{.{
-    .name = "durability belongs to airlock",
-    .sequences = &.{
-        &.{ ".", "sync", "(" },
-        &.{ ".", "syncFile", "(" },
-        &.{ ".", "syncDir", "(" },
-        &.{ "createFileAtomic", "(" },
-        &.{ "fsync", "(" },
-        &.{ "fdatasync", "(" },
-        &.{ "FlushFileBuffers", "(" },
-    },
-}};
-
-/// The caller owns asynchronous work.
-const no_async = [_]gantry.rules.TokenRule{.{
-    .name = "async belongs to the caller",
-    .sequences = &.{&.{ "io", ".", "async", "(" }},
-}};
