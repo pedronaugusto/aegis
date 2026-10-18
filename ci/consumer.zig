@@ -14,7 +14,7 @@ pub fn main() !void {
     const n = try aegis.int.Checked(usize).init(7).mul(9);
     const identifier = aegis.id.Id(struct {}, u64).fromRaw(n.raw());
     const bytes = try aegis.units.Bits(u64).fromRaw(identifier.raw()).toBytesRounded(.up);
-    aegis.assert.invariant(bytes.raw() == 8, "checked byte conversion");
+    aegis.assert.invariant(bytes.eql(.fromRaw(8)), "checked byte conversion");
     var domain = aegis.handle.Domain.init(0x1234);
     const Pool = aegis.handle.Pool(u32, struct {});
     var slots: [1]Pool.Slot = undefined;

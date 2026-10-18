@@ -33,7 +33,7 @@ const request = try Request.fromRaw(1);
 const size = try aegis.int.Checked(usize).init(4).mul(8);
 const payload = aegis.units.Bytes(usize).fromRaw(size.raw());
 const timeout = aegis.units.Duration(.millisecond, i64).fromRaw(250).toIoDuration();
-aegis.assert.post(payload.raw() == 32, "payload fits the record");
+aegis.assert.post(payload.eql(.fromRaw(32)), "payload fits the record");
 // One text form for durations and sizes, exact both ways: `1m30s`, `64MiB`.
 const grace = try aegis.units.Duration(.millisecond, u32).parse("1m30s");
 const limit = try aegis.units.Bytes(u64).parse("64MiB");
