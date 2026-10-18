@@ -7,7 +7,6 @@ const Frame = struct {
     offset: u32,
     reason: enum { bad_length, canceled },
 };
-const C = e.Context(Frame, 2);
 test "A9 inline contexts preserve first frames cause and independent copies" {
     var failure: e.Failure(error{ BadLength, Canceled }, Frame, 2) = .{ .cause = error.BadLength };
     failure.context.push(.{ .phase = .record, .offset = 3, .reason = .bad_length });
