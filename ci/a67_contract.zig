@@ -37,8 +37,10 @@ pub fn main(init: std.process.Init) !void {
     } else if (std.mem.eql(u8, name, "owned")) {
         var owner = a.own.Owned(u64, cleanup).init(1);
         owner.deinit();
+        // glint-ignore: A003 -- design: the deliberate second release the checked builds stop on; an isolated child process runs it
         owner.deinit();
     } else if (std.mem.eql(u8, name, "must-use")) {
+        // glint-ignore: A003 -- design: the deliberately undischarged result the checked builds stop on; an isolated child process runs it
         var outcome = a.own.MustUse(u64, "required outcome inspection").init(1);
         outcome.deinit();
     } else if (std.mem.eql(u8, name, "association")) {
@@ -46,6 +48,7 @@ pub fn main(init: std.process.Init) !void {
         var second = a.BlockingGuarded(u64).init(2);
         var condition = a.Condition.initLimit(0);
         var held = try first.acquire(init.io);
+        errdefer held.deinit(init.io);
         condition.wait(init.io, &held, .none) catch |err| {
             if (err != error.WaiterLimit) return err;
         };
@@ -62,6 +65,7 @@ pub fn main(init: std.process.Init) !void {
         budget.taken = 0;
         reservation.release();
     } else if (std.mem.eql(u8, name, "shared-overflow")) {
+        // glint-ignore: A003 -- design: never released, as the retain past the limit stops the run in every build; an isolated child process runs it
         var owner = try S.create(std.heap.page_allocator, 1);
         // glint-ignore: A001 -- design: a deliberately corrupted count in an isolated child process; it isolates the all-mode limit
         owner.block.count.store(S.maximum_handles, .monotonic);
@@ -70,6 +74,7 @@ pub fn main(init: std.process.Init) !void {
         var owner = try S.create(std.heap.page_allocator, 1);
         var other = owner.retain();
         owner.release();
+        // glint-ignore: A003 -- design: the deliberate second release the checked builds stop on; an isolated child process runs it
         owner.release();
         other.release();
     } else if (std.mem.eql(u8, name, "teardown-held")) {

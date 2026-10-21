@@ -28,16 +28,18 @@ pub fn main(init: std.process.Init) !void {
         std.mem.doNotOptimizeAway(stale.get().*);
     } else if (std.mem.eql(u8, name, "end-twice")) {
         const request = try table.open();
-        const copy = request;
         request.end();
-        copy.end();
+        // glint-ignore: A003 -- design: the deliberate second end the checked builds stop on; an isolated child process runs it
+        request.end();
     } else if (std.mem.eql(u8, name, "ref-after-end")) {
         const request = try table.open();
         request.end();
+        // glint-ignore: A003 -- design: the deliberate use of an ended scope the checked builds stop on; an isolated child process runs it
         std.mem.doNotOptimizeAway(request.ref(&storage));
     } else if (std.mem.eql(u8, name, "reborrow-expired")) {
         const request = try table.open();
-        const connection = try other.open();
+        // glint-ignore: A003 -- design: left open, as the checked builds stop at the stale reborrow before its end; an isolated child process runs it
+        const connection = other.open() catch unreachable; // unreachable: a table of one slot opens its first scope
         const view = request.ref(&storage);
         request.end();
         std.mem.doNotOptimizeAway(connection.reborrow(view));
@@ -45,8 +47,8 @@ pub fn main(init: std.process.Init) !void {
         var open_slots: [1]a.scope.Table(Request).Slot = undefined;
         var open = a.scope.Table(Request).init(&open_slots);
         errdefer open.deinit();
-        const request = try open.open();
-        std.mem.doNotOptimizeAway(request);
+        // The scope stays open: the teardown below is the violation.
+        _ = try open.open();
         open.deinit();
     } else return error.UnknownCase;
 }
