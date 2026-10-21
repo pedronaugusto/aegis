@@ -7,8 +7,8 @@
     .dependencies = .{},
     .dev_dependencies = .{
         .preflight = .{
-            .url = "git+https://github.com/pedronaugusto/preflight?ref=v0.11.0#eea6503d9f0bef415054dda0801c99bf51349fe2",
-            .hash = "preflight-0.11.0-LX1ZwqjVEgCdvh79Szw-T-WWXlrvp0es54ZGSOEutILh",
+            .url = "git+https://github.com/pedronaugusto/preflight?ref=v0.12.1#ca6342eb24d5f9b17dc5ba61cec15b4c7bf4d5e0",
+            .hash = "preflight-0.12.1-LX1ZwktkEwBIS-GYb_oRsejXQEmMS33pCXef29YbD59N",
         },
 
         .shakedown = .{
