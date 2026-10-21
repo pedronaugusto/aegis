@@ -1,35 +1,27 @@
 //! Scope mode matrix, intended-reason compile rejections and portable profiles.
+//! The build compiles the contract program in each mode and passes the binaries
+//! after the Zig, in the order of `modes`; it compiles the portable profiles too.
 const std = @import("std");
-const builtin = @import("builtin");
 
-const Run = struct { gpa: std.mem.Allocator, arena: std.mem.Allocator, io: std.Io, zig: []const u8 };
+const Run = struct { gpa: std.mem.Allocator, arena: std.mem.Allocator, io: std.Io, zig: []const u8, binaries: []const []const u8 };
+
+const modes = [_][]const u8{ "Debug", "ReleaseSafe", "ReleaseFast", "ReleaseSmall" };
 
 pub fn main(init: std.process.Init) !void {
     const arena = init.arena.allocator();
     const args = try init.minimal.args.toSlice(arena);
-    if (args.len != 2) return error.ZigExecutableRequired;
-    const run: Run = .{ .gpa = init.gpa, .arena = arena, .io = init.io, .zig = args[1] };
-    try std.Io.Dir.cwd().createDirPath(init.io, ".zig-cache/a12");
-    try modes(run);
+    if (args.len != 2 + modes.len) return error.ContractBinariesRequired;
+    const run: Run = .{ .gpa = init.gpa, .arena = arena, .io = init.io, .zig = args[1], .binaries = args[2..] };
+    try matrix(run);
     try rejections(run);
-    try portable(run);
     var out = std.Io.File.stdout().writer(init.io, &.{});
-    try out.interface.writeAll("A12: mode matrix, 8 compiler rejections and 6 portable profiles passed\n");
+    try out.interface.writeAll("A12: mode matrix and 8 compiler rejections passed\n");
     try out.interface.flush();
 }
 
 /// Every case stops in Debug and ReleaseSafe and runs to the end in ReleaseFast and ReleaseSmall.
-fn modes(run: Run) !void {
-    for ([_][]const u8{ "Debug", "ReleaseSafe", "ReleaseFast", "ReleaseSmall" }) |mode| {
-        const binary = try run.arena.print(".zig-cache/a12/contracts-{s}{s}", .{ mode, if (builtin.target.os.tag == .windows) ".exe" else "" });
-        const compiled = try std.process.run(run.gpa, run.io, .{ .argv = &.{ run.zig, "build-exe", try run.arena.print("-O{s}", .{mode}), "--dep", "aegis", "-Mroot=ci/a12_contract.zig", "-Maegis=src/root.zig", try run.arena.print("-femit-bin={s}", .{binary}) }, .stderr_limit = .limited(16384) });
-        defer run.gpa.free(compiled.stdout);
-        defer run.gpa.free(compiled.stderr);
-        if (compiled.term != .exited or compiled.term.exited != 0) {
-            var out = std.Io.File.stderr().writerStreaming(run.io, &.{});
-            try out.interface.writeAll(compiled.stderr);
-            return error.ContractCompilationFailed;
-        }
+fn matrix(run: Run) !void {
+    for (modes, run.binaries) |mode, binary| {
         const checked = std.mem.eql(u8, mode, "Debug") or std.mem.eql(u8, mode, "ReleaseSafe");
         const cases = [_]struct { name: []const u8, message: []const u8 }{
             .{ .name = "ref-expired", .message = "scope reference used after its scope ended" },
@@ -99,21 +91,6 @@ fn rejections(run: Run) !void {
                 try out.interface.print("A12 negative {d} {s}: expected {s}\n{s}", .{ i, mode, case[1], result.stderr });
                 try out.interface.flush();
                 return error.ScopeContractNotDiagnosed;
-            }
-        }
-    }
-}
-
-fn portable(run: Run) !void {
-    for ([_][]const u8{ "x86-linux-gnu", "wasm32-freestanding", "aarch64-freestanding" }) |target| {
-        for ([_][]const u8{ "ReleaseSafe", "ReleaseFast" }) |mode| {
-            const result = try std.process.run(run.gpa, run.io, .{ .argv = &.{ run.zig, "build-obj", try run.arena.print("-O{s}", .{mode}), "-target", target, "--dep", "aegis", "-Mroot=ci/a12_values.zig", "-Maegis=src/root.zig", "-fno-emit-bin" }, .stderr_limit = .limited(16384) });
-            defer run.gpa.free(result.stdout);
-            defer run.gpa.free(result.stderr);
-            if (result.term != .exited or result.term.exited != 0) {
-                var out = std.Io.File.stderr().writerStreaming(run.io, &.{});
-                try out.interface.writeAll(result.stderr);
-                return error.PortableScopeCompilationFailed;
             }
         }
     }

@@ -82,8 +82,11 @@ pub fn dev(b: *std.Build, tools: type) void {
     }) });
     const run_contracts = b.addRunArtifact(contracts);
     run_contracts.addArg(b.graph.zig_exe);
+    contractBinaries(b, p, run_contracts, "ci/contract.zig", &.{ .safe, .fast });
     run_contracts.setCwd(p.path("."));
-    b.step("check-contracts", "Require release fail-stop and portable scalar profiles").dependOn(&run_contracts.step);
+    const contracts_step = b.step("check-contracts", "Require release fail-stop and portable scalar profiles");
+    contracts_step.dependOn(&run_contracts.step);
+    portableProfiles(b, p, contracts_step, "ci/scalars.zig", &.{.fast});
     const choices_codegen = b.addExecutable(.{ .name = "aegis-choices-codegen", .root_module = b.createModule(.{
         .root_source_file = p.path("ci/choice_codegen.zig"),
         .target = b.graph.host,
@@ -106,9 +109,10 @@ pub fn dev(b: *std.Build, tools: type) void {
         .optimize = .safe,
     }) });
     const run_bytes_contracts = b.addRunArtifact(bytes_contracts);
-    run_bytes_contracts.addArg(b.graph.zig_exe);
-    run_bytes_contracts.setCwd(p.path("."));
-    b.step("check-secret-bytes", "Require all-mode move rejection and portable byte owner compilation").dependOn(&run_bytes_contracts.step);
+    contractBinaries(b, p, run_bytes_contracts, "ci/bytes_contract.zig", &.{ .debug, .safe, .fast });
+    const bytes_step = b.step("check-secret-bytes", "Require all-mode move rejection and portable byte owner compilation");
+    bytes_step.dependOn(&run_bytes_contracts.step);
+    portableProfiles(b, p, bytes_step, "ci/a4_contract.zig", &.{.fast});
     // Timing's AArch64 instructions are compiled only where they can run: an object of its span
     // for each architecture, unoptimized too, where nothing else removes the dead branch.
     const timing_step = b.step("check-timing", "Compile secret.Timing's span for every architecture, a no-op where there is no mode");
@@ -148,9 +152,10 @@ pub fn dev(b: *std.Build, tools: type) void {
     }
     const a67 = b.addExecutable(.{ .name = "aegis-a67-contracts", .root_module = b.createModule(.{ .root_source_file = p.path("ci/a67_check.zig"), .target = b.graph.host, .optimize = .safe }) });
     const run_a67 = b.addRunArtifact(a67);
-    run_a67.addArg(b.graph.zig_exe);
-    run_a67.setCwd(p.path("."));
-    b.step("check-a67", "Require mode-matrix safety/diagnostics and portable value layouts").dependOn(&run_a67.step);
+    contractBinaries(b, p, run_a67, "ci/a67_contract.zig", &.{ .debug, .safe, .fast, .small });
+    const a67_step = b.step("check-a67", "Require mode-matrix safety/diagnostics and portable value layouts");
+    a67_step.dependOn(&run_a67.step);
+    portableProfiles(b, p, a67_step, "ci/a67_values.zig", &.{ .safe, .fast });
     const a67_tests = b.step("test-a67", "Run A6/A7 synchronization, ownership and bounds in both release modes");
     const bytes_tests = b.step("test-secret-bytes", "Run A4 ownership contracts in both release modes");
     const scalar_tests = b.step("test-scalars", "Run A3 contracts in both release modes");
@@ -166,8 +171,11 @@ pub fn dev(b: *std.Build, tools: type) void {
     const a10 = b.addExecutable(.{ .name = "aegis-a10-contracts", .root_module = b.createModule(.{ .root_source_file = p.path("ci/a10_check.zig"), .target = b.graph.host, .optimize = .safe }) });
     const run_a10 = b.addRunArtifact(a10);
     run_a10.addArg(b.graph.zig_exe);
+    contractBinaries(b, p, run_a10, "ci/a10_contract.zig", &.{ .debug, .safe, .fast, .small });
     run_a10.setCwd(p.path("."));
-    b.step("check-a10", "Require typestate mode-matrix contracts, intended-reason rejections and portable profiles").dependOn(&run_a10.step);
+    const a10_step = b.step("check-a10", "Require typestate mode-matrix contracts, intended-reason rejections and portable profiles");
+    a10_step.dependOn(&run_a10.step);
+    portableProfiles(b, p, a10_step, "ci/a10_values.zig", &.{ .safe, .fast });
     const a10_tests = b.step("test-a10", "Run A10 typestate semantics in the three release modes");
     for ([_]std.lang.Optimize{ .safe, .fast, .small }) |mode| {
         const release_module = testModule(b, b.graph.host, mode);
@@ -177,8 +185,11 @@ pub fn dev(b: *std.Build, tools: type) void {
     const a12 = b.addExecutable(.{ .name = "aegis-a12-contracts", .root_module = b.createModule(.{ .root_source_file = p.path("ci/a12_check.zig"), .target = b.graph.host, .optimize = .safe }) });
     const run_a12 = b.addRunArtifact(a12);
     run_a12.addArg(b.graph.zig_exe);
+    contractBinaries(b, p, run_a12, "ci/a12_contract.zig", &.{ .debug, .safe, .fast, .small });
     run_a12.setCwd(p.path("."));
-    b.step("check-a12", "Require scope mode-matrix contracts, intended-reason rejections and portable profiles").dependOn(&run_a12.step);
+    const a12_step = b.step("check-a12", "Require scope mode-matrix contracts, intended-reason rejections and portable profiles");
+    a12_step.dependOn(&run_a12.step);
+    portableProfiles(b, p, a12_step, "ci/a12_values.zig", &.{ .safe, .fast });
     const a12_tests = b.step("test-a12", "Run A12 scope semantics in the three release modes");
     for ([_]std.lang.Optimize{ .safe, .fast, .small }) |mode| {
         const release_module = testModule(b, b.graph.host, mode);
@@ -186,6 +197,32 @@ pub fn dev(b: *std.Build, tools: type) void {
         a12_tests.dependOn(&b.addRunArtifact(release_tests).step);
     }
     contractGroups(b);
+}
+
+/// A contract program in each mode its check runs it in, the binaries passed to the
+/// check in that order. The build compiles them, so it states what they import.
+fn contractBinaries(b: *std.Build, p: *std.Build, run: *std.Build.Step.Run, source: []const u8, modes: []const std.lang.Optimize) void {
+    for (modes) |mode| {
+        const program = b.addExecutable(.{ .name = b.fmt("{s}-{t}", .{ std.Io.Dir.path.stem(source), mode }), .root_module = contractModule(b, p, source, b.graph.host, mode) });
+        run.addFileArg(program.getEmittedBin());
+    }
+}
+
+/// A program that must compile for each portable profile: analysed as an object
+/// for every target and mode.
+fn portableProfiles(b: *std.Build, p: *std.Build, step: *std.Build.Step, source: []const u8, modes: []const std.lang.Optimize) void {
+    for ([_]std.Target.Query{
+        .{ .cpu_arch = .x86, .os_tag = .linux, .abi = .gnu },
+        .{ .cpu_arch = .wasm32, .os_tag = .freestanding },
+        .{ .cpu_arch = .aarch64, .os_tag = .freestanding },
+    }) |query| {
+        const target = b.resolveTargetQuery(query);
+        for (modes) |mode| step.dependOn(&b.addObject(.{ .name = std.Io.Dir.path.stem(source), .root_module = contractModule(b, p, source, target, mode) }).step);
+    }
+}
+
+fn contractModule(b: *std.Build, p: *std.Build, source: []const u8, target: std.Build.ResolvedTarget, mode: std.lang.Optimize) *std.Build.Module {
+    return b.createModule(.{ .root_source_file = p.path(source), .target = target, .optimize = mode, .imports = &.{.{ .name = "aegis", .module = b.dependency("aegis", .{ .target = target, .optimize = mode }).module("aegis") }} });
 }
 
 // The contract gates split into groups of near-equal hosted cost. Each group is
