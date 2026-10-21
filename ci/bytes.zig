@@ -106,12 +106,20 @@ pub fn moveConsumer(comptime wrapped: bool, gpa: std.mem.Allocator, input: []con
     return destination.capacity() +% destination.len();
 }
 
-pub fn adoptDead(comptime wrapped: bool, gpa: std.mem.Allocator, allocation: []u8, live_len: usize) void {
-    var owner = Owner(wrapped).adopt(gpa, allocation, live_len) catch return;
+// Each adopts a whole allocation of its own, as an adoption must, initialized: `capacity`
+// bytes, which the owner wipes in full.
+pub fn adoptDead(comptime wrapped: bool, gpa: std.mem.Allocator, capacity: usize, live_len: usize) void {
+    if (live_len > capacity) return;
+    const allocation = gpa.alloc(u8, capacity) catch return;
+    @memset(allocation, 0);
+    var owner = Owner(wrapped).adopt(gpa, allocation, live_len) catch unreachable; // unreachable: live_len is at most capacity, checked above
     owner.deinit();
 }
-pub fn replaceConsumer(comptime wrapped: bool, gpa: std.mem.Allocator, allocation: []u8, live_len: usize, input: []const u8) !usize {
-    var owner = try Owner(wrapped).adopt(gpa, allocation, live_len);
+pub fn replaceConsumer(comptime wrapped: bool, gpa: std.mem.Allocator, capacity: usize, live_len: usize, input: []const u8) !usize {
+    if (live_len > capacity) return error.InvalidLength;
+    const allocation = try gpa.alloc(u8, capacity);
+    @memset(allocation, 0);
+    var owner = Owner(wrapped).adopt(gpa, allocation, live_len) catch unreachable; // unreachable: live_len is at most capacity, checked above
     defer owner.deinit();
     try owner.replace(input);
     return owner.len();

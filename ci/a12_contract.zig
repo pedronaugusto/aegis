@@ -10,8 +10,10 @@ pub fn main(init: std.process.Init) !void {
     const name = args[1];
     var slots: [1]a.scope.Table(Request).Slot = undefined;
     var table = a.scope.Table(Request).init(&slots);
+    defer table.deinit();
     var other_slots: [1]a.scope.Table(Connection).Slot = undefined;
     var other = a.scope.Table(Connection).init(&other_slots);
+    defer other.deinit();
     if (std.mem.eql(u8, name, "ref-expired")) {
         const request = try table.open();
         const view = request.ref(&storage);
@@ -40,8 +42,11 @@ pub fn main(init: std.process.Init) !void {
         request.end();
         std.mem.doNotOptimizeAway(connection.reborrow(view));
     } else if (std.mem.eql(u8, name, "table-open")) {
-        const request = try table.open();
+        var open_slots: [1]a.scope.Table(Request).Slot = undefined;
+        var open = a.scope.Table(Request).init(&open_slots);
+        errdefer open.deinit();
+        const request = try open.open();
         std.mem.doNotOptimizeAway(request);
-        table.deinit();
+        open.deinit();
     } else return error.UnknownCase;
 }

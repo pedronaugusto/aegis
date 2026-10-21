@@ -16,8 +16,8 @@ pub fn main() !void {
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena.deinit();
 
-    const request = try requests.open();
     const body = try arena.allocator().dupe(u8, "GET /index");
+    const request = try requests.open();
     const view = request.ref(body); // good while `request` is open
     aegis.assert.post(view.get().len == 10, "the body is readable while its request is open");
 

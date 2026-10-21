@@ -14,12 +14,12 @@ comptime {
 export fn pure(seed: u32) u32 {
     var slots: [2]Slots.Slot = undefined;
     var table = Slots.init(&slots);
+    defer table.deinit();
     var value = seed;
     const request = table.open() catch return 0;
     const view = request.ref(&value);
     view.get().* +%= 1;
     const result = view.get().*;
     request.end();
-    table.deinit();
     return result;
 }

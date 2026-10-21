@@ -71,7 +71,7 @@ pub fn main(init: std.process.Init) !void {
                             if (std.mem.find(u8, line, "@llvm.memset.") != null and std.mem.find(u8, line, "i64 %") != null and std.mem.find(u8, line, "i1 true)") != null) allocation_wipe = true;
                         }
                         if (!allocation_wipe) return error.MissingFullCapacityErasure;
-                        if (std.mem.eql(u8, name, "bytes_adopt_dead") and std.mem.find(u8, body, "i64 %2, i1 true)") == null) return error.MissingAdoptedCapacityErasure;
+                        if (std.mem.eql(u8, name, "bytes_adopt_dead") and std.mem.find(u8, body, "i64 %1, i1 true)") == null) return error.MissingAdoptedCapacityErasure;
                     }
                 } else if (owner(name)) {
                     const swapped = std.mem.find(u8, body, "atomicrmw xchg") != null and std.mem.find(u8, body, " acquire") != null;

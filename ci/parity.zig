@@ -232,17 +232,17 @@ export fn baselineBytesMove(gpa: *const std.mem.Allocator, input: [*]const u8, n
 export fn wrapperBytesMove(gpa: *const std.mem.Allocator, input: [*]const u8, n: usize, capacity: usize, fail: bool) usize {
     return bytes.moveConsumer(true, gpa.*, input[0..n], capacity, fail) catch 0;
 }
-export fn baselineBytesAdoptDead(gpa: *const std.mem.Allocator, allocation: [*]u8, capacity: usize, live_len: usize) void {
-    bytes.adoptDead(false, gpa.*, allocation[0..capacity], live_len);
+export fn baselineBytesAdoptDead(gpa: *const std.mem.Allocator, capacity: usize, live_len: usize) void {
+    bytes.adoptDead(false, gpa.*, capacity, live_len);
 }
-export fn baselineBytesReplace(gpa: *const std.mem.Allocator, allocation: [*]u8, capacity: usize, live_len: usize, input: [*]const u8, n: usize) usize {
-    return bytes.replaceConsumer(false, gpa.*, allocation[0..capacity], live_len, input[0..n]) catch 0;
+export fn baselineBytesReplace(gpa: *const std.mem.Allocator, capacity: usize, live_len: usize, input: [*]const u8, n: usize) usize {
+    return bytes.replaceConsumer(false, gpa.*, capacity, live_len, input[0..n]) catch 0;
 }
-export fn wrapperBytesAdoptDead(gpa: *const std.mem.Allocator, allocation: [*]u8, capacity: usize, live_len: usize) void {
-    bytes.adoptDead(true, gpa.*, allocation[0..capacity], live_len);
+export fn wrapperBytesAdoptDead(gpa: *const std.mem.Allocator, capacity: usize, live_len: usize) void {
+    bytes.adoptDead(true, gpa.*, capacity, live_len);
 }
-export fn wrapperBytesReplace(gpa: *const std.mem.Allocator, allocation: [*]u8, capacity: usize, live_len: usize, input: [*]const u8, n: usize) usize {
-    return bytes.replaceConsumer(true, gpa.*, allocation[0..capacity], live_len, input[0..n]) catch 0;
+export fn wrapperBytesReplace(gpa: *const std.mem.Allocator, capacity: usize, live_len: usize, input: [*]const u8, n: usize) usize {
+    return bytes.replaceConsumer(true, gpa.*, capacity, live_len, input[0..n]) catch 0;
 }
 
 const a67_parity = @import("a67_parity.zig");
