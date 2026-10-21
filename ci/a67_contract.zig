@@ -58,11 +58,13 @@ pub fn main(init: std.process.Init) !void {
     } else if (std.mem.eql(u8, name, "budget")) {
         var budget = a.bounded.Budget(u8).init(1);
         var reservation = try budget.reserve(1);
-        budget.taken = 0; // Deliberate corrupted admission state, isolates all-mode underflow check.
+        // glint-ignore: A001 -- design: a deliberately corrupted admission state in an isolated child process; it isolates the all-mode underflow check
+        budget.taken = 0;
         reservation.release();
     } else if (std.mem.eql(u8, name, "shared-overflow")) {
         var owner = try S.create(std.heap.page_allocator, 1);
-        owner.block.count.store(S.maximum_handles, .monotonic); // Deliberate corrupted count, isolates the all-mode limit.
+        // glint-ignore: A001 -- design: a deliberately corrupted count in an isolated child process; it isolates the all-mode limit
+        owner.block.count.store(S.maximum_handles, .monotonic);
         _ = owner.retain();
     } else if (std.mem.eql(u8, name, "shared-twice")) {
         var owner = try S.create(std.heap.page_allocator, 1);

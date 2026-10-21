@@ -49,8 +49,10 @@ noinline fn measure(comptime wrapped: bool, comptime name: []const u8, io: std.I
         defer group.cancel(io);
         for (0..threads) |_| try group.concurrent(io, worker(wrapped), .{ &shared, count });
         try group.await(io);
-        std.debug.assert(shared.data == count * threads);
-        accumulator = shared.data;
+        // Every worker has joined: the sole owner's teardown reads the count without a lock.
+        const total = (if (wrapped) shared.teardown() else &shared.data).*;
+        std.debug.assert(total == count * threads);
+        accumulator = total;
     } else {
         for (0..count) |i| {
             const seed: u8 = @truncate(i); // safe: synthetic public seed intentionally repeats every 256 iterations

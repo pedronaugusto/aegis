@@ -36,6 +36,7 @@ export fn baselineGapsSharedRetain(owner: *const c.DirectHandle) *c.DirectBlock 
     return c.sharedRetain(false, owner).block;
 }
 export fn wrapperGapsSharedRetain(owner: *const c.Handle) *anyopaque {
+    // glint-ignore: A001 -- measured-boundary: the parity export returns the retained handle's block, as the baseline returns its own; the retain stays observable to the codegen comparison
     return c.sharedRetain(true, owner).block;
 }
 export fn baselineGapsSharedGet(owner: *const c.DirectHandle) *const u64 {
