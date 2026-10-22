@@ -67,7 +67,7 @@ noinline fn measure(comptime wrapped: bool, comptime name: []const u8, io: Io, c
         } else if (comptime std.mem.startsWith(u8, name, "atomic")) {
             adding.add();
         } else if (comptime std.mem.eql(u8, name, "lazy_cold")) {
-            // glint-ignore: A001 -- measured-boundary: the cold path is measured again each round; the harness empties the Lazy, which has no public reset
+            // aegis: hot-loop: the cold path is measured again each round; the harness empties the Lazy, which has no public reset
             lazy.state.store(.empty, .monotonic);
             accumulator +%= (try gaps.lazyCold(wrapped, io, &lazy, i + 1)).*;
         } else Churn(wrapped).worker(&churn, 1);
