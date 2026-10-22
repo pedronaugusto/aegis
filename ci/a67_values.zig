@@ -9,7 +9,6 @@ comptime {
         std.debug.assert(@alignOf(a.own.Owned(u64, cleanup)) == @alignOf(u64));
         std.debug.assert(@sizeOf(a.own.MustUse(u64, "read")) == @sizeOf(u64));
         std.debug.assert(@sizeOf(a.InitContext) == 0);
-        std.debug.assert(@sizeOf(a.Order(&.{.{ .name = "root" }}).Context) == 0);
     }
     if (builtin.optimize == .fast or builtin.optimize == .small) std.debug.assert(@sizeOf(a.Confined(u64)) == @sizeOf(u64));
 }

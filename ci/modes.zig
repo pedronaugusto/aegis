@@ -38,7 +38,6 @@ pub const cases = [_]Case{
     .{ .module = "Once", .name = "once-recursive", .when = .debug, .message = "recursive Once initializer", .runs_unchecked = false, .run = onceRecursive },
     .{ .module = "Shared", .name = "shared-overflow", .when = .always, .message = "shared owner handle count overflow", .run = sharedOverflow },
     .{ .module = "Shared", .name = "shared-twice", .when = .debug, .message = "reached unreachable code", .runs_unchecked = false, .run = sharedTwice },
-    .{ .module = "Order", .name = "order-same-owner", .when = .debug, .message = "SameOwner", .runs_unchecked = false, .run = orderSameOwner },
     .{ .module = "Confined", .name = "confined-access", .when = .checked, .message = "Confined accessed", .run = confinedAccess },
     .{ .module = "Confined", .name = "confined-handoff", .when = .checked, .message = "Confined accessed", .run = confinedHandoff },
     .{ .module = "bounded", .name = "budget-underflow", .when = .always, .message = "budget reservation underflow", .run = budgetUnderflow },
@@ -183,17 +182,6 @@ fn sharedTwice(_: std.process.Init) !void {
     // glint-ignore: A003 -- design: the deliberate second release the checked builds stop on; an isolated child process runs it
     owner.release();
     other.release();
-}
-
-const O = a.Order(&.{.{ .name = "one" }});
-
-fn orderSameOwner(init: std.process.Init) !void {
-    var context: O.Context = .{};
-    var owner = O.Ordered(a.BlockingGuarded(u64), 0).init(.init(0));
-    var held = try owner.acquireOrdered(init.io, &context);
-    defer held.deinit(init.io);
-    var recursive = try owner.acquireOrdered(init.io, &context);
-    recursive.deinit(init.io);
 }
 
 fn confinedAccess(_: std.process.Init) !void {

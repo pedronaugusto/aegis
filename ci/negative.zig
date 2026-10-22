@@ -80,13 +80,6 @@ const cases = [_]Case{
     \\    writer.print("{f}", .{secret}) catch return;
     \\}
     },
-    .{ .name = "order_cycle", .message = "cyclic lock order", .source =
-    \\const a = @import("aegis");
-    \\const O = a.Order(&.{ .{ .name = "one", .after = &.{1} }, .{ .name = "two", .after = &.{0} } });
-    \\export fn bad() usize {
-    \\    return @sizeOf(O.Context);
-    \\}
-    },
     .{ .name = "zero_ring", .message = "ring capacity must be nonzero", .source =
     \\const a = @import("aegis");
     \\export fn bad() usize {

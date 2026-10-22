@@ -25,7 +25,7 @@ pub fn initLimit(limit: usize) Condition {
     return .{ .limit = limit };
 }
 
-/// BlockingGuarded or Ordered blocking guard only; spin guards cannot wait.
+/// BlockingGuarded guards only; spin guards cannot wait.
 /// Guard held on every return. Reborrow afterward; predicate loops retain one absolute deadline.
 pub fn wait(self: *Condition, io: Io, guard: anytype, timeout: Io.Timeout) WaitError!void {
     if (@hasDecl(@TypeOf(guard.*), "waitCondition")) return guard.waitCondition(self, io, timeout);

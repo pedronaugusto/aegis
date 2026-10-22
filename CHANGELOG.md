@@ -4,6 +4,10 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Breaking
+
+- `Order` goes (its `Rank`, `Context` and `Ordered` with it). Every aegis module now meets the criterion of aegis's design §7: a danger rule of glint's aegis pack requires it, or a required module is built on it. No rule requires lock ranking, nothing in aegis builds on it, and no package in the family uses it.
+
 ## [0.1.15] - 2026-10-22
 
 ### Added

@@ -39,7 +39,6 @@ const Frame = struct {
 };
 fn cleanup(_: *u64) void {}
 fn cleanupIo(_: *u64, _: std.Io) void {}
-const Ranks = a.Order(&.{.{ .name = "root" }});
 const Pool = a.handle.Pool(u64, Tag);
 
 pub const rows = [_]Row{
@@ -63,8 +62,6 @@ pub const rows = [_]Row{
     .{ .module = "Lazy", .label = "Lazy(u64)", .aegis = a.Lazy(u64), .direct = struct { state: std.atomic.Value(enum(u8) { empty, ready }), mutex: std.Io.Mutex, data: u64 }, .equal = .every },
     .{ .module = "Atomic", .label = "Atomic(units.Bytes(u64))", .aegis = a.Atomic(a.units.Bytes(u64)), .direct = std.atomic.Value(u64), .equal = .every },
     .{ .module = "Shared", .label = "Shared(u64, cleanup)", .aegis = a.Shared(u64, cleanup), .direct = *anyopaque, .equal = .release },
-    .{ .module = "Order", .label = "Order(ranks).Context", .aegis = Ranks.Context, .direct = void, .equal = .release },
-    .{ .module = "Order", .label = "Order(ranks).Ordered(BlockingGuarded(u64), 0)", .aegis = Ranks.Ordered(a.BlockingGuarded(u64), 0), .direct = a.BlockingGuarded(u64), .equal = .every },
     .{ .module = "Confined", .label = "Confined(u64)", .aegis = a.Confined(u64), .direct = u64, .equal = .unchecked },
     .{ .module = "int", .label = "int.Checked(u32)", .aegis = a.int.Checked(u32), .direct = u32, .equal = .every },
     .{ .module = "int", .label = "int.Saturating(i64)", .aegis = a.int.Saturating(i64), .direct = i64, .equal = .every },

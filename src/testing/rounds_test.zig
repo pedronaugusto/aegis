@@ -177,11 +177,6 @@ test "A6 isHeld reads a lock without taking it, for the spin guard, the blocking
     try t.expect(blocking.isHeld());
     guard.deinit(t.io);
     try t.expect(!blocking.isHeld());
-
-    const O = a.Order(&.{.{ .name = "root" }});
-    var ordered = O.Ordered(a.Guarded(u32), 0).init(.init(3));
-    try t.expect(!ordered.isHeld());
-    try t.expect(!ordered.base.isHeld());
 }
 
 fn holdWhile(owner: *a.Guarded(u32), held: *std.atomic.Value(bool), release: *std.atomic.Value(bool)) void {
@@ -517,57 +512,6 @@ test "A6 Condition waitUncancelable still ends at its deadline and at the waiter
     defer held.deinit(t.io);
     try t.expectError(error.WaiterLimit, changed.waitUncancelable(t.io, &held, .none));
     try t.expect(owner.tryAcquire() == null);
-}
-
-const Rank = a.Order(&.{ .{ .name = "outer" }, .{ .name = "inner", .after = &.{0} } });
-const Outer = Rank.Ordered(a.BlockingGuarded(u32), 0);
-const Inner = Rank.Ordered(a.BlockingGuarded(u32), 1);
-
-const OrderedCleanup = struct {
-    outer: Outer = .init(.init(0)),
-    started: Io.Event = .unset,
-    fn waiter(self: *OrderedCleanup, io: Io) u32 {
-        var context: Rank.Context = .{};
-        var held = self.outer.acquireOrderedUncancelable(io, &context);
-        defer held.deinit(io);
-        self.started.set(io);
-        held.value().* += 1;
-        return held.value().*;
-    }
-    fn cancelIt(io: Io, future: *Io.Future(u32)) u32 {
-        return future.cancel(io);
-    }
-    fn main(self: *OrderedCleanup, io: Io) !void {
-        var context: Rank.Context = .{};
-        var first = try self.outer.acquireOrdered(io, &context);
-        var waiter_future = try io.concurrent(waiter, .{ self, io });
-        var canceler = try io.concurrent(cancelIt, .{ io, &waiter_future });
-        try io.sleep(.fromMilliseconds(5), .awake);
-        first.value().* = 10;
-        first.deinit(io);
-        // The request reached the parked waiter, and it still took the lock.
-        try t.expectEqual(@as(u32, 11), canceler.await(io));
-    }
-};
-
-test "A6 ordered uncancelable acquire takes the lock under a cancellation request and keeps the rank discipline" {
-    for (0..8) |seed| {
-        const sim = try shake.Sim.init(t.allocator, .{ .executor = .threads, .seed = seed, .yield_per_million = 250000 });
-        defer sim.deinit();
-        var state: OrderedCleanup = .{};
-        try t.expectEqual(shake.Sim.Outcome.finished, sim.run(OrderedCleanup.main, .{ &state, sim.io() }));
-    }
-    // The ranks still order: inner may be taken under outer, and the context pops in order.
-    var outer: Outer = .init(.init(1));
-    var inner: Inner = .init(.init(2));
-    var context: Rank.Context = .{};
-    var a_guard = outer.acquireOrderedUncancelable(t.io, &context);
-    try context.check(&inner, 1);
-    var b_guard = inner.acquireOrderedUncancelable(t.io, &context);
-    try t.expectEqual(@as(u32, 2), b_guard.value().*);
-    b_guard.deinit(t.io);
-    a_guard.deinit(t.io);
-    try t.expect(outer.isHeld() == false);
 }
 
 fn drop(_: *u32) void {}

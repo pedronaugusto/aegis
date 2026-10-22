@@ -225,12 +225,6 @@ export fn baselineGapsBudgetCharged(owner: *const base.DirectBudget) u64 {
 export fn wrapperGapsBudgetCharged(owner: *const a.bounded.Budget(u64)) u64 {
     return c.budgetCharged(true, owner);
 }
-export fn baselineGapsOrderedUncancelable(io: *const std.Io, owner: *base.DirectMutex) u64 {
-    return c.orderedUncancelable(false, io, owner);
-}
-export fn wrapperGapsOrderedUncancelable(io: *const std.Io, owner: *base.Ordered) u64 {
-    return c.orderedUncancelable(true, io, owner);
-}
 export fn baselineGapsWaitUncancelable(io: *const std.Io, changed: *base.DirectCondition, owner: *base.DirectMutex, timeout: *const std.Io.Timeout) u64 {
     return c.waitUncancelable(false, io, changed, owner, timeout.*) catch std.math.maxInt(u64);
 }

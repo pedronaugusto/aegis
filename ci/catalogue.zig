@@ -3,8 +3,10 @@
 //! ReleaseSmall and what is checked in which builds, and names its layout rows
 //! (ci/layouts.zig), its paired kernels (the three codegen checks), its mode-matrix cases
 //! (ci/modes.zig) and its example. This program fails when a public name, a fixture, a case,
-//! a row or an example belongs to no module, or a stated check has no case to hold it; then
-//! it prints the contract table README.md shows (`zig build catalogue`).
+//! a row or an example belongs to no module, or a stated check has no case to hold it, or a
+//! module is neither required by a danger rule of glint's aegis pack nor built on by a module
+//! that is (aegis's design §7, criterion 4); then it prints the contract table README.md shows
+//! (`zig build catalogue`).
 const std = @import("std");
 const aegis = @import("aegis");
 const modes = @import("modes.zig");
@@ -30,11 +32,22 @@ pub const Module = struct {
     example: []const u8,
     /// False for a module of functions only, which has no layout to hold.
     types: bool = true,
+    /// Why it is in aegis: the danger rule of glint's aegis pack that requires it at its danger
+    /// sites, or the required module built on it. A module with neither goes.
+    required: Required,
+};
+
+pub const Required = union(enum) {
+    /// The rule's ID, A007 to A020.
+    rule: []const u8,
+    /// The module built on it, itself required by a rule.
+    block: []const u8,
 };
 
 pub const modules = [_]Module{
     .{
         .name = "Secret",
+        .required = .{ .rule = "A008" },
         .names = &.{ "Secret", "secret.Secret" },
         .release = "exactly `T`",
         .always = "the whole representation, padding included, wiped by volatile stores at `deinit` and after `moveInto`; a move into overlapping storage stops; formatting refused at compile time",
@@ -43,6 +56,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "SecretBytes",
+        .required = .{ .rule = "A008" },
         .names = &.{ "SecretBytes", "secret.SecretBytes" },
         .release = "allocator, allocation and live length, as a hand-written owner",
         .always = "full capacity wiped before free and on `reserve`; capacity and overlap errors before any change; a move into overlapping storage stops",
@@ -51,6 +65,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "secret",
+        .required = .{ .rule = "A008" },
         .names = &.{ "secret.Choice", "secret.OrderChoices", "secret.CompareError", "secret.SelectError", "secret.equal", "secret.equalBytes", "secret.compareUnsigned", "secret.audited_profiles" },
         .release = "a `Choice` is one byte holding one bit",
         .always = "the instructions of hand-written mask arithmetic, with no branch or load on a secret in the audited profiles; unequal lengths and partial overlap are errors",
@@ -59,6 +74,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "secret.Timing",
+        .required = .{ .block = "secret" },
         .names = &.{ "secret.Timing", "secret.scrubStack", "secret.stackReach", "secret.scrubbed" },
         .release = "`Timing` is the mode it found, one `u64`",
         .always = "data-independent timing set for the span where the processor has it, nothing where it has none; `scrubStack` zeroes its frame with volatile stores",
@@ -67,6 +83,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "Guarded",
+        .required = .{ .rule = "A007" },
         .names = &.{ "Guarded", "sync.Guarded" },
         .release = "a lock word beside `T`; a guard is one pointer",
         .always = "acquire is one swap and release one store",
@@ -76,6 +93,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "SpinRwGuarded",
+        .required = .{ .rule = "A007" },
         .names = &.{ "SpinRwGuarded", "sync.SpinRwGuarded" },
         .release = "one state word beside `T`; a guard is one pointer",
         .always = "readers share and a writer excludes them, a waiting writer holding off new readers",
@@ -85,6 +103,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "BlockingGuarded",
+        .required = .{ .rule = "A007" },
         .names = &.{ "BlockingGuarded", "sync.BlockingGuarded" },
         .release = "a `std.Io.Mutex` beside `T`; a guard is one pointer",
         .always = "the mutex's own operations; a canceled acquire grants nothing",
@@ -94,6 +113,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "RwGuarded",
+        .required = .{ .rule = "A007" },
         .names = &.{ "RwGuarded", "sync.RwGuarded" },
         .release = "a `std.Io.RwLock`, an admission count and its limit beside `T`",
         .always = "admission past the limit is `AdmissionLimit`, before std's packed counters can overflow",
@@ -103,6 +123,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "Condition",
+        .required = .{ .rule = "A007" },
         .names = &.{ "Condition", "sync.Condition" },
         .release = "the hand-written waiter registry",
         .always = "the waiter limit; the guard held again on every return; a wait with another owner's guard stops",
@@ -111,6 +132,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "Once",
+        .required = .{ .rule = "A007" },
         .names = &.{ "Once", "InitContext", "sync.Once", "sync.InitContext" },
         .release = "state, mutex, a condition and `T`; `InitContext` is empty",
         .always = "initialized once and published by a release store; the waiter limit",
@@ -120,6 +142,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "Lazy",
+        .required = .{ .rule = "A007" },
         .names = &.{ "Lazy", "sync.Lazy" },
         .release = "state, mutex and `T`",
         .always = "initialized once and published by a release store; only the initializer's errors",
@@ -128,6 +151,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "Atomic",
+        .required = .{ .rule = "A007" },
         .names = &.{ "Atomic", "sync.Atomic" },
         .release = "the backing integer's atomic cell",
         .always = "checked `fetchAdd` and `fetchSub` report overflow with the cell unchanged",
@@ -136,6 +160,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "Shared",
+        .required = .{ .rule = "A007" },
         .names = &.{ "Shared", "sync.Shared" },
         .release = "one pointer",
         .always = "the static cleanup runs once, at the last release; a count past its limit stops",
@@ -144,16 +169,8 @@ pub const modules = [_]Module{
         .example = "examples/shared.zig",
     },
     .{
-        .name = "Order",
-        .names = &.{ "Order", "sync.Order" },
-        .release = "`Context` is empty; an ordered lock is its lock",
-        .always = "the lock's own operations",
-        .debug = "an acquire out of rank or of an owner already held stops",
-        .kernels = &.{ "a67_ordered", "gaps_ordered_uncancelable" },
-        .example = "examples/order.zig",
-    },
-    .{
         .name = "Confined",
+        .required = .{ .rule = "A007" },
         .names = &.{ "Confined", "TaskIdentity", "sync.Confined", "sync.TaskIdentity" },
         .release = "exactly `T`",
         .always = "nothing: the payload is plain data",
@@ -163,6 +180,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "int",
+        .required = .{ .rule = "A010" },
         .names = &.{"int"},
         .release = "the integer",
         .always = "overflow, division by zero, invalid shifts, range and narrowing are errors; a conversion that cannot fail carries none",
@@ -171,6 +189,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "id",
+        .required = .{ .rule = "A016" },
         .names = &.{"id"},
         .release = "the integer",
         .always = "ids never wrap: exhaustion, underflow and a backwards distance are errors; `NonZero` refuses zero",
@@ -179,6 +198,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "units",
+        .required = .{ .rule = "A011" },
         .names = &.{"units"},
         .release = "the integer",
         .always = "arithmetic and conversions checked, a conversion that cannot fail carrying no check; text read and written exactly",
@@ -187,6 +207,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "assert",
+        .required = .{ .rule = "A013" },
         .names = &.{"assert"},
         .types = false,
         .release = "no storage; a check is a compare and a cold stop",
@@ -197,6 +218,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "bounded",
+        .required = .{ .rule = "A012" },
         .names = &.{"bounded"},
         .release = "storage and counters, as hand-written",
         .always = "`Full`, `Empty`, `OutOfBounds` and `LimitExceeded` returned; a budget never holds more than its maximum; a reservation underflow stops",
@@ -205,6 +227,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "own",
+        .required = .{ .rule = "A015" },
         .names = &.{"own"},
         .release = "exactly `T`",
         .always = "the static cleanup once, at `deinit`",
@@ -214,6 +237,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "state",
+        .required = .{ .rule = "A017" },
         .names = &.{"state"},
         .release = "a stage is its payload; a runtime machine is its payload and state",
         .always = "an undeclared event is `IllegalEvent` and changes nothing; a commit of an edge the machine does not declare stops",
@@ -224,6 +248,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "scope",
+        .required = .{ .rule = "A014" },
         .names = &.{"scope"},
         .release = "a reference is its pointer; a table keeps nothing",
         .always = "nothing: these checks follow Zig's runtime safety",
@@ -233,6 +258,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "handle",
+        .required = .{ .rule = "A014" },
         .names = &.{"handle"},
         .release = "keys and slots as hand-written; an index is its integer",
         .always = "stale, foreign and out-of-range keys are errors; generations never wrap, a worn-out slot retires",
@@ -241,6 +267,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "input",
+        .required = .{ .rule = "A009" },
         .names = &.{"input"},
         .release = "the value or view it wraps",
         .always = "the parser's own checks and errors, unchanged",
@@ -249,6 +276,7 @@ pub const modules = [_]Module{
     },
     .{
         .name = "err",
+        .required = .{ .rule = "A018" },
         .names = &.{"err"},
         .release = "inline frames, a length and a truncation mark",
         .always = "frames kept up to the capacity and truncation marked; nothing allocated",
@@ -338,16 +366,45 @@ pub fn main(init: std.process.Init) !void {
             failed = true;
         }
     }
+    for (modules) |module| if (!try earned(&err.interface, module)) {
+        failed = true;
+    };
     if (failed) return Failure.CatalogueIncomplete;
     var out = std.Io.File.stdout().writerStreaming(init.io, &.{});
     try table(&out.interface);
 }
 
+/// Whether a module earns its place: a danger rule (A007 to A020) requires it, or a module a
+/// rule requires is built on it.
+fn earned(err: *std.Io.Writer, module: Module) !bool {
+    switch (module.required) {
+        .rule => |id| {
+            const number = if (id.len == 4 and id[0] == 'A') std.fmt.parseInt(u8, id[1..], 10) catch 0 else 0;
+            if (number >= 7 and number <= 20) return true;
+            try err.print("catalogue: {s} names {s}, which is no danger rule (A007 to A020)\n", .{ module.name, id });
+        },
+        .block => |name| {
+            for (modules) |other| if (std.mem.eql(u8, other.name, name)) {
+                if (other.required == .rule) return true;
+                try err.print("catalogue: {s} is built on by {s}, which no rule requires\n", .{ module.name, name });
+                return false;
+            };
+            try err.print("catalogue: {s} is built on by {s}, which is no module\n", .{ module.name, name });
+        },
+    }
+    return false;
+}
+
 /// The README's contract table, one row per module.
 fn table(out: *std.Io.Writer) !void {
-    try out.writeAll("| Module | In ReleaseFast and ReleaseSmall | In every build | Debug and ReleaseSafe | Debug | Example |\n|---|---|---|---|---|---|\n");
+    try out.writeAll("| Module | Required by | In ReleaseFast and ReleaseSmall | In every build | Debug and ReleaseSafe | Debug | Example |\n|---|---|---|---|---|---|---|\n");
     for (modules) |module| {
-        try out.print("| `{s}` | {s} | {s} | {s} | {s} | [{s}]({s}) |\n", .{ module.name, module.release, module.always, orDash(module.checked), orDash(module.debug), std.Io.Dir.path.basename(module.example), module.example });
+        var buffer: [64]u8 = undefined;
+        const why = switch (module.required) {
+            .rule => |id| id,
+            .block => |name| try std.fmt.bufPrint(&buffer, "`{s}` builds on it", .{name}),
+        };
+        try out.print("| `{s}` | {s} | {s} | {s} | {s} | {s} | [{s}]({s}) |\n", .{ module.name, why, module.release, module.always, orDash(module.checked), orDash(module.debug), std.Io.Dir.path.basename(module.example), module.example });
     }
 }
 

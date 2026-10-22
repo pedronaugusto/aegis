@@ -41,7 +41,6 @@ pub const Shared = sync.Shared;
 /// Explicit logical-task initializer stack; zero-sized in release.
 pub const InitContext = sync.InitContext;
 /// Comptime partial rank relation with Debug logical-task diagnostics.
-pub const Order = sync.Order;
 /// Checked single-task state in Debug/ReleaseSafe, plain payload in fast/small.
 pub const Confined = sync.Confined;
 /// Stable caller-issued logical-task identity for Confined.

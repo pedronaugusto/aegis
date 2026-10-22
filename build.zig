@@ -236,7 +236,6 @@ const examples = [_][]const u8{
     "examples/lazy.zig",
     "examples/atomic.zig",
     "examples/shared.zig",
-    "examples/order.zig",
     "examples/confined.zig",
     "examples/int.zig",
     "examples/id.zig",
