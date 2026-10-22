@@ -4,6 +4,8 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+## [0.1.16] - 2026-10-22
+
 ### Added
 
 - The catalogue names, for every module, the danger rule of glint's aegis pack that requires it at its danger sites, or the required module built on it, and refuses a module with neither (aegis's design §7, criterion 4); README's table shows it. `Order` is the answer to A021, a function holding two aegis guards at once without both ranked.
