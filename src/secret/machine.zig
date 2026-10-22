@@ -53,7 +53,11 @@ noinline fn paint(comptime bytes: usize) void {
 /// their operands, and Apple's cores from the M3 on turn off the data memory-dependent
 /// prefetcher (GoFetch, 2024). Where the processor has no such control it does nothing.
 pub const Timing = struct {
+    /// Private: the register as `begin` found it, or `untouched` where it set nothing.
     previous: u64,
+
+    /// No DIT register reads this: every bit but the mode's is reserved as zero.
+    const untouched = std.math.maxInt(u64);
 
     const in_target = builtin.cpu.arch == .aarch64 and std.Target.aarch64.featureSetHas(builtin.cpu.features, .dit);
 
@@ -74,8 +78,8 @@ pub const Timing = struct {
     pub inline fn begin() Timing {
         // At compile time first: the AArch64 instructions below must not reach another
         // architecture's assembler, which an unoptimized build would otherwise give them.
-        if (comptime !available) return .{ .previous = 0 };
-        if (!supported()) return .{ .previous = 0 };
+        if (comptime !available) return .{ .previous = untouched };
+        if (!supported()) return .{ .previous = untouched };
         // DIT is S3_3_C4_C2_5, its bit 24 the mode; spelled as the register number so no
         // assembler feature is needed beyond what the target already has.
         const previous = asm volatile ("mrs %[value], s3_3_c4_c2_5"
@@ -88,10 +92,10 @@ pub const Timing = struct {
         return .{ .previous = previous };
     }
 
-    /// Restores the mode `begin` found.
+    /// Restores the mode `begin` found. It asks nothing again: `begin` recorded whether it set it.
     pub inline fn end(timing: Timing) void {
         if (comptime !available) return;
-        if (!supported()) return;
+        if (timing.previous == untouched) return;
         asm volatile ("msr s3_3_c4_c2_5, %[value]"
             :
             : [value] "r" (timing.previous),
