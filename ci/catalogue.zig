@@ -402,7 +402,7 @@ fn table(out: *std.Io.Writer) !void {
         var buffer: [64]u8 = undefined;
         const why = switch (module.required) {
             .rule => |id| id,
-            .block => |name| try std.fmt.bufPrint(&buffer, "`{s}` builds on it", .{name}),
+            .block => |name| try std.mem.print(&buffer, "`{s}` builds on it", .{name}),
         };
         try out.print("| `{s}` | {s} | {s} | {s} | {s} | {s} | [{s}]({s}) |\n", .{ module.name, why, module.release, module.always, orDash(module.checked), orDash(module.debug), std.Io.Dir.path.basename(module.example), module.example });
     }
