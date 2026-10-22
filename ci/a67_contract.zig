@@ -47,12 +47,13 @@ pub fn main(init: std.process.Init) !void {
         var first = a.BlockingGuarded(u64).init(1);
         var second = a.BlockingGuarded(u64).init(2);
         var condition = a.Condition.initLimit(0);
-        var held = try first.acquire(init.io);
-        errdefer held.deinit(init.io);
-        condition.wait(init.io, &held, .none) catch |err| {
-            if (err != error.WaiterLimit) return err;
-        };
-        held.deinit(init.io);
+        {
+            var held = try first.acquire(init.io);
+            defer held.deinit(init.io);
+            condition.wait(init.io, &held, .none) catch |err| {
+                if (err != error.WaiterLimit) return err;
+            };
+        }
         var other = try second.acquire(init.io);
         defer other.deinit(init.io);
         condition.wait(init.io, &other, .none) catch |err| {
