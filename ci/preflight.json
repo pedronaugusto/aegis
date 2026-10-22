@@ -38,6 +38,9 @@
       "imports": [
         "aegis"
       ]
+    },
+    "zig build catalogue": {
+      "command": ["zig", "build", "catalogue"]
     }
   },
   "extra_checks": [["zig", "build", "check-timing"]]

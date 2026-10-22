@@ -1,4 +1,5 @@
-//! Deterministic A5 enclosing-caller lowering/cost gate. Raw evidence is private.
+//! Deterministic A5 enclosing-caller lowering/cost gate. The objects are scratch; the report of
+//! every checked build goes to the directory the build names.
 const std = @import("std");
 const cases = @import("choice_callers.zig");
 const profiles = @import("aegis").secret.audited_profiles;
@@ -6,9 +7,11 @@ pub fn main(init: std.process.Init) !void {
     const a = init.arena.allocator();
     const dir = std.Io.Dir.cwd();
     const args = try init.minimal.args.toSlice(a);
-    if (args.len < 2 or args.len > 3) return error.ZigExecutableRequired;
-    const destination = if (args.len == 3) args[2] else ".zig-cache/a5-proof";
+    // The Zig to compile with, and the directory the report goes to.
+    if (args.len != 3) return error.ZigAndEvidenceDirectoryRequired;
+    const destination = ".zig-cache/a5-proof";
     try dir.createDirPath(init.io, destination);
+    try dir.createDirPath(init.io, args[2]);
     var report = std.Io.Writer.Allocating.init(a);
     var checked: usize = 0;
     for (profiles.all) |entry| {
@@ -66,7 +69,7 @@ pub fn main(init: std.process.Init) !void {
             }
         }
     }
-    try dir.writeFile(init.io, .{ .sub_path = try a.print("{s}/parity.txt", .{destination}), .data = report.written() });
+    try dir.writeFile(init.io, .{ .sub_path = try a.print("{s}/parity.txt", .{args[2]}), .data = report.written() });
     var out = std.Io.File.stdout().writer(init.io, &.{});
     try out.interface.print("A5 caller parity: {d} profiles, {d} builds checked\n", .{ profiles.all.len, checked });
 }

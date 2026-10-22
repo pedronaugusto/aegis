@@ -1,58 +1,18 @@
-//! Typestate mode matrix, intended-reason compile rejections and portable profiles.
-//! The build compiles the contract program in each mode and passes the binaries
-//! after the Zig, in the order of `modes`; it compiles the portable profiles too.
+//! Typestate intended-reason compile rejections; the mode matrix is ci/modes.zig's. The build
+//! passes the Zig the rejections compile with; it compiles the portable profiles too.
 const std = @import("std");
 
-const Run = struct { gpa: std.mem.Allocator, arena: std.mem.Allocator, io: std.Io, zig: []const u8, binaries: []const []const u8 };
-
-const modes = [_][]const u8{ "Debug", "ReleaseSafe", "ReleaseFast", "ReleaseSmall" };
+const Run = struct { gpa: std.mem.Allocator, arena: std.mem.Allocator, io: std.Io, zig: []const u8 };
 
 pub fn main(init: std.process.Init) !void {
     const arena = init.arena.allocator();
     const args = try init.minimal.args.toSlice(arena);
-    if (args.len != 2 + modes.len) return error.ContractBinariesRequired;
-    const run: Run = .{ .gpa = init.gpa, .arena = arena, .io = init.io, .zig = args[1], .binaries = args[2..] };
-    try matrix(run);
+    if (args.len != 2) return error.ZigExecutableRequired;
+    const run: Run = .{ .gpa = init.gpa, .arena = arena, .io = init.io, .zig = args[1] };
     try rejections(run);
     var out = std.Io.File.stdout().writer(init.io, &.{});
-    try out.interface.writeAll("A10: mode matrix and 16 compiler rejections passed\n");
+    try out.interface.writeAll("A10: 16 compiler rejections passed\n");
     try out.interface.flush();
-}
-
-fn matrix(run: Run) !void {
-    for (modes, run.binaries) |mode, binary| {
-        const debug = std.mem.eql(u8, mode, "Debug");
-        const checked = debug or std.mem.eql(u8, mode, "ReleaseSafe");
-        const When = enum { debug, checked, always };
-        const cases = [_]struct { name: []const u8, message: []const u8, when: When }{
-            .{ .name = "stage-reuse", .message = "state stage used after its payload moved on", .when = .debug },
-            .{ .name = "take-twice", .message = "state stage used after its payload moved on", .when = .debug },
-            .{ .name = "stage-alias", .message = "state transition destination is its own source", .when = .checked },
-            .{ .name = "commit-forged", .message = "state commit of an edge the machine does not declare", .when = .always },
-        };
-        for (cases) |case| {
-            const must_fail = switch (case.when) {
-                .debug => debug,
-                .checked => checked,
-                .always => true,
-            };
-            const result = try std.process.run(run.gpa, run.io, .{ .argv = &.{ binary, case.name }, .stderr_limit = .limited(16384) });
-            defer run.gpa.free(result.stdout);
-            defer run.gpa.free(result.stderr);
-            const succeeded = result.term == .exited and result.term.exited == 0;
-            if (must_fail == succeeded) {
-                var out = std.Io.File.stderr().writerStreaming(run.io, &.{});
-                try out.interface.print("A10 {s} {s}: expected {s}\n", .{ mode, case.name, if (must_fail) "a stop" else "no stop" });
-                try out.interface.flush();
-                return error.ModeContractMismatch;
-            }
-            if (must_fail and std.mem.find(u8, result.stderr, case.message) == null) {
-                var out = std.Io.File.stderr().writerStreaming(run.io, &.{});
-                try out.interface.writeAll(result.stderr);
-                return error.UnexpectedContractFailure;
-            }
-        }
-    }
 }
 
 const prologue =

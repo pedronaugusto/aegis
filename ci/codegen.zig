@@ -7,12 +7,16 @@ const a67_names = [_][]const u8{ "a67_mutex", "a67_rw_read", "a67_rw_write", "a6
 const gaps_names = [_][]const u8{ "gaps_try_acquire", "gaps_teardown", "gaps_lazy_ready", "gaps_lazy_cold", "gaps_lazy_infallible", "gaps_shared_retain", "gaps_shared_get", "gaps_shared_release", "gaps_owned_from", "gaps_compare", "gaps_equal", "gaps_last", "gaps_exceeds", "gaps_io_widen", "gaps_io_timestamp", "gaps_io_narrow", "gaps_never", "gaps_index_compare", "gaps_owned_io", "gaps_wide_round_trip", "gaps_is_held", "gaps_saturating_add", "gaps_saturating_sub", "gaps_saturating_span", "gaps_id_successor", "gaps_id_advance", "gaps_id_retreat", "gaps_id_distance", "gaps_cast_widen", "gaps_cast_usize", "gaps_count_convert", "gaps_duration_widen", "gaps_duration_coarse", "gaps_buffer_capacity", "gaps_buffer_full", "gaps_budget_keeping", "gaps_budget_charged", "gaps_ordered_uncancelable", "gaps_wait_uncancelable", "gaps_atomic_load", "gaps_atomic_store", "gaps_atomic_swap", "gaps_atomic_compare_exchange", "gaps_atomic_max", "gaps_atomic_add_wrapping", "gaps_atomic_add" };
 const state_names = [_][]const u8{ "state_next", "state_next_wide", "state_next_switch", "state_next_wide_switch", "state_terminal", "state_step", "state_plan_commit", "state_transition", "state_transition_with", "state_take" };
 const scope_names = [_][]const u8{ "scope_get", "scope_get_slice", "scope_make", "scope_reborrow", "scope_open", "scope_end", "scope_cycle" };
-const names = owner_names ++ numeric_names ++ bytes_names ++ a67_names ++ gaps_names ++ state_names ++ scope_names;
+const a11_names = [_][]const u8{ "a11_spin_rw_read", "a11_spin_rw_write", "a11_timing_span", "a11_scrub_stack" };
+/// Every pair this check compares, by the name its exports are spelled from.
+pub const names = owner_names ++ numeric_names ++ bytes_names ++ a67_names ++ gaps_names ++ state_names ++ scope_names ++ a11_names;
 pub fn main(init: std.process.Init) !void {
     const a = init.arena.allocator();
     const args = try init.minimal.args.toSlice(a);
-    if (args.len < 2) return error.ZigExecutableRequired;
-    const record = args.len == 3 and std.mem.eql(u8, args[2], "--record");
+    // The Zig to compile with, and the directory the evidence of each target and mode goes to.
+    if (args.len != 3) return error.ZigAndEvidenceDirectoryRequired;
+    const evidence_dir = args[2];
+    try std.Io.Dir.cwd().createDirPath(init.io, evidence_dir);
     const dir = std.Io.Dir.cwd();
     try dir.createDirPath(init.io, ".zig-cache/parity");
     for ([_][]const u8{ "x86_64-linux-gnu", "aarch64-linux-gnu" }) |target| {
@@ -30,7 +34,7 @@ pub fn main(init: std.process.Init) !void {
             const ir = try dir.readFileAlloc(init.io, try a.print("{s}.ll", .{stem}), a, .limited(32 * 1024 * 1024));
             const object = try dir.readFileAlloc(init.io, try a.print("{s}.o", .{stem}), a, .limited(32 * 1024 * 1024));
             var evidence: std.Io.Writer.Allocating = .init(a);
-            try evidence.writer.print("# {s} {s} parity\n\nZig 0.17.0, LLVM, baseline CPU, stripped object. All owner, A3 scalar and A4 byte-owner pairs have identical emitted instructions (shared aliases or normalized assembly); storage/alignment assertions compile.\n\n", .{ target, mode });
+            try evidence.writer.print("# {s} {s} parity\n\nZig 0.17.0, LLVM, baseline CPU, stripped object. Every pair has identical emitted instructions (shared aliases or normalized assembly) and equal code size; a `_switch` row may be smaller than the idiomatic switch it is held against, never larger. The storage and alignment assertions beside the fixtures compile.\n\n", .{ target, mode });
             for (names) |name| {
                 const base = try alias(a, ir, try exportName(a, "baseline", name));
                 const wrap = try alias(a, ir, try exportName(a, "wrapper", name));
@@ -80,7 +84,7 @@ pub fn main(init: std.process.Init) !void {
                 }
                 try evidence.writer.print("## {s}\n\nSymbols → `{s}` / `{s}`; baseline/wrapper machine code {d}/{d} bytes.\n\n```asm\n{s}```\n\n```llvm\n{s}\n```\n\n", .{ name, base, wrap, baseline_bytes, wrapper_bytes, emitted, body });
             }
-            if (record) try dir.writeFile(init.io, .{ .sub_path = try a.print(".zig-cache/parity/codegen-{s}-{s}.md", .{ target, mode }), .data = try a.print("{s}\n", .{std.mem.trimEnd(u8, evidence.written(), "\n")}) });
+            try dir.writeFile(init.io, .{ .sub_path = try a.print("{s}/{s}-{s}.md", .{ evidence_dir, target, mode }), .data = try a.print("{s}\n", .{std.mem.trimEnd(u8, evidence.written(), "\n")}) });
         }
     }
 }
@@ -90,7 +94,7 @@ fn owner(name: []const u8) bool {
     return false;
 }
 fn reported(name: []const u8) bool {
-    inline for (.{ "a67_", "gaps_", "state_", "scope_" }) |prefix| if (std.mem.startsWith(u8, name, prefix)) return true;
+    inline for (.{ "a67_", "gaps_", "state_", "scope_", "a11_" }) |prefix| if (std.mem.startsWith(u8, name, prefix)) return true;
     return false;
 }
 pub fn alias(a: std.mem.Allocator, ir: []const u8, name: []const u8) ![]const u8 {
@@ -128,13 +132,58 @@ fn operand(a: std.mem.Allocator, writer: *std.Io.Writer, text: []const u8, token
         while (end < token.len and (std.ascii.isAlphanumeric(token[end]) or token[end] == '_' or token[end] == '.' or token[end] == '$')) end += 1;
         if (try contents(a, text, token[at..end])) |bytes| return writer.print(" {s}<{s}>{s}", .{ token[0..at], bytes, token[end..] });
     }
+    // A data object named outright (a static, a local common) stands for its bytes the same way.
+    var start: usize = 0;
+    while (start < token.len) {
+        if (!symbolic(token[start]) or std.ascii.isDigit(token[start])) {
+            start += 1;
+            continue;
+        }
+        var end = start;
+        while (end < token.len and symbolic(token[end])) end += 1;
+        if (try isObject(a, text, token[start..end])) {
+            if (try contents(a, text, token[start..end])) |bytes| return writer.print(" {s}<{s}>{s}", .{ token[0..start], bytes, token[end..] });
+        }
+        start = end;
+    }
     try writer.print(" {s}", .{token});
 }
 
-/// The bytes of a label that is plain data, written out in hex, or null when it is not.
+fn symbolic(byte: u8) bool {
+    return std.ascii.isAlphanumeric(byte) or byte == '_' or byte == '.' or byte == '$';
+}
+
+/// The data objects one assembly text declares, found once per text.
+var objects: std.StringHashMapUnmanaged(void) = .empty;
+var objects_of: ?[*]const u8 = null;
+
+fn isObject(a: std.mem.Allocator, text: []const u8, symbol: []const u8) !bool {
+    if (objects_of != text.ptr) {
+        objects = .empty;
+        objects_of = text.ptr;
+        var lines = std.mem.splitScalar(u8, text, '\n');
+        while (lines.next()) |raw| {
+            const line = std.mem.trim(u8, raw, " \t");
+            if (!std.mem.startsWith(u8, line, ".type\t") or !std.mem.endsWith(u8, line, ",@object")) continue;
+            try objects.put(a, line[".type\t".len .. line.len - ",@object".len], {});
+        }
+    }
+    return objects.contains(symbol);
+}
+
+/// The bytes of a label that is plain data, written out in hex, or null when it is not. A local
+/// common is its size in zero bytes.
 fn contents(a: std.mem.Allocator, text: []const u8, label: []const u8) !?[]const u8 {
     const marker = try a.print("\n{s}:\n", .{label});
-    const start = std.mem.find(u8, text, marker) orelse return null;
+    const start = std.mem.find(u8, text, marker) orelse {
+        const common = try a.print(".comm\t{s},", .{label});
+        const at = std.mem.find(u8, text, common) orelse return null;
+        const size_end = std.mem.findAnyPos(u8, text, at + common.len, ",\n") orelse return null;
+        const size = std.fmt.parseInt(usize, text[at + common.len .. size_end], 10) catch return null;
+        const zeros = try a.alloc(u8, size * 2);
+        @memset(zeros, '0');
+        return zeros;
+    };
     var bytes: std.ArrayList(u8) = .empty;
     var lines = std.mem.splitScalar(u8, text[start + marker.len ..], '\n');
     // Data ends at its `.size`, or for a constant-pool entry at the first line that is not data.
@@ -206,6 +255,13 @@ fn directive(a: std.mem.Allocator, bytes: *std.ArrayList(u8), line: []const u8) 
 }
 
 pub fn instructions(a: std.mem.Allocator, text: []const u8, name: []const u8, target: []const u8) ![]const u8 {
+    return normalized(a, text, name, target, 0);
+}
+
+/// How many calls deep a callee is read by its body; a deeper one is compared by name.
+const callee_depth = 3;
+
+fn normalized(a: std.mem.Allocator, text: []const u8, name: []const u8, target: []const u8, depth: usize) ![]const u8 {
     const marker = try a.print(".L{s}:", .{name});
     const start = std.mem.find(u8, text, marker) orelse std.mem.find(u8, text, try a.print("\n{s}:", .{name})) orelse return error.MissingAssemblyFunction;
     const end = std.mem.findPos(u8, text, start, ".size") orelse return error.MissingAssemblySize;
@@ -233,11 +289,31 @@ pub fn instructions(a: std.mem.Allocator, text: []const u8, name: []const u8, ta
                     break;
                 }
             }
-            if (!local) try operand(a, &output.writer, text, token);
+            if (local) continue;
+            if (depth < callee_depth and !std.mem.eql(u8, token, name)) {
+                if (try callee(a, text, token)) |symbol| {
+                    // A call stands for the instructions behind it, as a data label stands for
+                    // its bytes: two helpers with the same body are the same helper.
+                    const body_text = try normalized(a, text, symbol, target, depth + 1);
+                    try output.writer.print(" fn{{{s}}}", .{std.mem.trimEnd(u8, try std.mem.replaceOwned(u8, a, body_text, "\n", ";"), ";")});
+                    continue;
+                }
+            }
+            try operand(a, &output.writer, text, token);
         }
         try output.writer.writeByte('\n');
     }
     return output.written();
+}
+
+/// The function symbol an operand names, when this assembly defines it, or null.
+fn callee(a: std.mem.Allocator, text: []const u8, token: []const u8) !?[]const u8 {
+    const symbol = if (std.mem.endsWith(u8, token, "@PLT")) token[0 .. token.len - 4] else token;
+    if (symbol.len == 0 or !(std.ascii.isAlphabetic(symbol[0]) or symbol[0] == '_')) return null;
+    for ([_][]const u8{ "@function", "%function" }) |kind| {
+        if (std.mem.find(u8, text, try a.print(".type\t{s},{s}\n", .{ symbol, kind })) != null) return symbol;
+    }
+    return null;
 }
 
 // The compiler emits little-endian ELF64 for the two fixed Linux target fixtures.

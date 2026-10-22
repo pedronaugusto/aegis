@@ -4,6 +4,14 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Added
+
+- A release contract for every module in the README: what it is in ReleaseFast and ReleaseSmall, what it keeps checking in every build and what Debug and ReleaseSafe add, each row held by the gate (layouts against hand-written storage on the portable profiles, paired kernels, a mode matrix of every deliberate violation, the whole suite in each release mode). An example of every module in `examples/`, which the build runs.
+
+### Changed
+
+- `secret.Timing.end` restores the mode only where `begin` set it, from what `begin` recorded, instead of asking a second time whether the processor has it: on AArch64 Linux a span is now the instructions of a hand-written one (it was 60 bytes larger).
+
 ## [0.1.14] - 2026-10-17
 
 ### Changed

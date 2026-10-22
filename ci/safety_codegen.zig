@@ -1,13 +1,16 @@
 //! A8/A9 portable compilation and strict paired release instruction/layout gate.
 const std = @import("std");
 const emitted = @import("codegen.zig");
-const names = [_][]const u8{ "handle_get", "handle_insert", "handle_remove", "handle_index", "input_parse", "context_push", "input_diagnostics", "dense_sum" };
+/// Every pair this check compares, by the name its exports are spelled from.
+pub const names = [_][]const u8{ "handle_get", "handle_insert", "handle_remove", "handle_index", "input_parse", "context_push", "input_diagnostics", "dense_sum" };
 pub fn main(init: std.process.Init) !void {
     const arena = init.arena.allocator();
     const args = try init.minimal.args.toSlice(arena);
-    if (args.len != 2) return error.ZigExecutableRequired;
+    // The Zig to compile with, and the directory the evidence of each compared pair goes to.
+    if (args.len != 3) return error.ZigAndEvidenceDirectoryRequired;
     const dir = std.Io.Dir.cwd();
     try dir.createDirPath(init.io, ".zig-cache/a8-a9");
+    try dir.createDirPath(init.io, args[2]);
     for ([_][]const u8{ "x86_64-linux-gnu", "aarch64-linux-gnu", "x86_64-linux-musl", "x86_64-windows-gnu", "aarch64-windows-gnu", "x86_64-macos", "aarch64-macos", "x86-linux-gnu", "wasm32-freestanding", "aarch64-freestanding" }) |target| {
         for ([_][]const u8{ "Debug", "ReleaseSafe", "ReleaseFast", "ReleaseSmall" }) |mode| {
             const stem = try arena.print(".zig-cache/a8-a9/{s}-{s}", .{ target, mode });
@@ -23,19 +26,21 @@ pub fn main(init: std.process.Init) !void {
                 try out.interface.writeAll(result.stderr);
                 return error.SafetyProfileCompilationFailed;
             }
-            if (paired) try compare(init, target, mode, stem);
+            if (paired) try compare(init, target, mode, stem, args[2]);
         }
     }
     var out = std.Io.File.stdout().writer(init.io, &.{});
     try out.interface.writeAll("A8/A9: 40 profiles compiled; 32 Fast/Small layout/instruction pairs equal; retirement checked by the A8 tests\n");
     try out.interface.flush();
 }
-fn compare(init: std.process.Init, target: []const u8, mode: []const u8, stem: []const u8) !void {
+fn compare(init: std.process.Init, target: []const u8, mode: []const u8, stem: []const u8, evidence_dir: []const u8) !void {
     const arena = init.arena.allocator();
     const dir = std.Io.Dir.cwd();
     const assembly = try dir.readFileAlloc(init.io, try arena.print("{s}.s", .{stem}), arena, .limited(32 * 1024 * 1024));
     const ir = try dir.readFileAlloc(init.io, try arena.print("{s}.ll", .{stem}), arena, .limited(32 * 1024 * 1024));
     const object = try dir.readFileAlloc(init.io, try arena.print("{s}.o", .{stem}), arena, .limited(32 * 1024 * 1024));
+    var evidence: std.Io.Writer.Allocating = .init(arena);
+    try evidence.writer.print("# {s} {s} parity: handles, input and error context\n\nZig 0.17.0, LLVM, baseline CPU, stripped object. Every pair has identical emitted instructions (shared aliases or normalized assembly) and equal code size.\n\n", .{ target, mode });
     for (names) |name| {
         const base = try emitted.exportName(arena, "baseline", name);
         const wrap = try emitted.exportName(arena, "wrapper", name);
@@ -52,5 +57,7 @@ fn compare(init: std.process.Init, target: []const u8, mode: []const u8, stem: [
         // Every resolving fixture must retain its required validation even in Fast/Small.
         const body = try emitted.function(arena, ir, try emitted.alias(arena, ir, wrap));
         if (std.mem.eql(u8, name, "handle_get") and std.mem.find(u8, body, "icmp") == null) return error.KeyChecksStripped;
+        try evidence.writer.print("## {s}\n\nSymbols → `{s}` / `{s}`; baseline/wrapper machine code {d}/{d} bytes.\n\n```asm\n{s}```\n\n", .{ name, ba, wa, bs, ws, try emitted.instructions(arena, assembly, ba, target) });
     }
+    try dir.writeFile(init.io, .{ .sub_path = try arena.print("{s}/{s}-{s}.md", .{ evidence_dir, target, mode }), .data = evidence.written() });
 }
