@@ -4,6 +4,8 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+## [0.1.15] - 2026-10-22
+
 ### Added
 
 - A release contract for every module in the README: what it is in ReleaseFast and ReleaseSmall, what it keeps checking in every build and what Debug and ReleaseSafe add, each row held by the gate (layouts against hand-written storage on the portable profiles, paired kernels, a mode matrix of every deliberate violation, the whole suite in each release mode). An example of every module in `examples/`, which the build runs.
