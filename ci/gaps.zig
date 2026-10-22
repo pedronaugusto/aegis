@@ -298,6 +298,19 @@ pub fn budgetCharged(comptime wrapped: bool, owner: if (wrapped) *const a.bounde
     if (wrapped) return owner.charged() +% owner.maximum();
     return owner.used +% owner.maximum;
 }
+pub fn orderedUncancelable(comptime wrapped: bool, io: *const Io, owner: if (wrapped) *base.Ordered else *base.DirectMutex) u64 {
+    if (wrapped) {
+        var task: base.Policy.Context = .{};
+        var guard = owner.acquireOrderedUncancelable(io.*, &task);
+        defer guard.deinit(io.*);
+        guard.value().* +%= 1;
+        return guard.value().*;
+    }
+    owner.mutex.lockUncancelable(io.*);
+    defer owner.mutex.unlock(io.*);
+    owner.data +%= 1;
+    return owner.data;
+}
 pub fn waitUncancelable(comptime wrapped: bool, io: *const Io, changed: if (wrapped) *a.Condition else *base.DirectCondition, owner: if (wrapped) *a.BlockingGuarded(u64) else *base.DirectMutex, timeout: Io.Timeout) a.Condition.UncancelableWaitError!u64 {
     if (wrapped) {
         var guard = owner.acquireUncancelable(io.*);

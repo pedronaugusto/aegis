@@ -10,6 +10,7 @@ pub const InitContext = once.InitContext;
 pub const Atomic = @import("Atomic.zig").Atomic;
 pub const Lazy = @import("Lazy.zig").Lazy;
 pub const Shared = @import("Shared.zig").Shared;
+pub const Order = @import("Order.zig").Order;
 const confined = @import("Confined.zig");
 pub const Confined = confined.Confined;
 pub const TaskIdentity = confined.Identity;

@@ -38,7 +38,7 @@ pub const Module = struct {
 };
 
 pub const Required = union(enum) {
-    /// The rule's ID, A007 to A020.
+    /// The rule's ID, A007 to A021.
     rule: []const u8,
     /// The module built on it, itself required by a rule.
     block: []const u8,
@@ -167,6 +167,16 @@ pub const modules = [_]Module{
         .debug = "a handle released twice stops",
         .kernels = &.{ "gaps_shared_retain", "gaps_shared_get", "gaps_shared_release" },
         .example = "examples/shared.zig",
+    },
+    .{
+        .name = "Order",
+        .required = .{ .rule = "A021" },
+        .names = &.{ "Order", "sync.Order" },
+        .release = "`Context` is empty; an ordered lock is its lock",
+        .always = "the lock's own operations",
+        .debug = "an acquire out of rank or of an owner already held stops",
+        .kernels = &.{ "a67_ordered", "gaps_ordered_uncancelable" },
+        .example = "examples/order.zig",
     },
     .{
         .name = "Confined",
@@ -374,14 +384,14 @@ pub fn main(init: std.process.Init) !void {
     try table(&out.interface);
 }
 
-/// Whether a module earns its place: a danger rule (A007 to A020) requires it, or a module a
+/// Whether a module earns its place: a danger rule (A007 to A021) requires it, or a module a
 /// rule requires is built on it.
 fn earned(err: *std.Io.Writer, module: Module) !bool {
     switch (module.required) {
         .rule => |id| {
             const number = if (id.len == 4 and id[0] == 'A') std.fmt.parseInt(u8, id[1..], 10) catch 0 else 0;
-            if (number >= 7 and number <= 20) return true;
-            try err.print("catalogue: {s} names {s}, which is no danger rule (A007 to A020)\n", .{ module.name, id });
+            if (number >= 7 and number <= 21) return true;
+            try err.print("catalogue: {s} names {s}, which is no danger rule (A007 to A021)\n", .{ module.name, id });
         },
         .block => |name| {
             for (modules) |other| if (std.mem.eql(u8, other.name, name)) {

@@ -281,6 +281,28 @@ test "A6 once simulated waiting cancel never cancels initializer or publishes pa
     }
 }
 
+test "A6 logical-task rank checks before base lock waiting and reservation across condition" {
+    const O = a.Order(&.{ .{ .name = "root" }, .{ .name = "child", .after = &.{0} }, .{ .name = "other" } });
+    var ctx: O.Context = .{};
+    var low = O.Ordered(a.BlockingGuarded(u32), 0).init(.init(1));
+    var high = O.Ordered(a.BlockingGuarded(u32), 1).init(.init(2));
+    var equal = O.Ordered(a.BlockingGuarded(u32), 0).init(.init(3));
+    var held = try low.acquireOrdered(t.io, &ctx);
+    if (builtin.optimize == .debug) {
+        try t.expectError(error.SameOwner, ctx.check(&low, 0));
+        try t.expectError(error.Unordered, ctx.check(&equal, 0));
+        try t.expectError(error.Unordered, ctx.check(&high, 2));
+    }
+    var child = try high.acquireOrdered(t.io, &ctx);
+    try t.expectEqual(@as(u32, 2), child.value().*);
+    if (builtin.optimize == .debug) try t.expectError(error.Inversion, ctx.check(&equal, 0));
+    child.deinit(t.io);
+    var condition = a.Condition.initLimit(0);
+    try t.expectError(error.WaiterLimit, condition.wait(t.io, &held, .none));
+    held.deinit(t.io);
+    if (builtin.optimize != .debug) try t.expectEqual(@as(usize, 0), @sizeOf(O.Context));
+}
+
 test "A6 Confined identity access and explicit synchronized handoff" {
     const first: a.TaskIdentity = @fromBackingInt(@intCast(1));
     const next: a.TaskIdentity = @fromBackingInt(@intCast(2));

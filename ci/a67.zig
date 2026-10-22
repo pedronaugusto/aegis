@@ -38,6 +38,8 @@ pub fn cleanup(payload: *Payload) void {
 }
 pub const Owned = a.own.Owned(Payload, cleanup);
 pub const MustUse = a.own.MustUse(u64, "inspect result");
+pub const Policy = a.Order(&.{.{ .name = "root" }});
+pub const Ordered = Policy.Ordered(a.BlockingGuarded(u64), 0);
 
 pub fn mutex(comptime wrapped: bool, io: Io, owner: if (wrapped) *a.BlockingGuarded(u64) else *DirectMutex) Io.Cancelable!u64 {
     if (wrapped) {
@@ -204,6 +206,17 @@ pub fn confined(comptime wrapped: bool, owner: if (wrapped) *a.Confined(u64) els
     owner.data +%= 1;
     return owner.data;
 }
+pub fn ordered(comptime wrapped: bool, io: Io, owner: if (wrapped) *Ordered else *DirectMutex) Io.Cancelable!u64 {
+    if (wrapped) {
+        var task: Policy.Context = .{};
+        var guard = try owner.acquireOrdered(io, &task);
+        defer guard.deinit(io);
+        guard.value().* +%= 1;
+        return guard.value().*;
+    }
+    return mutex(false, io, owner);
+}
+
 pub fn ringBuffer(comptime wrapped: bool, owner: if (wrapped) *a.bounded.RingBuffer(u64) else *DirectRingBuffer, input: u64) bool {
     if (wrapped) {
         var value = input;

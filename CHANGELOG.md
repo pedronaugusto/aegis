@@ -4,9 +4,9 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
-### Breaking
+### Added
 
-- `Order` goes (its `Rank`, `Context` and `Ordered` with it). Every aegis module now meets the criterion of aegis's design §7: a danger rule of glint's aegis pack requires it, or a required module is built on it. No rule requires lock ranking, nothing in aegis builds on it, and no package in the family uses it.
+- The catalogue names, for every module, the danger rule of glint's aegis pack that requires it at its danger sites, or the required module built on it, and refuses a module with neither (aegis's design §7, criterion 4); README's table shows it. `Order` is the answer to A021, a function holding two aegis guards at once without both ranked.
 
 ## [0.1.15] - 2026-10-22
 

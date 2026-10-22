@@ -2,7 +2,7 @@ const gantry = @import("gantry");
 pub const layers: []const gantry.rules.Layer = &.{
     .{ .name = "base", .patterns = &.{ "src/scalar.zig", "src/int.zig", "src/id.zig", "src/units.zig", "src/assert.zig", "src/move.zig" } },
     .{ .name = "secret", .patterns = &.{ "src/secret.zig", "src/secret/**" } },
-    .{ .name = "sync", .patterns = &.{ "src/Guarded.zig", "src/SpinRwGuarded.zig", "src/sync.zig", "src/BlockingGuarded.zig", "src/RwGuarded.zig", "src/Condition.zig", "src/Confined.zig", "src/Once.zig", "src/Lazy.zig", "src/Shared.zig", "src/Atomic.zig", "src/interior.zig" } },
+    .{ .name = "sync", .patterns = &.{ "src/Guarded.zig", "src/SpinRwGuarded.zig", "src/sync.zig", "src/BlockingGuarded.zig", "src/RwGuarded.zig", "src/Condition.zig", "src/Confined.zig", "src/Once.zig", "src/Lazy.zig", "src/Shared.zig", "src/Atomic.zig", "src/interior.zig", "src/Order.zig" } },
     .{ .name = "handles", .patterns = &.{ "src/handle.zig", "src/handle/**" } },
     .{ .name = "boundary", .patterns = &.{ "src/input.zig", "src/err.zig" } },
     .{ .name = "bounded and ownership", .patterns = &.{ "src/bounded.zig", "src/own.zig" } },

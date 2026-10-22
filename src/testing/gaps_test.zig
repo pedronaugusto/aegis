@@ -152,6 +152,9 @@ test "A6 teardown hands a sole owner its data without an Io or a lock" {
     try t.expectEqual(@as(u32, 3), blocking.teardown().*);
     var shared = a.RwGuarded(u32).init(4);
     try t.expectEqual(@as(u32, 4), shared.teardown().*);
+    const O = a.Order(&.{.{ .name = "root" }});
+    var ordered = O.Ordered(a.BlockingGuarded(u32), 0).init(.init(8));
+    try t.expectEqual(@as(u32, 8), ordered.teardown().*);
     // A guard that ended before teardown leaves the lock free, so teardown agrees with it.
     var guard = try blocking.acquire(t.io);
     guard.deinit(t.io);

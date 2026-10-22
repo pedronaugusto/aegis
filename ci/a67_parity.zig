@@ -79,6 +79,12 @@ export fn baselineA67Confined(owner: *c.DirectConfined, identity: a.TaskIdentity
 export fn wrapperA67Confined(owner: *a.Confined(u64), identity: a.TaskIdentity) u64 {
     return c.confined(true, owner, identity);
 }
+export fn baselineA67Ordered(io: *const std.Io, owner: *c.DirectMutex) u64 {
+    return c.ordered(false, io.*, owner) catch |err| @intFromError(err);
+}
+export fn wrapperA67Ordered(io: *const std.Io, owner: *c.Ordered) u64 {
+    return c.ordered(true, io.*, owner) catch |err| @intFromError(err);
+}
 comptime {
     std.debug.assert(@sizeOf(c.DirectMutex) == @sizeOf(a.BlockingGuarded(u64)));
     std.debug.assert(@alignOf(c.DirectMutex) == @alignOf(a.BlockingGuarded(u64)));
@@ -106,6 +112,8 @@ comptime {
     std.debug.assert(@alignOf(u64) == @alignOf(c.MustUse));
     std.debug.assert(@sizeOf(c.DirectConfined) == @sizeOf(a.Confined(u64)));
     std.debug.assert(@alignOf(c.DirectConfined) == @alignOf(a.Confined(u64)));
+    std.debug.assert(@sizeOf(c.DirectMutex) == @sizeOf(c.Ordered));
+    std.debug.assert(@alignOf(c.DirectMutex) == @alignOf(c.Ordered));
     std.debug.assert(@sizeOf(a.BlockingGuarded(u64).Guard) == @sizeOf(*u64));
     std.debug.assert(@sizeOf(a.RwGuarded(u64).ReadGuard) == @sizeOf(*u64));
     std.debug.assert(@sizeOf(a.RwGuarded(u64).WriteGuard) == @sizeOf(*u64));

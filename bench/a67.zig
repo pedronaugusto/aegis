@@ -7,7 +7,7 @@ const builtin = @import("builtin");
 const Io = std.Io;
 const samples = 16;
 const rounds = 100000;
-const names = [_][]const u8{ "mutex", "rw_read", "rw_write", "once_ready", "once_cold", "condition", "array", "queue", "buffer", "ring_buffer", "limit", "budget", "owned", "must_use", "confined" };
+const names = [_][]const u8{ "mutex", "rw_read", "rw_write", "once_ready", "once_cold", "condition", "array", "queue", "buffer", "ring_buffer", "limit", "budget", "owned", "must_use", "confined", "ordered" };
 fn State(comptime wrapped: bool) type {
     return struct {
         const Self = @This();
@@ -22,6 +22,7 @@ fn State(comptime wrapped: bool) type {
         buffer: if (wrapped) a.bounded.Buffer(u64) else c.DirectBuffer = undefined,
         ring: if (wrapped) a.bounded.RingBuffer(u64) else c.DirectRingBuffer = undefined,
         confined: if (wrapped) a.Confined(u64) else c.DirectConfined = if (wrapped) .init(@fromBackingInt(@intCast(1)), 0) else .{ .data = 0, .owner = if (c.checked) @fromBackingInt(@intCast(1)) else {} },
+        ordered: if (wrapped) c.Ordered else c.DirectMutex = if (wrapped) .init(.init(0)) else .{ .data = 0 },
         sequence: u64 = 0,
         output: u64 = 0,
         fn init(self: *Self) void {
@@ -126,6 +127,7 @@ fn operation(comptime name: []const u8, comptime wrapped: bool) Operation {
                 return destination;
             }
             if (comptime std.mem.eql(u8, name, "confined")) return c.confined(wrapped, &state.confined, @fromBackingInt(@intCast(1)));
+            if (comptime std.mem.eql(u8, name, "ordered")) return c.ordered(wrapped, io, &state.ordered) catch 0;
             unreachable;
         }
     }.run;
