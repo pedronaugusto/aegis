@@ -4,6 +4,10 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- The hosted gate's `contracts-published` job ran the suite in each release mode outside preflight's runner, so with no watchdog or timing record, and preflight refused it (the nightly's red since 0.1.15). `test-release` is gone: the release tier runs the whole suite in ReleaseSafe and ReleaseFast under the runner, and ReleaseSmall, which keeps no check ReleaseFast drops, is held by the mode matrix.
+
 ## [0.1.16] - 2026-10-22
 
 ### Added

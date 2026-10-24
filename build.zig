@@ -30,13 +30,6 @@ pub fn dev(b: *std.Build, tools: type) void {
     // The tests whose threads contend natively, which CI runs under `-Dthread-sanitizer=true` on Linux.
     const races = b.addTest(.{ .name = "aegis-native-races", .root_module = m, .filters = &.{ "Guarded native", "Consumer Job", "A6 native", "A12 native" }, .use_llvm = true });
     b.step("test-native-races", "Run the native mutual exclusion and Job race tests").dependOn(&b.addRunArtifact(races).step);
-    // The whole suite in each release mode: what a module keeps checking there, and that its
-    // semantics hold where Debug's own checks are gone.
-    const release_tests = b.step("test-release", "Run every test in ReleaseSafe, ReleaseFast and ReleaseSmall");
-    for ([_]std.lang.Optimize{ .safe, .fast, .small }) |mode| {
-        const release = b.addTest(.{ .name = b.fmt("aegis-tests-{t}", .{mode}), .root_module = testModule(b, b.graph.host, mode), .filters = filters, .use_llvm = true });
-        release_tests.dependOn(&b.addRunArtifact(release).step);
-    }
 
     // An example for every module, built against the module a consumer gets and run: running
     // it is what proves the code does what the text around it says. examples/usage.zig is the
@@ -295,7 +288,7 @@ fn contractGroups(b: *std.Build) void {
     const groups = [_]struct { name: []const u8, description: []const u8, steps: []const []const u8 }{
         .{ .name = "contracts-values", .description = "Run the value and owner contracts: paired kernels, layouts, the ABI and the portable profiles", .steps = &.{ "check-negative", "check-parity", "check-contracts", "check-secret-bytes", "check-layouts" } },
         .{ .name = "contracts-choices", .description = "Run the A5 choice contracts", .steps = &.{ "check-choices", "check-choices-negative" } },
-        .{ .name = "contracts-published", .description = "Run the mode matrix, the release-mode suite and the published-module gates", .steps = &.{ "check-modes", "test-release", "check-a67", "check-handles-input", "check-a10", "check-a12", "check-consumer" } },
+        .{ .name = "contracts-published", .description = "Run the mode matrix and the published-module gates", .steps = &.{ "check-modes", "check-a67", "check-handles-input", "check-a10", "check-a12", "check-consumer" } },
     };
     const all = b.step("contracts", "Run every contract group");
     for (groups) |group| {
