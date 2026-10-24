@@ -102,6 +102,47 @@ test "A7 OwnedIo releases through the Io of the releaser, once, and a moved or t
     try t.expectEqual(@as(usize, 1), log.closed);
 }
 
+/// A handle copied by value, as a file or a directory is: what `move` and `lend` take.
+const Copied = struct {
+    descriptor: u32,
+    log: *Log,
+    fn close(self: *Copied, io: Io) void {
+        self.log.closed += 1;
+        self.log.io_seen = io.userdata;
+    }
+};
+const Holding = a.own.OwnedIo(Copied, Copied.close);
+
+fn opened(log: *Log, descriptor: u32) Holding {
+    var owner = Holding.init(.{ .descriptor = descriptor, .log = log });
+    // Used here, so bound here: only `move` may hand it on.
+    owner.borrowMut().descriptor += 1;
+    return owner.move();
+}
+
+const Keeper = struct {
+    held: Holding,
+    fn lent(k: *Keeper) a.own.Lent(Copied) {
+        return k.held.lend();
+    }
+};
+
+test "A7 OwnedIo moves by value once used, and lends a copy that is not the holder's to release" {
+    const io = t.io;
+    var log: Log = .{};
+    // Returned by value and moved again before its first use, as an owner opened and stored is.
+    const returned = opened(&log, 4);
+    var keeper: Keeper = .{ .held = returned };
+    try t.expectEqual(@as(usize, 0), log.closed);
+    const copy = keeper.lent();
+    try t.expectEqual(@as(u32, 5), copy.get().descriptor);
+    try t.expect(!@hasDecl(a.own.Lent(Copied), "deinit"));
+    try t.expectEqual(@sizeOf(Copied), @sizeOf(a.own.Lent(Copied)));
+    keeper.held.deinit(io);
+    try t.expectEqual(@as(usize, 1), log.closed);
+    try t.expectEqual(io.userdata, log.io_seen);
+}
+
 test "A7 OwnedIo and Owned are the same size and OwnedIo takes no Io until it is released" {
     const Plain = a.own.Owned(Handle, Handle.plain);
     try t.expectEqual(@sizeOf(Plain), @sizeOf(Closing));

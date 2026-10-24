@@ -6,6 +6,7 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ### Added
 
+- `own.Owned.move` and `own.OwnedIo.move`: a used owner handed on by value, consumed as `moveInto` consumes it, the result binding at its first use, so a function that opens and uses a resource can return its owner. `own.Lent(T)` and `lend()`: a copy of a by-value payload (a file, a directory) with no `deinit`, what an accessor hands out of a handle its owner closes. Both refuse a payload that declares `moveInto`. (relic's repository moves its directories from discovery into its state, and its accessors hand them out.)
 - `SecretBytes.appendSlice` and `SecretBytes.Writer`: secret text built a piece at a time, grown only through `reserve`, which erases the storage it leaves. The writer is a `std.Io.Writer` whose buffer is the allocation itself, so what is printed is held nowhere else; `flush` publishes it as the live prefix, and `err` names the allocation failure behind `WriteFailed`. Overlapping input is refused as `replace` refuses it. (relic built such text in a `std.ArrayList` and wiped it by hand, where each growth left an unwiped copy.)
 
 ## [0.1.17] - 2026-10-24

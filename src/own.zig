@@ -1,7 +1,7 @@
 //! Explicit single-task owners. Cleanup is static, infallible and nonblocking.
 const builtin = @import("builtin");
 const std = @import("std");
-const move = @import("move.zig");
+const moves = @import("move.zig");
 const diagnostics = builtin.optimize == .debug;
 const State = if (diagnostics) struct { live: bool = true, address: ?*const anyopaque = null } else struct {};
 
@@ -47,7 +47,7 @@ fn Owner(comptime T: type, comptime with_io: bool, comptime cleanup: if (with_io
         /// `init` would copy it and leave the source able to release it again.
         pub fn initFrom(source: *T) Self {
             var self: Self = .{ .data = undefined };
-            move.into(T, source, &self.data);
+            moves.into(T, source, &self.data);
             return self;
         }
         pub fn borrow(self: *Self) *const T {
@@ -63,13 +63,30 @@ fn Owner(comptime T: type, comptime with_io: bool, comptime cleanup: if (with_io
             bind(&self.state, self);
             std.debug.assert(self != destination);
             destination.* = .{ .data = undefined };
-            move.into(T, &self.data, &destination.data);
+            moves.into(T, &self.data, &destination.data);
             consume(&self.state);
+        }
+        /// Transfers into a fresh owner returned by value, as `moveInto` does: binds and consumes `self`; the
+        /// result binds at its first use, so it may be moved freely until then, as after `init`.
+        pub fn move(self: *Self) Self {
+            if (comptime moves.declares(T)) @compileError("move returns its owner by value; a payload that moves by moveInto moves by moveInto");
+            var destination: Self = undefined;
+            self.moveInto(&destination);
+            return destination;
+        }
+        /// What `lend` gives.
+        pub const Lending = Lent(T);
+        /// A copy of the payload that is not the caller's to release, as `borrow` lends it. It ends on
+        /// mutation, transfer or cleanup of the owner; nothing checks a `Lent` that outlives it.
+        pub fn lend(self: *Self) Lending {
+            if (comptime moves.declares(T)) @compileError("lend copies its payload; a payload that moves by moveInto is reached by borrow");
+            bind(&self.state, self);
+            return .{ .data = self.data };
         }
         /// Transfers payload into uninitialized disjoint storage; deinit is no longer owed.
         pub fn take(self: *Self, destination: *T) void {
             bind(&self.state, self);
-            move.into(T, &self.data, destination);
+            moves.into(T, &self.data, destination);
             consume(&self.state);
         }
         /// Runs exactly once, without implicit waiting, allocation or unwind on abort. An owner released
@@ -84,6 +101,20 @@ fn Owner(comptime T: type, comptime with_io: bool, comptime cleanup: if (with_io
             bind(&self.state, self);
             consume(&self.state);
             cleanup(&self.data, io);
+        }
+    };
+}
+
+/// A copy of a resource an owner keeps, lent out: the type says it is not the holder's to release, and it
+/// has no `deinit`. It ends on mutation, transfer or cleanup of the owner, as a borrow does; nothing checks
+/// one that outlives it. What an accessor hands out of a handle its owner closes.
+pub fn Lent(comptime T: type) type {
+    return struct {
+        const Self = @This();
+        /// Private: reached through `get`.
+        data: T,
+        pub fn get(self: Self) T {
+            return self.data;
         }
     };
 }
