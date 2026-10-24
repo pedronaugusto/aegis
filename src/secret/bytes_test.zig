@@ -304,3 +304,100 @@ fn resizeProperty(_: void, c: *shake.Case) !void {
 test "A4 SecretBytes shakedown shrinking resize traces preserve independent live-set oracle" {
     try shake.check(std.testing.allocator, {}, resizeProperty, .{ .cases = 128 });
 }
+
+test "A4 SecretBytes appendSlice grows by erasing every storage it leaves" {
+    var observe: Observer = .{ .child = std.testing.allocator };
+    var owner = try SecretBytes.init(observe.allocator(), 4);
+    try owner.appendSlice("pass");
+    try std.testing.expectEqual(@as(usize, 1), observe.allocations);
+    // Each growth past capacity frees the old storage, which Observer
+    // refuses unless it is all zero.
+    try owner.appendSlice("word=");
+    try owner.appendSlice("hunter2-and-then-some-more-bytes");
+    try quietEqual(owner.expose(), "password=hunter2-and-then-some-more-bytes");
+    try std.testing.expect(observe.allocations >= 3);
+    try std.testing.expectEqual(observe.allocations - 1, observe.frees);
+    try std.testing.expectEqual(@as(usize, 0), observe.resize_calls + observe.remap_calls);
+    try zero(owner.allocation[owner.len()..]);
+    owner.deinit();
+    try std.testing.expectEqual(@as(usize, 0), observe.live);
+}
+
+test "A4 SecretBytes appendSlice refuses overlap and failure changes nothing" {
+    var observe: Observer = .{ .child = std.testing.allocator };
+    var owner = try SecretBytes.init(observe.allocator(), 8);
+    defer owner.deinit();
+    try owner.appendSlice("12345678");
+    try std.testing.expectError(error.Overlap, owner.appendSlice(owner.expose()[2..4]));
+    try std.testing.expectError(error.Overlap, owner.appendSlice(owner.allocation[7..8]));
+    observe.fail = true;
+    try std.testing.expectError(error.OutOfMemory, owner.appendSlice("9"));
+    observe.fail = false;
+    try quietEqual(owner.expose(), "12345678");
+    try std.testing.expectEqual(@as(usize, 8), owner.capacity());
+    try owner.appendSlice("");
+    try std.testing.expectEqual(@as(usize, 8), owner.len());
+}
+
+test "A4 SecretBytes Writer prints into the owner and publishes at flush" {
+    var observe: Observer = .{ .child = std.testing.allocator };
+    var owner = try SecretBytes.init(observe.allocator(), 0);
+    var w = SecretBytes.Writer.init(&owner);
+    try w.interface.print("username={s}\npassword={s}\n", .{ "git", "s3cret-past-any-small-capacity" });
+    try w.interface.print("timeout={d}\n", .{@as(u32, 900)});
+    try w.interface.splatByteAll('x', 70);
+    try w.interface.flush();
+    const xs: [70]u8 = @splat('x');
+    const want = "username=git\npassword=s3cret-past-any-small-capacity\ntimeout=900\n" ++ xs;
+    try quietEqual(owner.expose(), want);
+    try std.testing.expect(observe.allocations >= 2);
+    try std.testing.expectEqual(observe.allocations - 1, observe.frees);
+    // A writer opened again appends after the live prefix.
+    var again = SecretBytes.Writer.init(&owner);
+    try again.interface.writeAll("!");
+    try again.interface.flush();
+    try std.testing.expectEqual(want.len + 1, owner.len());
+    try zero(owner.allocation[owner.len()..]);
+    owner.deinit();
+    try std.testing.expectEqual(@as(usize, 0), observe.live);
+}
+
+test "A4 SecretBytes Writer reports allocation failure as err with the written kept" {
+    var observe: Observer = .{ .child = std.testing.allocator };
+    var owner = try SecretBytes.init(observe.allocator(), 4);
+    defer owner.deinit();
+    var w = SecretBytes.Writer.init(&owner);
+    try w.interface.writeAll("abcd");
+    observe.fail = true;
+    try std.testing.expectError(error.WriteFailed, w.interface.writeAll("e"));
+    try std.testing.expectEqual(@as(?SecretBytes.ReserveError, error.OutOfMemory), w.err);
+    try w.interface.flush();
+    try quietEqual(owner.expose(), "abcd");
+}
+
+fn appendProperty(_: void, c: *shake.Case) !void {
+    var observe: Observer = .{ .child = std.testing.allocator };
+    var owner = try SecretBytes.init(observe.allocator(), shake.gen.intRange(c.source, usize, 0, 16));
+    defer owner.deinit();
+    var oracle: [48 * 24]u8 = undefined;
+    var live: usize = 0;
+    var chunk: [24]u8 = undefined;
+    for (0..48) |_| {
+        const n = shake.gen.intRange(c.source, usize, 0, chunk.len);
+        for (chunk[0..n]) |*byte| byte.* = shake.gen.int(c.source, u8);
+        if (shake.gen.boolean(c.source)) {
+            try owner.appendSlice(chunk[0..n]);
+        } else {
+            var w = SecretBytes.Writer.init(&owner);
+            try w.interface.writeAll(chunk[0..n]);
+            try w.interface.flush();
+        }
+        @memcpy(oracle[live..][0..n], chunk[0..n]);
+        live += n;
+        try quietEqual(owner.expose(), oracle[0..live]);
+        try zero(owner.allocation[live..]);
+    }
+}
+test "A4 SecretBytes shakedown appends and writes match an oracle with slack zero" {
+    try shake.check(std.testing.allocator, {}, appendProperty, .{ .cases = 128 });
+}

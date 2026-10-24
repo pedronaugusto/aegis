@@ -4,6 +4,10 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Added
+
+- `SecretBytes.appendSlice` and `SecretBytes.Writer`: secret text built a piece at a time, grown only through `reserve`, which erases the storage it leaves. The writer is a `std.Io.Writer` whose buffer is the allocation itself, so what is printed is held nowhere else; `flush` publishes it as the live prefix, and `err` names the allocation failure behind `WriteFailed`. Overlapping input is refused as `replace` refuses it. (relic built such text in a `std.ArrayList` and wiped it by hand, where each growth left an unwiped copy.)
+
 ## [0.1.17] - 2026-10-24
 
 ### Fixed
