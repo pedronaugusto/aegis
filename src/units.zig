@@ -370,6 +370,8 @@ pub fn Count(comptime Tag: type, comptime Repr: type) type {
         pub const Domain = Tag;
         /// The integer the count is held in.
         pub const Representation = Repr;
+        /// This scalar as generic code built on any aegis version reads it (README, "Generic code").
+        pub const aegis_scalar = .{ .contract = 1, .kind = .count, .representation = Repr, .domain = Tag };
         /// Private: use fromRaw/raw.
         _,
         pub const AddError = ints.Checked(Repr).AddError;
@@ -419,6 +421,8 @@ pub fn Bytes(comptime Repr: type) type {
         const Self = @This();
         /// The integer the count of bytes is held in.
         pub const Representation = Repr;
+        /// This scalar as generic code built on any aegis version reads it (README, "Generic code").
+        pub const aegis_scalar = .{ .contract = 1, .kind = .bytes, .representation = Repr };
         /// Private: use fromRaw/raw.
         _,
         pub const AddError = ints.Checked(Repr).AddError;
@@ -496,6 +500,8 @@ pub fn Bits(comptime Repr: type) type {
         const Self = @This();
         /// The integer the count of bits is held in.
         pub const Representation = Repr;
+        /// This scalar as generic code built on any aegis version reads it (README, "Generic code").
+        pub const aegis_scalar = .{ .contract = 1, .kind = .bits, .representation = Repr };
         /// Private: use fromRaw/raw.
         _,
         pub const AddError = ints.Checked(Repr).AddError;
@@ -555,6 +561,8 @@ pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
         pub const Scale = unit;
         /// The integer the span is held in.
         pub const Representation = Repr;
+        /// This scalar as generic code built on any aegis version reads it (README, "Generic code").
+        pub const aegis_scalar = .{ .contract = 1, .kind = .duration, .representation = Repr, .unit = unit };
         /// Private: use fromRaw/raw.
         _,
         pub const AddError = ints.Checked(Repr).AddError;
@@ -665,6 +673,8 @@ pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: t
         pub const Scale = unit;
         /// The integer the instant is held in.
         pub const Representation = Repr;
+        /// This scalar as generic code built on any aegis version reads it (README, "Generic code").
+        pub const aegis_scalar = .{ .contract = 1, .kind = .instant, .representation = Repr, .unit = unit, .clock = ClockTag };
         /// Private: use fromRaw/raw.
         _,
         pub const AddError = ints.Checked(Repr).AddError;

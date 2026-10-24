@@ -4,6 +4,10 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Added
+
+- Each scalar says what it is in one declaration, `aegis_scalar`: its `contract` (the declaration's version, 1), its `kind` (`.ranged`, `.duration`, …), its `representation`, and its bounds, unit, clock or domain. Generic code recognizes aegis's scalars by it and builds them only through their own checked functions, as README's contract 1 names them, refusing a contract it does not know by its number. Rebuilding a type from its published parameters and comparing, which README recommended, refuses a type made by another copy of aegis: a plain `zig build` whose dependencies pin two aegis versions builds two, so ensign refused bay's `int.Ranged` as a non-exhaustive enum, while the declaration reads the same in every copy.
+
 ## [0.1.17] - 2026-10-24
 
 ### Fixed

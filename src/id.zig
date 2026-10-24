@@ -35,6 +35,8 @@ fn Identity(comptime Tag: type, comptime Repr: type, comptime nonzero: bool) typ
         pub const Domain = Tag;
         /// The integer the id is held in.
         pub const Representation = Repr;
+        /// This scalar as generic code built on any aegis version reads it (README, "Generic code").
+        pub const aegis_scalar = .{ .contract = 1, .kind = if (nonzero) .nonzero else .id, .representation = Repr, .domain = Tag };
         /// The count type of `advance`, `retreat` and `distanceTo`.
         pub const Step = StepOf(Tag, Repr);
         pub const FromRawError = error{InvalidId};
@@ -116,6 +118,8 @@ pub fn Counter(comptime Tag: type, comptime Repr: type) type {
         pub const Domain = Tag;
         /// The integer the last issued id is held in.
         pub const Representation = Repr;
+        /// This scalar as generic code built on any aegis version reads it (README, "Generic code").
+        pub const aegis_scalar = .{ .contract = 1, .kind = .counter, .representation = Repr, .domain = Tag };
         /// Private: last successfully issued ID; persists unchanged on exhaustion.
         _,
         pub const NextError = error{IdExhausted};
