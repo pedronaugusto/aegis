@@ -807,3 +807,75 @@ test "A6 native Atomic checked adds race to exactly the maximum and never past i
         try t.expectEqual(Hits.fromRaw(255), state.cell.load(.monotonic));
     }
 }
+
+/// One whole-file read under `everyFault`: the file is there before each run, and what the run read is
+/// freed after it. Each run allocates from a heap of its own, so a remap answers alike in every run.
+const WholeRead = struct {
+    tmp: t.TmpDir = undefined,
+    heap: std.heap.SafeAllocator = undefined,
+    gpa: std.mem.Allocator = undefined,
+    read: ?[]u8 = null,
+
+    pub fn setUp(r: *WholeRead, fio: *shake.FaultIo) !void {
+        r.tmp = t.tmpDir(.{});
+        errdefer r.tmp.cleanup();
+        try r.tmp.dir.writeFile(t.io, .{ .sub_path = "whole", .data = "every byte of it" });
+        r.heap = .init(std.heap.page_allocator, .{});
+        r.gpa = try fio.allocator(r.heap.allocator());
+        r.read = null;
+    }
+    pub fn run(r: *WholeRead, io: Io) !void {
+        r.read = try a.own.readFile(io, r.tmp.dir, "whole", r.gpa, .fromRaw(64));
+    }
+    pub fn check(r: *WholeRead, io: Io, result: anyerror!void, injected: ?shake.Injected) !void {
+        _ = io;
+        if (result) |_| {
+            // A cancel that lands is never read past (one that cannot land is no fault). A read that
+            // moves none ends the file there, as a file cut short under the read does, so a short read
+            // gives what was there; a fault the read recovers from (a failed remap) gives it all.
+            const whole = "every byte of it";
+            const fault: shake.IoFault = if (injected) |given| given.fault else .{ .short = 0 };
+            switch (fault) {
+                .cancel => return error.CancelLost,
+                .short => try t.expect(std.mem.startsWith(u8, whole, r.read.?)),
+                else => try t.expectEqualStrings(whole, r.read.?),
+            }
+            if (injected == null) try t.expectEqualStrings(whole, r.read.?);
+        } else |failure| {
+            const fault = injected orelse return failure;
+            switch (fault.fault) {
+                .cancel => try t.expectEqual(error.Canceled, failure),
+                .fail => |want| try t.expectEqual(want, failure),
+                else => {},
+            }
+        }
+    }
+    pub fn tearDown(r: *WholeRead) void {
+        if (r.read) |bytes| r.gpa.free(bytes);
+        r.tmp.cleanup();
+        if (r.heap.deinit() != 0) @panic("own.readFile leaked");
+    }
+};
+
+test "A7 own.readFile returns a cancel wherever it lands, the length's read included, and every fault it is given" {
+    var run: WholeRead = .{};
+    var report: shake.EveryFaultReport = .{};
+    defer report.deinit();
+    const done = shake.everyFault(t.allocator, t.io, &run, .{ .cancel = true, .diagnostics = &report }) catch |failure| {
+        if (report.failure) |f| std.debug.print("{s}\n", .{f.trace});
+        return failure;
+    };
+    try t.expect(done.runs > 1);
+}
+
+test "A7 own.readFile reads at most its limit, refused before anything is allocated" {
+    var tmp = t.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(t.io, .{ .sub_path = "four", .data = "four" });
+    const exact = try a.own.readFile(t.io, tmp.dir, "four", t.allocator, .fromRaw(4));
+    defer t.allocator.free(exact);
+    try t.expectEqualStrings("four", exact);
+    var failing: std.testing.FailingAllocator = .init(t.allocator, .{ .fail_index = 0 });
+    try t.expectError(error.StreamTooLong, a.own.readFile(t.io, tmp.dir, "four", failing.allocator(), .fromRaw(3)));
+    try t.expectError(error.FileNotFound, a.own.readFile(t.io, tmp.dir, "absent", t.allocator, .fromRaw(3)));
+}

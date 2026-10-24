@@ -2,6 +2,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
 const moves = @import("move.zig");
+const units = @import("units.zig");
 const diagnostics = builtin.optimize == .debug;
 const State = if (diagnostics) struct { live: bool = true, address: ?*const anyopaque = null } else struct {};
 
@@ -102,6 +103,33 @@ fn Owner(comptime T: type, comptime with_io: bool, comptime cleanup: if (with_io
             consume(&self.state);
             cleanup(&self.data, io);
         }
+    };
+}
+
+/// Why `readFile` failed: opening the file, reading its length, reading it, memory, or a file longer
+/// than the limit. A cancel is `Canceled` wherever it lands, the length's read included.
+pub const ReadFileError = std.Io.File.OpenError || std.Io.File.StatError || std.Io.File.Reader.Error || std.mem.Allocator.Error || error{
+    /// The file holds more than the limit's bytes.
+    StreamTooLong,
+};
+
+/// The bytes of the file at `sub_path` in `dir`, at most `limit` of them; the caller owns them and frees
+/// them with `gpa`. The file's length is read first and its error returned, so a cancel that lands there
+/// is `Canceled`: std's `Dir.readFileAlloc` takes a failed length as a guess and reads on, losing it. A
+/// file longer than `limit` is `StreamTooLong` before anything is allocated, and one that grows past it
+/// while it is read is too.
+pub fn readFile(io: std.Io, dir: std.Io.Dir, sub_path: []const u8, gpa: std.mem.Allocator, limit: units.Bytes(u64)) ReadFileError![]u8 {
+    var file = try dir.openFile(io, sub_path, .{ .allow_directory = builtin.os.tag != .windows });
+    defer file.close(io);
+    const length = (try file.stat(io)).size;
+    if (length > limit.raw()) return error.StreamTooLong;
+    // The reader knows the length, so it never asks again.
+    var reader: std.Io.File.Reader = .initSize(file, io, &.{}, length);
+    // std reads one byte past a limit to tell a longer stream; a limit past `usize` is all memory.
+    const most = @min(std.math.cast(usize, limit.raw()) orelse std.math.maxInt(usize), std.math.maxInt(usize) - 1);
+    return reader.interface.allocRemaining(gpa, .limited(most)) catch |err| switch (err) {
+        error.ReadFailed => return reader.err.?,
+        error.OutOfMemory, error.StreamTooLong => |e| return e,
     };
 }
 
