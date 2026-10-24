@@ -834,19 +834,22 @@ const WholeRead = struct {
             // moves none ends the file there, as a file cut short under the read does, so a short read
             // gives what was there; a fault the read recovers from (a failed remap) gives it all.
             const whole = "every byte of it";
-            const fault: shake.IoFault = if (injected) |given| given.fault else .{ .short = 0 };
-            switch (fault) {
+            const given = injected orelse return t.expectEqualStrings(whole, r.read.?);
+            switch (given.fault) {
                 .cancel => return error.CancelLost,
                 .short => try t.expect(std.mem.startsWith(u8, whole, r.read.?)),
-                else => try t.expectEqualStrings(whole, r.read.?),
+                // The one failure a read recovers from: a remap refused, the bytes moved by alloc.
+                .fail => if (given.call == .remap) try t.expectEqualStrings(whole, r.read.?) else return error.FaultSwallowed,
+                else => return error.FaultSwallowed,
             }
-            if (injected == null) try t.expectEqualStrings(whole, r.read.?);
         } else |failure| {
-            const fault = injected orelse return failure;
-            switch (fault.fault) {
+            const given = injected orelse return failure;
+            switch (given.fault) {
                 .cancel => try t.expectEqual(error.Canceled, failure),
-                .fail => |want| try t.expectEqual(want, failure),
-                else => {},
+                .fail, .fail_after => |want| try t.expectEqual(want, failure),
+                // A read that moves less is no failure.
+                .short => return failure,
+                else => return failure,
             }
         }
     }
@@ -868,7 +871,33 @@ test "A7 own.readFile returns a cancel wherever it lands, the length's read incl
     try t.expect(done.runs > 1);
 }
 
-test "A7 own.readFile reads at most its limit, refused before anything is allocated" {
+/// An `Io` whose file lengths read four bytes short, as a file that grows after its length is read.
+const Grown = struct {
+    var base: Io = undefined;
+    var vtable: Io.VTable = undefined;
+    fn io() Io {
+        base = t.io;
+        vtable = base.vtable.*;
+        vtable.fileStat = stat;
+        return .{ .userdata = base.userdata, .vtable = &vtable };
+    }
+    fn stat(userdata: ?*anyopaque, file: Io.File) Io.File.StatError!Io.File.Stat {
+        var out = try base.vtable.fileStat(userdata, file);
+        out.size -|= 4;
+        return out;
+    }
+};
+
+test "A7 own.readFile reads as long as the file's length said, not what was appended after" {
+    var tmp = t.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(t.io, .{ .sub_path = "grown", .data = "said and more" });
+    const read = try a.own.readFile(Grown.io(), tmp.dir, "grown", t.allocator, .fromRaw(64));
+    defer t.allocator.free(read);
+    try t.expectEqualStrings("said and ", read);
+}
+
+test "A7 own.readFile reads at most its limit, refused before anything is allocated, and readFileSentinel ends what it read" {
     var tmp = t.tmpDir(.{});
     defer tmp.cleanup();
     try tmp.dir.writeFile(t.io, .{ .sub_path = "four", .data = "four" });
@@ -878,4 +907,8 @@ test "A7 own.readFile reads at most its limit, refused before anything is alloca
     var failing: std.testing.FailingAllocator = .init(t.allocator, .{ .fail_index = 0 });
     try t.expectError(error.StreamTooLong, a.own.readFile(t.io, tmp.dir, "four", failing.allocator(), .fromRaw(3)));
     try t.expectError(error.FileNotFound, a.own.readFile(t.io, tmp.dir, "absent", t.allocator, .fromRaw(3)));
+    const text = try a.own.readFileSentinel(t.io, tmp.dir, "four", t.allocator, .fromRaw(4), 0);
+    defer t.allocator.free(text);
+    try t.expectEqualStrings("four", text);
+    try t.expectEqual(@as(u8, 0), text[text.len]);
 }
