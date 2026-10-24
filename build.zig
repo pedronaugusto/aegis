@@ -1,4 +1,9 @@
 const std = @import("std");
+
+/// aegis's owners and its whole-file read for a build script, which takes no package module:
+/// `@import("aegis").own.readFile` in a build runner as in a program. Zig analyzes only what a
+/// build script uses, so a build runner compiles the read and what it needs, not aegis.
+pub const own = @import("src/own.zig");
 /// What a project that depends on aegis builds: the `aegis` module, std only.
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .cpu_model = .baseline } });
