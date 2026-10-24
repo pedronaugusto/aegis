@@ -62,7 +62,7 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [0.1.9] - 2026-10-15
 
-The change tagged v0.2.0 the same day, released on the 0.1 line: it breaks no caller (only builds that failed to compile now compile), and a family resolves aegis within one line, so a new minor would have split every package that also reaches aegis through shakedown. Use 0.1.9; v0.2.0 is withdrawn.
+The change first tagged v0.2.0 the same day, released on the 0.1 line: it breaks no caller (only builds that failed to compile now compile), and a family resolves aegis within one line, so a new minor would have split every package that also reaches aegis through shakedown. v0.2.0 was withdrawn and its tag removed; 0.1.9 is the same tree.
 
 ### Changed
 
@@ -72,10 +72,6 @@ The change tagged v0.2.0 the same day, released on the 0.1 line: it breaks no ca
 
 - `secret.Choice.audited`: whether this build (compiler, backend, target, CPU model and features, mitigation level) is one whose lowering `zig build check-choices` inspects; `secret.audited_profiles` lists them.
 - check-choices covers x86_64-linux-gnu at x86_64_v2/v3/v4, aarch64-linux-gnu at neoverse_n1/v2, aarch64-macos at apple_m2/m3/m4, x86_64 FreeBSD, OpenBSD, NetBSD and DragonFly, and wasm32-freestanding: 20 profiles, 240 builds.
-
-## [0.2.0] - 2026-10-15 [withdrawn]
-
-The same tree as 0.1.9 under a minor; withdrawn for it.
 
 ## [0.1.8] - 2026-10-14
 
