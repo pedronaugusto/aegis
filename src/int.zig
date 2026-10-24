@@ -57,6 +57,8 @@ pub fn Checked(comptime Repr: type) type {
         const Self = @This();
         /// The integer the value is held in.
         pub const Representation = Repr;
+        /// This scalar as generic code built on any aegis version reads it (README, "Generic code").
+        pub const aegis_scalar = .{ .contract = 1, .kind = .checked, .representation = Repr };
         /// Private: use init/raw; Zig reflection can bypass this contract.
         value: Repr,
         pub const AddError = error{ Overflow, Underflow };
@@ -127,6 +129,8 @@ pub fn Saturating(comptime Repr: type) type {
         const Self = @This();
         /// The integer the value is held in.
         pub const Representation = Repr;
+        /// This scalar as generic code built on any aegis version reads it (README, "Generic code").
+        pub const aegis_scalar = .{ .contract = 1, .kind = .saturating, .representation = Repr };
         /// Private: use init/raw.
         value: Repr,
         pub const DivError = error{DivisionByZero};
@@ -183,6 +187,8 @@ pub fn Ranged(comptime Repr: type, comptime min: Repr, comptime max: Repr) type 
         const Self = @This();
         /// The integer the value is held in.
         pub const Representation = Repr;
+        /// This scalar as generic code built on any aegis version reads it (README, "Generic code").
+        pub const aegis_scalar = .{ .contract = 1, .kind = .ranged, .representation = Repr, .minimum = min, .maximum = max };
         /// The smallest value `init` accepts.
         pub const minimum: Repr = min;
         /// The largest value `init` accepts.

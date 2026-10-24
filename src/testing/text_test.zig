@@ -1,5 +1,5 @@
 //! Units as text, and the parameters every scalar publishes: the grammar `Duration.parse` and `Bytes.parse`
-//! read, the canonical form `format` writes, and the types a generic consumer rebuilds from their declarations.
+//! read, the canonical form `format` writes, and how a generic consumer recognizes each scalar by its declarations.
 const std = @import("std");
 const shake = @import("shakedown");
 const a = @import("../root.zig");
@@ -238,43 +238,24 @@ test "A3 parse agrees with an exact oracle on generated components, fractions an
     try shake.check(t.allocator, {}, sizeOracle, .{ .cases = 2048, .seed = 0x512e });
 }
 
-/// Which aegis scalar `T` is, found the way a generic consumer finds it: by rebuilding the type from the
-/// parameters it publishes and comparing, never by its name. The declarations each family alone publishes
-/// pick the constructor first, so a type is only ever rebuilt with parameters its own family accepts.
+/// Which aegis scalar `T` is, found the way a generic consumer finds it: by the `aegis_scalar` declaration
+/// it carries, at the one contract this reader knows, never by its name or by rebuilding it, so a type made
+/// by another copy of aegis (a dependency pinning another version) is recognized alike.
 const Kind = enum { checked, saturating, ranged, count, bytes, bits, duration, instant, id, nonzero, counter, other };
 
 fn kindOf(comptime T: type) Kind {
     switch (@typeInfo(T)) {
-        .@"struct", .@"enum" => {},
+        .@"struct", .@"enum", .@"union", .@"opaque" => {},
         else => return .other,
     }
-    if (!@hasDecl(T, "Representation") or @TypeOf(T.Representation) != type) return .other;
-    const R = T.Representation;
-    if (@typeInfo(R) != .int) return .other;
-    if (@typeInfo(T) == .@"struct") {
-        if (T == a.int.Checked(R)) return .checked;
-        if (T == a.int.Saturating(R)) return .saturating;
-        return .other;
-    }
-    if (@hasDecl(T, "minimum")) return if (T == a.int.Ranged(R, T.minimum, T.maximum)) .ranged else .other;
-    if (@hasDecl(T, "Clock")) return if (T == U.Instant(T.Clock, T.Scale, R)) .instant else .other;
-    if (@hasDecl(T, "Scale")) return if (T == U.Duration(T.Scale, R)) .duration else .other;
-    if (@hasDecl(T, "Step")) {
-        if (T == a.id.Id(T.Domain, R)) return .id;
-        if (T == a.id.NonZero(T.Domain, R)) return .nonzero;
-        return .other;
-    }
-    if (@hasDecl(T, "Domain")) {
-        if (T == U.Count(T.Domain, R)) return .count;
-        if (@typeInfo(R).int.signedness == .unsigned and T == a.id.Counter(T.Domain, R)) return .counter;
-        return .other;
-    }
-    if (T == U.Bytes(R)) return .bytes;
-    if (T == U.Bits(R)) return .bits;
-    return .other;
+    if (!@hasDecl(T, "aegis_scalar")) return .other;
+    const scalar = T.aegis_scalar;
+    if (@typeInfo(@TypeOf(scalar)) != .@"struct" or !@hasField(@TypeOf(scalar), "contract") or scalar.contract != 1) return .other;
+    const name = @tagName(scalar.kind);
+    return if (@hasField(Kind, name)) @field(Kind, name) else .other;
 }
 
-test "A3 every scalar publishes the parameters it was made from, and a generic consumer rebuilds it from them" {
+test "A3 every scalar publishes the parameters it was made from and which scalar it is, as another copy of aegis reads it" {
     const Tag = struct {};
     const Jobs = a.int.Ranged(u16, 1, 256);
     comptime std.debug.assert(Jobs.Representation == u16);
@@ -285,6 +266,12 @@ test "A3 every scalar publishes the parameters it was made from, and a generic c
     comptime std.debug.assert(U.Duration(.millisecond, u64).Scale == .millisecond);
     comptime std.debug.assert(U.Count(Tag, u8).Domain == Tag);
     comptime std.debug.assert(a.id.Counter(Tag, u32).Domain == Tag);
+    // The declaration states the parameters too.
+    comptime std.debug.assert(Jobs.aegis_scalar.representation == u16 and Jobs.aegis_scalar.minimum == 1 and Jobs.aegis_scalar.maximum == 256);
+    comptime std.debug.assert(U.Duration(.millisecond, u64).aegis_scalar.unit == .millisecond);
+    comptime std.debug.assert(U.Instant(.awake, .second, i64).aegis_scalar.clock == .awake);
+    comptime std.debug.assert(U.Count(Tag, u8).aegis_scalar.domain == Tag);
+    comptime std.debug.assert(a.id.NonZero(Tag, u64).aegis_scalar.domain == Tag);
     const cases = .{
         .{ a.int.Checked(u7), Kind.checked },               .{ a.int.Saturating(i64), Kind.saturating },
         .{ Jobs, Kind.ranged },                             .{ a.int.Ranged(i8, -1, 1), Kind.ranged },
@@ -295,6 +282,19 @@ test "A3 every scalar publishes the parameters it was made from, and a generic c
         .{ enum(u16) { _ }, Kind.other },
         .{ struct {
             pub const Representation = u8;
+        }, Kind.other },
+        // Another copy of aegis's Ranged(u16, 1, 256): never equal to `Jobs`, recognized alike.
+        .{ enum(u16) {
+            pub const aegis_scalar = .{ .contract = 1, .kind = .ranged, .representation = u16, .minimum = 1, .maximum = 256 };
+            pub const Representation = u16;
+            pub const minimum: u16 = 1;
+            pub const maximum: u16 = 256;
+            _,
+        }, Kind.ranged },
+        // A later contract this reader does not know: refused, not misread.
+        .{ enum(u16) {
+            pub const aegis_scalar = .{ .contract = 2, .kind = .ranged, .representation = u16 };
+            _,
         }, Kind.other },
         .{ u16, Kind.other },                               .{ a.int.Checked(u7), Kind.checked },
         .{ a.id.Id(Tag, i32), Kind.id },                    .{ U.Count(Tag, i8), Kind.count },
