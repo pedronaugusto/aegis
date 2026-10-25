@@ -172,7 +172,7 @@ pub fn budget(comptime wrapped: bool, owner: if (wrapped) *a.bounded.Budget(u64)
         owner.consume(amount) catch return false;
         var reservation: a.bounded.Budget(u64).Reservation = .{ .budget = owner, .amount = release };
         // Built by hand, the reservation is counted open as one `reserve` gives.
-        if (@import("builtin").optimize == .debug) owner.open += 1;
+        if (@import("builtin").optimize == .debug) owner.unsettled += 1;
         reservation.release();
         return true;
     }
