@@ -4,6 +4,8 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+## [0.1.18] - 2026-10-25
+
 ### Added
 
 - `own.readFile(io, dir, sub_path, gpa, limit)` and `own.readFileSentinel(..., sentinel)` (source text a parser reads to its end): a whole file's bytes, at most `limit` (`units.Bytes(u64)`, which the caller must give), the caller owning them. It reads the file's length first and returns its error, so a cancel that lands there is `Canceled`; std 0.17's `Dir.readFileAlloc` takes a failed length as a guess and reads on, so that cancel is lost. A file longer than the limit is `StreamTooLong` before anything is allocated, and the read is as long as the length said (bytes appended after it are not read). Proved under shakedown's `everyFault` with every cancel, error, short read and allocation failure. (relic-c's finding; preflight's default policy names it as std's replacement.)
