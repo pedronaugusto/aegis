@@ -29,9 +29,9 @@ fn State(comptime wrapped: bool) type {
             self.* = .{};
             self.buffer = if (wrapped) .initBuffer(&self.memory) else .{ .storage = &self.memory, .gpa = null, .maximum = 3 };
             self.ring = if (wrapped) (a.bounded.RingBuffer(u64).initBuffer(&self.memory) catch @panic("nonzero storage")) else .{ .storage = &self.memory, .gpa = null, .maximum = 3 };
-            // glint-ignore: A001 -- measured-boundary: the harness seeds a ready Once before timing; Once has no ready constructor and getOrInit needs an Io and a task
+            // aegis: boundary: the harness seeds a ready Once before timing; Once has no ready constructor and getOrInit needs an Io and a task
             self.once.data = 42;
-            // glint-ignore: A001 -- measured-boundary: the seeded value's publication; as getOrInit's would be, before timing
+            // aegis: boundary: the seeded value's publication; as getOrInit's would be, before timing
             self.once.state.store(.ready, .release);
         }
     };
@@ -55,7 +55,7 @@ fn operation(comptime name: []const u8, comptime wrapped: bool) Operation {
             if (comptime std.mem.eql(u8, name, "once_ready")) return c.onceReady(wrapped, &state.once).?.*;
             if (comptime std.mem.eql(u8, name, "once_cold")) {
                 const owner = &state.once;
-                // glint-ignore: A001 -- measured-boundary: the cold path is measured again each round; the harness empties the Once, which has no public reset
+                // aegis: boundary: the cold path is measured again each round; the harness empties the Once, which has no public reset
                 owner.state.store(.empty, .monotonic);
                 return (c.onceCold(wrapped, io, owner, input) catch return 0).*;
             }
@@ -63,7 +63,7 @@ fn operation(comptime name: []const u8, comptime wrapped: bool) Operation {
             if (comptime std.mem.eql(u8, name, "array")) {
                 const owner = &state.array;
                 const admitted = c.array(wrapped, owner, input);
-                // glint-ignore: A001 -- measured-boundary: a full owner is emptied for the next round as the direct side is, by its count; clear would loop over the elements
+                // aegis: boundary: a full owner is emptied for the next round as the direct side is, by its count; clear would loop over the elements
                 if (!admitted) owner.used = 0;
                 return @intFromBool(admitted);
             }
@@ -84,7 +84,7 @@ fn operation(comptime name: []const u8, comptime wrapped: bool) Operation {
             if (comptime std.mem.eql(u8, name, "buffer")) {
                 const owner = &state.buffer;
                 const admitted = c.buffer(wrapped, owner, input);
-                // glint-ignore: A001 -- measured-boundary: a full owner is emptied for the next round as the direct side is, by its count; clear would loop over the elements
+                // aegis: boundary: a full owner is emptied for the next round as the direct side is, by its count; clear would loop over the elements
                 if (!admitted) owner.used = 0;
                 return @intFromBool(admitted);
             }

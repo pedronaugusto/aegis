@@ -169,9 +169,9 @@ fn cleanup(value: *u64) void {
 const S = a.Shared(u64, cleanup);
 
 fn sharedOverflow(_: std.process.Init) !void {
-    // glint-ignore: A003 -- design: never released, as the retain past the limit stops the run in every build; an isolated child process runs it
+    // aegis: design: never released, as the retain past the limit stops the run in every build; an isolated child process runs it
     var owner = try S.create(std.heap.page_allocator, 1);
-    // glint-ignore: A001 -- design: a deliberately corrupted count in an isolated child process; it isolates the all-mode limit
+    // aegis: design: a deliberately corrupted count in an isolated child process; it isolates the all-mode limit
     owner.block.count.store(S.maximum_handles, .monotonic);
     _ = owner.retain();
 }
@@ -180,7 +180,7 @@ fn sharedTwice(_: std.process.Init) !void {
     var owner = try S.create(std.heap.page_allocator, 1);
     var other = owner.retain();
     owner.release();
-    // glint-ignore: A003 -- design: the deliberate second release the checked builds stop on; an isolated child process runs it
+    // aegis: design: the deliberate second release the checked builds stop on; an isolated child process runs it
     owner.release();
     other.release();
 }
@@ -209,7 +209,7 @@ fn confinedHandoff(_: std.process.Init) !void {
 fn budgetUnderflow(_: std.process.Init) !void {
     var budget = a.bounded.Budget(u8).init(1);
     var reservation = try budget.reserve(1);
-    // glint-ignore: A001 -- design: a deliberately corrupted admission state in an isolated child process; it isolates the all-mode underflow check
+    // aegis: design: a deliberately corrupted admission state in an isolated child process; it isolates the all-mode underflow check
     budget.taken = 0;
     reservation.release();
 }
@@ -217,12 +217,12 @@ fn budgetUnderflow(_: std.process.Init) !void {
 fn ownedTwice(_: std.process.Init) !void {
     var owner = a.own.Owned(u64, cleanup).init(1);
     owner.deinit();
-    // glint-ignore: A003 -- design: the deliberate second release the checked builds stop on; an isolated child process runs it
+    // aegis: design: the deliberate second release the checked builds stop on; an isolated child process runs it
     owner.deinit();
 }
 
 fn mustUse(_: std.process.Init) !void {
-    // glint-ignore: A003 -- design: the deliberately undischarged result the checked builds stop on; an isolated child process runs it
+    // aegis: design: the deliberately undischarged result the checked builds stop on; an isolated child process runs it
     var outcome = a.own.MustUse(u64, "required outcome inspection").init(1);
     outcome.deinit();
 }
@@ -298,7 +298,7 @@ fn endTwice(_: std.process.Init) !void {
     defer table.deinit();
     const request = try table.open();
     request.end();
-    // glint-ignore: A003 -- design: the deliberate second end the checked builds stop on; an isolated child process runs it
+    // aegis: design: the deliberate second end the checked builds stop on; an isolated child process runs it
     request.end();
 }
 
@@ -308,7 +308,7 @@ fn refAfterEnd(_: std.process.Init) !void {
     defer table.deinit();
     const request = try table.open();
     request.end();
-    // glint-ignore: A003 -- design: the deliberate use of an ended scope the checked builds stop on; an isolated child process runs it
+    // aegis: design: the deliberate use of an ended scope the checked builds stop on; an isolated child process runs it
     std.mem.doNotOptimizeAway(request.ref(&storage));
 }
 
@@ -320,7 +320,7 @@ fn reborrowExpired(_: std.process.Init) !void {
     var other = a.scope.Table(Connection).init(&other_slots);
     defer other.deinit();
     const request = try table.open();
-    // glint-ignore: A003 -- design: left open, as the checked builds stop at the stale reborrow before its end; an isolated child process runs it
+    // aegis: design: left open, as the checked builds stop at the stale reborrow before its end; an isolated child process runs it
     const connection = other.open() catch unreachable; // unreachable: a table of one slot opens its first scope
     const view = request.ref(&storage);
     request.end();

@@ -111,14 +111,14 @@ pub fn adoptDead(comptime wrapped: bool, gpa: std.mem.Allocator, capacity: usize
     if (live_len > capacity) return;
     const allocation = gpa.alloc(u8, capacity) catch return;
     @memset(allocation, 0);
-    var owner = Owner(wrapped).adopt(gpa, allocation, live_len) catch unreachable; // unreachable: live_len is at most capacity, checked above
+    var owner = Owner(wrapped).adopt(allocation, live_len) catch unreachable; // unreachable: live_len is at most capacity, checked above
     owner.deinit(gpa);
 }
 pub fn replaceConsumer(comptime wrapped: bool, gpa: std.mem.Allocator, capacity: usize, live_len: usize, input: []const u8) !usize {
     if (live_len > capacity) return error.InvalidLength;
     const allocation = try gpa.alloc(u8, capacity);
     @memset(allocation, 0);
-    var owner = Owner(wrapped).adopt(gpa, allocation, live_len) catch unreachable; // unreachable: live_len is at most capacity, checked above
+    var owner = Owner(wrapped).adopt(allocation, live_len) catch unreachable; // unreachable: live_len is at most capacity, checked above
     defer owner.deinit(gpa);
     try owner.replace(input);
     return owner.len();
