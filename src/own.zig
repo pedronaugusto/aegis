@@ -4,13 +4,18 @@ const std = @import("std");
 const moves = @import("move.zig");
 const units = @import("units.zig");
 const diagnostics = builtin.optimize == .debug;
-const State = if (diagnostics) struct { live: bool = true, address: ?*const anyopaque = null } else struct {};
+/// The owner's address is bound once, at its first use, and only read after: read-only borrows may run
+/// on several tasks at once, so the bind is one compare-and-swap from unbound (0), never a store per borrow.
+const State = if (diagnostics) struct { live: bool = true, address: std.atomic.Value(usize) = .init(0) } else struct {};
 
 fn bind(state: *State, address: *const anyopaque) void {
     if (diagnostics) {
         std.debug.assert(state.live);
-        if (state.address) |old| std.debug.assert(old == address);
-        state.address = address;
+        const wanted = @intFromPtr(address);
+        const bound = state.address.load(.monotonic);
+        if (bound == 0) {
+            if (state.address.cmpxchgStrong(0, wanted, .monotonic, .monotonic)) |other| std.debug.assert(other == wanted);
+        } else std.debug.assert(bound == wanted);
     }
 }
 fn consume(state: *State) void {
