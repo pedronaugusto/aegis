@@ -80,7 +80,7 @@ pub const rows = [_]Row{
     .{ .module = "bounded", .label = "bounded.Queue(u64, 4)", .aegis = a.bounded.Queue(u64, 4), .direct = struct { storage: [4]u64, head: usize, used: usize }, .equal = .every },
     .{ .module = "bounded", .label = "bounded.Buffer(u64)", .aegis = a.bounded.Buffer(u64), .direct = struct { storage: []u64, gpa: ?std.mem.Allocator, maximum: usize, used: usize }, .equal = .every },
     .{ .module = "bounded", .label = "bounded.Limit(u32)", .aegis = a.bounded.Limit(u32), .direct = u32, .equal = .every },
-    .{ .module = "bounded", .label = "bounded.Budget(u32)", .aegis = a.bounded.Budget(u32), .direct = struct { ceiling: u32, taken: u32 }, .equal = .every },
+    .{ .module = "bounded", .label = "bounded.Budget(u32)", .aegis = a.bounded.Budget(u32), .direct = struct { ceiling: u32, taken: u32 }, .equal = .release },
     .{ .module = "bounded", .label = "bounded.Budget(u32).Reservation", .aegis = a.bounded.Budget(u32).Reservation, .direct = struct { budget: *anyopaque, amount: u32 }, .equal = .release },
     .{ .module = "own", .label = "own.Owned(u64, cleanup)", .aegis = a.own.Owned(u64, cleanup), .direct = u64, .equal = .release },
     .{ .module = "own", .label = "own.OwnedIo(u64, cleanup)", .aegis = a.own.OwnedIo(u64, cleanupIo), .direct = u64, .equal = .release },

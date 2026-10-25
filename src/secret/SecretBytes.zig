@@ -90,11 +90,13 @@ pub fn appendSlice(self: *SecretBytes, bytes: []const u8) AppendError!void {
 /// Whether `bytes` shares any address with the backing allocation, slack
 /// included. Empty input has no occupied bytes.
 fn overlaps(self: *const SecretBytes, bytes: []const u8) bool {
-    if (bytes.len == 0 or self.allocation.len == 0) return false;
-    const x = @intFromPtr(self.allocation.ptr); // safe: numerical address comparison only, no dereference
-    const y = @intFromPtr(bytes.ptr); // safe: valid input slice address, compared without dereferencing
-    // Subtract from the greater address: no end-pointer overflow.
-    return if (x <= y) y - x < self.allocation.len else x - y < bytes.len;
+    if (bytes.len != 0 and self.allocation.len != 0) {
+        const x = @intFromPtr(self.allocation.ptr); // safe: numerical address comparison only, no dereference
+        const y = @intFromPtr(bytes.ptr); // safe: valid input slice address, compared without dereferencing
+        // Subtract from the greater address: no end-pointer overflow.
+        if (if (x <= y) y - x < self.allocation.len else x - y < bytes.len) return true;
+    }
+    return false;
 }
 
 /// A `std.Io.Writer` into the owner, after its live prefix. Its buffer is the
