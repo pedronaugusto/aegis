@@ -1,11 +1,16 @@
-//! One explicit owner of a full allocator allocation, including non-live slack.
+//! One explicit owner of a full allocator allocation, including non-live slack. It holds no
+//! allocator: the one that allocated it is passed to every call that allocates or frees (`init`,
+//! `reserve`, `appendSlice`, `Writer.init`, `deinit`), as std's unmanaged containers take theirs.
 const std = @import("std");
 const SecretBytes = @This();
 
 // Private by contract: never copy a live descriptor or truncate its allocation.
-gpa: std.mem.Allocator,
 allocation: []u8,
 used_len: usize,
+
+/// No allocation: nothing to erase, and `deinit` frees nothing. Grows through `reserve` and
+/// `appendSlice` like any other owner.
+pub const empty: SecretBytes = .{ .allocation = &.{}, .used_len = 0 };
 
 pub const InitError = std.mem.Allocator.Error;
 pub const AdoptError = error{InvalidLength};
@@ -19,17 +24,18 @@ pub const AppendError = error{ OutOfMemory, Overlap };
 pub fn init(gpa: std.mem.Allocator, full_capacity: usize) InitError!SecretBytes {
     const allocation = try gpa.alloc(u8, full_capacity);
     @memset(allocation, 0);
-    return .{ .gpa = gpa, .allocation = allocation, .used_len = 0 };
+    return .{ .allocation = allocation, .used_len = 0 };
 }
 
 /// Takes exclusive ownership of the full allocator-owned slice on success only.
-/// Requires a byte allocation releasable with u8 alignment by this allocator.
+/// Requires a byte allocation releasable with u8 alignment by the allocator later
+/// passed to `reserve`, `appendSlice` and `deinit`.
 /// The live prefix must be initialized; slack may be undefined. A slice cannot
 /// prove allocator provenance, full extent or exclusivity: those are obligations
 /// of the caller. Borrowed memory must never be adopted. Failure changes nothing.
-pub fn adopt(gpa: std.mem.Allocator, allocation: []u8, live_len: usize) AdoptError!SecretBytes {
+pub fn adopt(allocation: []u8, live_len: usize) AdoptError!SecretBytes {
     if (live_len > allocation.len) return error.InvalidLength;
-    return .{ .gpa = gpa, .allocation = allocation, .used_len = live_len };
+    return .{ .allocation = allocation, .used_len = live_len };
 }
 
 /// Number of live bytes.
@@ -79,10 +85,10 @@ pub fn replace(self: *SecretBytes, bytes: []const u8) ReplaceError!void {
 /// Disjoint input only, as `replace`: appends `bytes` after the live prefix,
 /// growing as `reserve` does (at least doubling), so no copy of the old
 /// storage is left unerased. Failure changes nothing; growth ends borrows.
-pub fn appendSlice(self: *SecretBytes, bytes: []const u8) AppendError!void {
+pub fn appendSlice(self: *SecretBytes, gpa: std.mem.Allocator, bytes: []const u8) AppendError!void {
     if (self.overlaps(bytes)) return error.Overlap;
     const new_len = std.math.add(usize, self.used_len, bytes.len) catch return error.OutOfMemory;
-    if (new_len > self.allocation.len) try self.reserve(@max(new_len, self.allocation.len *| 2));
+    if (new_len > self.allocation.len) try self.reserve(gpa, @max(new_len, self.allocation.len *| 2));
     @memcpy(self.allocation[self.used_len..new_len], bytes);
     self.used_len = new_len;
 }
@@ -107,13 +113,15 @@ fn overlaps(self: *const SecretBytes, bytes: []const u8) bool {
 /// allocation failure.
 pub const Writer = struct {
     owner: *SecretBytes,
+    /// The owner's allocator, which grows it.
+    gpa: std.mem.Allocator,
     interface: std.Io.Writer,
     err: ?ReserveError = null,
 
     const vtable: std.Io.Writer.VTable = .{ .drain = drain, .flush = flush, .rebase = rebase };
 
-    pub fn init(owner: *SecretBytes) Writer {
-        return .{ .owner = owner, .interface = .{ .buffer = owner.allocation, .end = owner.used_len, .vtable = &vtable } };
+    pub fn init(owner: *SecretBytes, gpa: std.mem.Allocator) Writer {
+        return .{ .owner = owner, .gpa = gpa, .interface = .{ .buffer = owner.allocation, .end = owner.used_len, .vtable = &vtable } };
     }
 
     fn of(w: *std.Io.Writer) *Writer {
@@ -128,7 +136,7 @@ pub const Writer = struct {
             self.err = error.OutOfMemory;
             return error.WriteFailed;
         };
-        owner.reserve(@max(needed, owner.allocation.len *| 2)) catch |err| {
+        owner.reserve(self.gpa, @max(needed, owner.allocation.len *| 2)) catch |err| {
             self.err = err;
             return error.WriteFailed;
         };
@@ -166,12 +174,12 @@ pub const Writer = struct {
 /// free, then publish new storage. Never resize/remap or transfer a bare slice.
 /// OOM preserves the old owner and all its borrows. Success ends old borrows.
 /// A request at or below capacity is a no-op and preserves borrows.
-pub fn reserve(self: *SecretBytes, new_capacity: usize) ReserveError!void {
+pub fn reserve(self: *SecretBytes, gpa: std.mem.Allocator, new_capacity: usize) ReserveError!void {
     if (new_capacity <= self.allocation.len) return;
-    const replacement = try self.gpa.alloc(u8, new_capacity);
+    const replacement = try gpa.alloc(u8, new_capacity);
     @memset(replacement, 0);
     @memcpy(replacement[0..self.used_len], self.expose());
-    eraseAndFree(self.gpa, self.allocation);
+    eraseAndFree(gpa, self.allocation);
     self.allocation = replacement;
 }
 
@@ -188,8 +196,8 @@ pub fn moveInto(self: *SecretBytes, destination: *SecretBytes) void {
 /// Erases full capacity BEFORE free in every mode, then invalidates this owner.
 /// Consumes self: no typed reads, reuse or second cleanup of the erased owner.
 /// No promise of erasing prior compiler copies, registers, paging or core dumps.
-pub fn deinit(self: *SecretBytes) void {
-    eraseAndFree(self.gpa, self.allocation);
+pub fn deinit(self: *SecretBytes, gpa: std.mem.Allocator) void {
+    eraseAndFree(gpa, self.allocation);
     self.* = undefined;
 }
 

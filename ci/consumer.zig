@@ -4,9 +4,9 @@ pub fn main() !void {
     var owned_secret = aegis.Secret([32]u8).init(@splat(0));
     defer owned_secret.deinit();
     var allocated = try aegis.SecretBytes.init(std.heap.page_allocator, 64);
-    defer allocated.deinit();
+    defer allocated.deinit(std.heap.page_allocator);
     try allocated.replace("consumer fixture");
-    try allocated.reserve(96);
+    try allocated.reserve(std.heap.page_allocator, 96);
     var shared = aegis.Guarded(u64).init(0);
     var held = shared.acquire();
     defer held.deinit();

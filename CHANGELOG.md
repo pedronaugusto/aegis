@@ -4,6 +4,10 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Breaking
+
+- `SecretBytes` holds no allocator: it is the allocation and its live length, 24 bytes where it was 40, as std's unmanaged containers are. The allocator that made it is passed where it allocates or frees: `init(gpa, capacity)` as before, `reserve(gpa, capacity)`, `appendSlice(gpa, bytes)`, `Writer.init(&owner, gpa)` and `deinit(gpa)`; `adopt(allocation, live_len)` no longer takes one. `SecretBytes.empty` is an owner of no allocation, to grow from, so a field that may hold none needs no optional. Before: `var key = try SecretBytes.init(gpa, 32); defer key.deinit(); try key.reserve(64);`. After: `var key = try SecretBytes.init(gpa, 32); defer key.deinit(gpa); try key.reserve(gpa, 64);`. (cloak's connection keeps its record and handshake-message buffers as owners: with an allocator in each, beside the one the connection holds, the idle client passed its 2 KiB budget.)
+
 ## [0.1.18] - 2026-10-25
 
 ### Added

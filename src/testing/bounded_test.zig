@@ -263,7 +263,8 @@ fn secretCleanup(value: *aegis.Secret([32]u8)) void {
     value.deinit();
 }
 fn bytesCleanup(value: *aegis.SecretBytes) void {
-    value.deinit();
+    // The test allocator is the one the owner was made with.
+    value.deinit(t.allocator);
 }
 test "A7 Owned preserves nested secret transfer erasure and full-capacity cleanup" {
     const S = own.Owned(aegis.Secret([32]u8), secretCleanup);

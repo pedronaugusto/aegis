@@ -45,7 +45,7 @@ const Pool = a.handle.Pool(u64, Tag);
 pub const rows = [_]Row{
     .{ .module = "Secret", .label = "Secret([32]u8)", .aegis = a.Secret([32]u8), .direct = [32]u8, .equal = .every },
     .{ .module = "Secret", .label = "Secret(Material)", .aegis = a.Secret(Material), .direct = Material, .equal = .every },
-    .{ .module = "SecretBytes", .label = "SecretBytes", .aegis = a.SecretBytes, .direct = struct { gpa: std.mem.Allocator, allocation: []u8, used_len: usize }, .equal = .every },
+    .{ .module = "SecretBytes", .label = "SecretBytes", .aegis = a.SecretBytes, .direct = struct { allocation: []u8, used_len: usize }, .equal = .every },
     .{ .module = "secret", .label = "secret.Choice", .aegis = a.secret.Choice, .direct = u1, .equal = .every },
     .{ .module = "secret", .label = "secret.OrderChoices", .aegis = a.secret.OrderChoices, .direct = struct { lt: u1, eq: u1, gt: u1 }, .equal = .every },
     .{ .module = "secret.Timing", .label = "secret.Timing", .aegis = a.secret.Timing, .direct = u64, .equal = .every },

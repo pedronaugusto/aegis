@@ -8,12 +8,12 @@ pub fn main(init: std.process.Init) !void {
     {
         // Capacity is explicit and zeroed; the live length starts at zero.
         var key = try aegis.SecretBytes.init(init.gpa, 16);
-        errdefer key.deinit(); // wipes the whole capacity before freeing it, in every build mode
+        errdefer key.deinit(init.gpa); // wipes the whole capacity before freeing it, in every build mode
         try key.replace("-----BEGIN KEY");
         aegis.assert.post(key.len() == 14 and key.capacity() == 16, "the live prefix sits in its capacity");
 
         // Growing never resizes in place: a new allocation, the old one wiped and freed.
-        try key.reserve(64);
+        try key.reserve(init.gpa, 64);
         try key.resizeWithinCapacity(14 + 5);
         @memcpy(key.exposeMut()[14..], "-----");
         aegis.assert.post(std.mem.eql(u8, key.expose(), "-----BEGIN KEY-----"), "the bytes moved with the reserve");
@@ -26,6 +26,6 @@ pub fn main(init: std.process.Init) !void {
         // The owner moves to where it lives; the allocation goes with it, no byte copied.
         key.moveInto(&kept);
     }
-    defer kept.deinit();
+    defer kept.deinit(init.gpa);
     aegis.assert.post(kept.len() == 19, "the moved owner holds the key");
 }

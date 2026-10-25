@@ -58,7 +58,7 @@ pub const modules = [_]Module{
         .name = "SecretBytes",
         .required = .{ .rule = "A008" },
         .names = &.{ "SecretBytes", "secret.SecretBytes" },
-        .release = "allocator, allocation and live length, as a hand-written owner",
+        .release = "allocation and live length, as a hand-written owner; the allocator is passed in",
         .always = "full capacity wiped before free and on `reserve`; capacity and overlap errors before any change; a move into overlapping storage stops",
         .kernels = &.{ "bytes_dead", "bytes_cleanup", "bytes_resize", "bytes_reserve", "bytes_move", "bytes_adopt_dead", "bytes_replace" },
         .example = "examples/secret_bytes.zig",
