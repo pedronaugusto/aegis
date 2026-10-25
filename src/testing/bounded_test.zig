@@ -90,6 +90,23 @@ test "A7 reservations transfer reap rollback and permanent consumption" {
     try t.expectError(error.LimitExceeded, b.Limit(u8).init(0).check(1));
     try b.Limit(u8).init(0).check(0);
 }
+test "A7 a budget is settled once each reservation is released or consumed; one dropped leaves it open in Debug" {
+    const debug = @import("builtin").optimize == .debug;
+    var budget = b.Budget(u8).init(10);
+    try t.expect(budget.settled());
+    var first = try budget.reserve(2);
+    var kept = try budget.reserveKeeping(2, 1);
+    try t.expectEqual(!debug, budget.settled());
+    var moved: b.Budget(u8).Reservation = undefined;
+    first.moveInto(&moved);
+    try t.expectEqual(!debug, budget.settled());
+    moved.release();
+    kept.consume();
+    try t.expect(budget.settled());
+    var dropped = try budget.reserve(1);
+    _ = &dropped;
+    try t.expectEqual(!debug, budget.settled());
+}
 const Resource = struct {
     gpa: std.mem.Allocator,
     bytes: []u8,

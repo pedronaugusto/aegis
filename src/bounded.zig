@@ -344,6 +344,8 @@ pub fn Budget(comptime Repr: type) type {
         ceiling: Repr,
         /// Private: outstanding reservations plus permanently consumed work; never above the ceiling.
         taken: Repr = 0,
+        /// Private: Debug-only count of reservations not yet released, consumed or moved on.
+        open: if (diagnostics) usize else void = if (diagnostics) 0 else {},
         pub const ReserveError = error{LimitExceeded};
         pub fn init(maximum_amount: Repr) Self {
             return .{ .ceiling = maximum_amount };
@@ -354,6 +356,7 @@ pub fn Budget(comptime Repr: type) type {
         }
         pub fn reserve(self: *Self, amount: Repr) ReserveError!Reservation {
             try self.charge(amount);
+            if (diagnostics) self.open += 1;
             return .{ .budget = self, .amount = amount };
         }
         /// An ordinary reservation that leaves at least `kept` unreserved. A path that must still be admitted
@@ -364,6 +367,7 @@ pub fn Budget(comptime Repr: type) type {
             const free = self.ceiling - self.taken;
             if (kept > free or amount > free - kept) return error.LimitExceeded;
             self.taken += amount;
+            if (diagnostics) self.open += 1;
             return .{ .budget = self, .amount = amount };
         }
         pub fn consume(self: *Self, amount: Repr) ReserveError!void {
@@ -381,6 +385,13 @@ pub fn Budget(comptime Repr: type) type {
         pub fn remaining(self: *const Self) Repr {
             return self.ceiling - self.taken;
         }
+        /// A Debug witness: whether every reservation this budget gave has been released or
+        /// consumed (a move hands one on, still open). A reservation dropped without either
+        /// leaves it false, which a test asserts after the work it charged. A build without
+        /// diagnostics keeps no count and answers true.
+        pub fn settled(self: *const Self) bool {
+            return if (diagnostics) self.open == 0 else true;
+        }
         pub const Reservation = struct {
             /// Private: stable borrowed budget.
             budget: *Self,
@@ -395,6 +406,7 @@ pub fn Budget(comptime Repr: type) type {
                 }
                 if (self.amount > self.budget.taken) @panic("budget reservation underflow");
                 self.budget.taken -= self.amount;
+                if (diagnostics) self.budget.open -= 1;
             }
             /// Ends the reservation with its amount kept as consumed work, as `Budget.consume`
             /// charges it: what it was reserved for was done, and the budget never takes it back.
@@ -403,6 +415,7 @@ pub fn Budget(comptime Repr: type) type {
                 if (diagnostics) {
                     std.debug.assert(self.live);
                     self.live = false;
+                    self.budget.open -= 1;
                 }
             }
             pub fn moveInto(self: *Reservation, destination: *Reservation) void {
