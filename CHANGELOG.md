@@ -4,6 +4,10 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Added
+
+- `units.Instant.floor(tick)`: the start of the tick an instant falls in, ticks counted from the clock's zero, rounded toward negative infinity and saturating at the representation's minimum; `tick` is positive. For bucketing time by a span that is not a unit, such as a filesystem's two-second tick.
+
 ## [0.2.0] - 2026-10-25
 
 ### Breaking

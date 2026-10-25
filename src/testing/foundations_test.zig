@@ -117,6 +117,44 @@ test "A3 clock domains correspondence and Io adapters" {
     try t.expectError(error.Inexact, U.Duration(.millisecond, i64).fromIoDuration(.fromNanoseconds(1), .exact));
 }
 
+test "A3 an instant floors to the start of its tick, toward negative infinity, saturating at the minimum" {
+    const U = aegis.units;
+    const Real = U.Instant(.real, .second, i8);
+    const tick = U.Duration(.second, i8).fromRaw(2);
+    // On a boundary an instant is its tick's start; just past, it goes back to it.
+    try t.expectEqual(@as(i8, 4), Real.fromRaw(4).floor(tick).raw());
+    try t.expectEqual(@as(i8, 4), Real.fromRaw(5).floor(tick).raw());
+    try t.expectEqual(@as(i8, 0), Real.fromRaw(0).floor(tick).raw());
+    try t.expectEqual(@as(i8, 0), Real.fromRaw(1).floor(tick).raw());
+    // Before zero the tick holding it starts earlier, not at zero.
+    try t.expectEqual(@as(i8, -2), Real.fromRaw(-1).floor(tick).raw());
+    try t.expectEqual(@as(i8, -2), Real.fromRaw(-2).floor(tick).raw());
+    try t.expectEqual(@as(i8, -4), Real.fromRaw(-3).floor(tick).raw());
+    // The extremes: the largest stays inside, and a start before the smallest saturates at it.
+    try t.expectEqual(@as(i8, 126), Real.fromRaw(127).floor(tick).raw());
+    try t.expectEqual(@as(i8, -128), Real.fromRaw(-128).floor(tick).raw());
+    try t.expectEqual(@as(i8, -128), Real.fromRaw(-128).floor(U.Duration(.second, i8).fromRaw(3)).raw());
+    try t.expectEqual(@as(i8, -126), Real.fromRaw(-126).floor(U.Duration(.second, i8).fromRaw(3)).raw());
+    try t.expectEqual(@as(i8, -127), Real.fromRaw(-1).floor(U.Duration(.second, i8).fromRaw(127)).raw());
+    try t.expectEqual(@as(i8, -128), Real.fromRaw(-128).floor(U.Duration(.second, i8).fromRaw(127)).raw());
+    try t.expectEqual(@as(i8, 0), Real.fromRaw(126).floor(U.Duration(.second, i8).fromRaw(127)).raw());
+    try t.expectEqual(@as(i8, 127), Real.fromRaw(127).floor(U.Duration(.second, i8).fromRaw(127)).raw());
+    // A tick of one step is every instant's own.
+    try t.expectEqual(@as(i8, -7), Real.fromRaw(-7).floor(U.Duration(.second, i8).fromRaw(1)).raw());
+    // Unsigned: never below zero, so nothing to saturate.
+    const Mono = U.Instant(.awake, .millisecond, u8);
+    try t.expectEqual(@as(u8, 250), Mono.fromRaw(255).floor(U.Duration(.millisecond, u8).fromRaw(10)).raw());
+    try t.expectEqual(@as(u8, 0), Mono.fromRaw(9).floor(U.Duration(.millisecond, u8).fromRaw(10)).raw());
+    // Exhaustive against a wider oracle.
+    for ([_]i8{ 1, 2, 3, 5, 7, 64, 127 }) |step| {
+        var x: i16 = -128;
+        while (x <= 127) : (x += 1) {
+            const oracle = @max(@divFloor(x, step) * step, -128);
+            try t.expectEqual(@as(i8, @intCast(oracle)), Real.fromRaw(@intCast(x)).floor(U.Duration(.second, i8).fromRaw(step)).raw());
+        }
+    }
+}
+
 test "A3 scalar layout and all-build scalar contracts" {
     inline for (.{ u8, i32, u64, usize, i128 }) |R| {
         inline for (.{ aegis.int.Checked(R), aegis.int.Saturating(R), aegis.int.Ranged(R, 0, 1), aegis.id.Id(struct {}, R), aegis.units.Duration(.second, R), aegis.units.Instant(struct {}, .second, R), aegis.units.Bytes(R) }) |T| {

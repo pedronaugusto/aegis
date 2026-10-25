@@ -2,6 +2,7 @@
 const std = @import("std");
 const ints = @import("int.zig");
 const scalar = @import("scalar.zig");
+const assert = @import("assert.zig");
 /// Rounding down/up is toward negative/positive infinity, respectively.
 pub const Rounding = enum { exact, down, up };
 /// Fixed duration scales, represented exactly as nanoseconds.
@@ -721,6 +722,14 @@ pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: t
         /// between two readings, where `durationTo` reports `error.Underflow`.
         pub inline fn saturatingDurationTo(self: Self, other: Self) Duration(unit, Repr) {
             return Duration(unit, Repr).fromRaw(@backingInt(other) -| @backingInt(self));
+        }
+        /// The start of the `tick` this instant falls in, ticks counted from the clock's zero: rounded toward
+        /// negative infinity, so an instant before zero goes back to the start of the tick holding it. A start
+        /// earlier than the representation holds saturates at its minimum. `tick` is positive.
+        pub inline fn floor(self: Self, tick: Duration(unit, Repr)) Self {
+            assert.pre(tick.raw() > 0, "a tick is a positive span");
+            const start = std.math.mul(Repr, @divFloor(@backingInt(self), tick.raw()), tick.raw()) catch return fromRaw(std.math.minInt(Repr));
+            return fromRaw(start);
         }
         pub inline fn convert(self: Self, comptime target: Unit, comptime Target: type, comptime rounding: Rounding) Wrapped(ErrorOf(Converted(Repr, Target, unit.nanoseconds(), target.nanoseconds(), rounding)), Instant(ClockTag, target, Target)) {
             const converted = scaledFor(Target, unit.nanoseconds(), target.nanoseconds(), rounding, @backingInt(self));
