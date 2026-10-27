@@ -188,7 +188,7 @@ fn number(s: *shake.Source, text: *Text, scale: u256, max_digits: u8) !?u256 {
         fraction = fraction * 10 + digit;
     }
     const tenths = std.math.pow(u256, 10, places);
-    if (fraction * scale % tenths != 0) return null;
+    if ((fraction * scale) % tenths != 0) return null;
     return whole * scale + fraction * scale / tenths;
 }
 
