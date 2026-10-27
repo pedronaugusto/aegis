@@ -4,6 +4,10 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Added
+
+- `Atomic(*T)` and `Atomic(?*T)`: a lock-free cell for one pointer, published and taken whole by `load`, `store`, `swap` and the compare-and-swaps, the size of the pointer (a lock-free list's head, a latest-value slot). It has no ordering or arithmetic: `fetchMax`, `fetchMin` and the adds refuse it at compile time. (shakedown's FaultIo kept its latest batch in a `std.atomic.Value(?*Batched)`, outside aegis.)
+
 ## [0.2.2] - 2026-10-27
 
 ### Added

@@ -804,6 +804,58 @@ test "A6 Atomic checked arithmetic reports overflow without changing the cell an
     try t.expectEqual(@as(i16, 7), span.load(.acquire).raw());
 }
 
+const Node = struct { next: ?*Node = null, value: u32 };
+
+test "A6 Atomic holds a pointer whole: published, taken and exchanged, the size of the pointer" {
+    var a_node: Node = .{ .value = 1 };
+    var b_node: Node = .{ .value = 2 };
+    var head: a.Atomic(?*Node) = .init(null);
+    try t.expectEqual(@sizeOf(?*Node), @sizeOf(a.Atomic(?*Node)));
+    try t.expectEqual(@as(?*Node, null), head.load(.acquire));
+    head.store(&a_node, .release);
+    try t.expectEqual(@as(?*Node, &a_node), head.swap(&b_node, .acq_rel));
+    try t.expectEqual(@as(?*Node, &b_node), head.cmpxchgStrong(&a_node, null, .acq_rel, .acquire));
+    // Success is the outer null: the value found is itself an optional pointer.
+    try t.expectEqual(@as(??*Node, null), head.cmpxchgStrong(&b_node, null, .acq_rel, .acquire));
+    var slot: a.Atomic(*Node) = .init(&a_node);
+    try t.expectEqual(@as(u32, 1), slot.load(.acquire).value);
+}
+
+const Pushing = struct {
+    head: a.Atomic(?*Node) = .init(null),
+    fn push(self: *Pushing, nodes: []Node) void {
+        for (nodes) |*node| {
+            var seen = self.head.load(.monotonic);
+            while (true) {
+                node.next = seen;
+                seen = self.head.cmpxchgWeak(seen, node, .release, .monotonic) orelse break;
+            }
+        }
+    }
+};
+
+test "A6 native Atomic pointer cell takes every push of a lock-free list from tasks at once" {
+    if (builtin.single_threaded) return error.SkipZigTest;
+    var nodes: [8][100]Node = undefined;
+    for (&nodes, 0..) |*row, r| for (row, 0..) |*node, i| {
+        node.* = .{ .value = @intCast(r * 100 + i) };
+    };
+    var state: Pushing = .{};
+    var group: Io.Group = .init;
+    defer group.cancel(t.io);
+    for (&nodes) |*row| try group.concurrent(t.io, Pushing.push, .{ &state, row });
+    try group.await(t.io);
+    var seen: [800]bool = @splat(false);
+    var at = state.head.load(.acquire);
+    var count: usize = 0;
+    while (at) |node| : (at = node.next) {
+        try t.expect(!seen[node.value]);
+        seen[node.value] = true;
+        count += 1;
+    }
+    try t.expectEqual(@as(usize, 800), count);
+}
+
 const Counting = struct {
     cell: a.Atomic(Hits) = .init(.fromRaw(0)),
     won: std.atomic.Value(u32) = .init(0),

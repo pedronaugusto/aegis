@@ -240,6 +240,28 @@ const cases = [_]Case{
     \\    return @sizeOf(a.Atomic(a.units.Duration(.nanosecond, i96)));
     \\}
     },
+    .{ .name = "atomic_pointer_order", .message = "an address has no order here", .source =
+    \\const a = @import("aegis");
+    \\var target: u32 = 0;
+    \\export fn bad() void {
+    \\    var cell: a.Atomic(*u32) = .init(&target);
+    \\    _ = cell.fetchMax(&target, .monotonic);
+    \\}
+    },
+    .{ .name = "atomic_pointer_arith", .message = "add and sub take its own type", .source =
+    \\const a = @import("aegis");
+    \\var target: u32 = 0;
+    \\export fn bad() void {
+    \\    var cell: a.Atomic(*u32) = .init(&target);
+    \\    _ = cell.fetchAddWrapping(&target, .monotonic);
+    \\}
+    },
+    .{ .name = "atomic_slice", .message = "single-item pointer", .source =
+    \\const a = @import("aegis");
+    \\export fn bad() usize {
+    \\    return @sizeOf(a.Atomic([]u8));
+    \\}
+    },
 };
 
 pub fn main(init: std.process.Init) !void {
