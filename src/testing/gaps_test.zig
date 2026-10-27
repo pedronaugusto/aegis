@@ -305,6 +305,57 @@ test "A6 Shared create fails without effect on every allocation and leaves the s
     try t.checkAllAllocationFailures(t.allocator, sharedAllocation, .{});
 }
 
+const Keyed = struct {
+    key: [32]u8,
+    fn drop(_: *Keyed) void {}
+    fn fill(byte: u8, self: *Keyed) error{Late}!void {
+        self.key = @splat(byte);
+        if (byte == 0x5a) return error.Late;
+    }
+};
+const SharedKeyed = a.Shared(Keyed, Keyed.drop);
+
+/// Refuses a free of any byte not erased, and counts the frees.
+const Erased = struct {
+    child: std.mem.Allocator,
+    frees: usize = 0,
+    fn allocator(self: *Erased) std.mem.Allocator {
+        return .{ .ptr = self, .vtable = &.{ .alloc = alloc, .resize = std.mem.Allocator.noResize, .remap = std.mem.Allocator.noRemap, .free = free } };
+    }
+    fn of(ptr: *anyopaque) *Erased {
+        return @ptrCast(@alignCast(ptr)); // safe: only paired with *Erased by allocator()
+    }
+    fn alloc(ptr: *anyopaque, n: usize, alignment: std.mem.Alignment, ret: usize) ?[*]u8 {
+        return of(ptr).child.rawAlloc(n, alignment, ret);
+    }
+    fn free(ptr: *anyopaque, memory: []u8, alignment: std.mem.Alignment, ret: usize) void {
+        const self = of(ptr);
+        for (memory) |byte| if (byte != 0) @panic("a block freed before it was erased");
+        self.frees += 1;
+        self.child.rawFree(memory, alignment, ret);
+    }
+};
+
+test "A6 Shared createWith builds the value in its block, and erases a block whose init failed after writing" {
+    var erased: Erased = .{ .child = t.allocator };
+    const gpa = erased.allocator();
+    var owner = try SharedKeyed.createWith(t.allocator, @as(u8, 7), Keyed.fill);
+    try t.expectEqualSlices(u8, &@as([32]u8, @splat(7)), &owner.get().key);
+    owner.release();
+    // The init writes the key, then fails: the block it wrote is erased before its free.
+    try t.expectError(error.Late, SharedKeyed.createWith(gpa, @as(u8, 0x5a), Keyed.fill));
+    try t.expectEqual(@as(usize, 1), erased.frees);
+}
+
+fn sharedWithAllocation(gpa: std.mem.Allocator) !void {
+    var owner = try SharedKeyed.createWith(gpa, @as(u8, 3), Keyed.fill);
+    owner.release();
+}
+
+test "A6 Shared createWith fails without effect on every allocation" {
+    try t.checkAllAllocationFailures(t.allocator, sharedWithAllocation, .{});
+}
+
 const Churn = struct {
     shared: SharedPayload,
     fn worker(self: *Churn) void {

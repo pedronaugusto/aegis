@@ -47,6 +47,33 @@ pub fn Shared(comptime T: type, comptime cleanup: fn (*T) void) type {
             return .{ .block = block };
         }
 
+        /// What `createWith` fails with: `init_fn`'s errors, or the block's allocation.
+        pub fn CreateWithError(comptime init_fn: anytype) type {
+            const Return = @typeInfo(@TypeOf(init_fn)).@"fn".return_type.?;
+            return @typeInfo(Return).error_union.error_set || std.mem.Allocator.Error;
+        }
+
+        /// A new block whose value `init_fn(context, &value)` builds in place, before any handle
+        /// exists, so a value that must not be copied (key material) is never anywhere but in the
+        /// block. On `init_fn`'s error the whole block is erased and then freed, without `cleanup`,
+        /// since the value was never whole: what a half-run `init_fn` wrote there is gone with it.
+        /// Releasing what `init_fn` itself acquired before it failed is `init_fn`'s own (its
+        /// `errdefer`).
+        pub fn createWith(gpa: std.mem.Allocator, context: anytype, comptime init_fn: anytype) CreateWithError(init_fn)!Self {
+            const block = try gpa.create(Block);
+            block.gpa = gpa;
+            block.count = .init(1);
+            init_fn(context, &block.data) catch |err| {
+                const bytes = std.mem.asBytes(block);
+                std.crypto.secureZero(u8, bytes);
+                // Allocator.destroy poisons the block in Debug before the free: free its exact
+                // extent directly, so the allocator sees the erased bytes.
+                gpa.rawFree(bytes, .of(Block), @returnAddress());
+                return err;
+            };
+            return .{ .block = block };
+        }
+
         /// Another handle to the same value. Release both.
         pub fn retain(self: *const Self) Self {
             if (diagnostics) std.debug.assert(self.live);
