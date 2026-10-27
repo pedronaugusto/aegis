@@ -893,41 +893,52 @@ test "A7 own.readFile returns a cancel wherever it lands, the length's read incl
     try t.expect(done.runs > 1);
 }
 
-/// An `Io` whose file lengths read four bytes short, as a file that grows after its length is read.
-const Grown = struct {
-    var base: Io = undefined;
-    var vtable: Io.VTable = undefined;
-    fn io() Io {
-        base = t.io;
-        vtable = base.vtable.*;
-        vtable.fileStat = stat;
-        return .{ .userdata = base.userdata, .vtable = &vtable };
-    }
-    fn stat(userdata: ?*anyopaque, file: Io.File) Io.File.StatError!Io.File.Stat {
-        var out = try base.vtable.fileStat(userdata, file);
-        out.size -|= 4;
-        return out;
-    }
-};
-
-test "A7 own.readFile reads as long as the file's length said, not what was appended after" {
-    var tmp = t.tmpDir(.{});
-    defer tmp.cleanup();
-    try tmp.dir.writeFile(t.io, .{ .sub_path = "grown", .data = "said and more" });
-    const read = try a.own.readFile(Grown.io(), tmp.dir, "grown", t.allocator, .fromRaw(64));
-    defer t.allocator.free(read);
-    try t.expectEqualStrings("said and ", read);
+/// An `Io` whose files state a length of `stated` whatever they hold, as pseudo-files do: sysfs states
+/// 4096, procfs 0.
+fn Lying(comptime stated: u64) type {
+    return struct {
+        var base: Io = undefined;
+        var vtable: Io.VTable = undefined;
+        fn io() Io {
+            base = t.io;
+            vtable = base.vtable.*;
+            vtable.fileStat = stat;
+            return .{ .userdata = base.userdata, .vtable = &vtable };
+        }
+        fn stat(userdata: ?*anyopaque, file: Io.File) Io.File.StatError!Io.File.Stat {
+            var out = try base.vtable.fileStat(userdata, file);
+            out.size = stated;
+            return out;
+        }
+    };
 }
 
-test "A7 own.readFile reads at most its limit, refused before anything is allocated, and readFileSentinel ends what it read" {
+test "A7 own.readFile reads what a file holds, not the length it states: longer, shorter or none" {
+    var tmp = t.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(t.io, .{ .sub_path = "port", .data = "org.preflight.0\n" });
+    inline for (.{ 4096, 0, 4 }) |stated| {
+        const io = Lying(stated).io();
+        const read = try a.own.readFile(io, tmp.dir, "port", t.allocator, .fromRaw(256));
+        defer t.allocator.free(read);
+        try t.expectEqualStrings("org.preflight.0\n", read);
+        // The limit is judged by what is read, whatever was stated.
+        try t.expectError(error.StreamTooLong, a.own.readFile(io, tmp.dir, "port", t.allocator, .fromRaw(15)));
+        const exact = try a.own.readFileSentinel(io, tmp.dir, "port", t.allocator, .fromRaw(16), 0);
+        defer t.allocator.free(exact);
+        try t.expectEqualStrings("org.preflight.0\n", exact);
+    }
+}
+
+test "A7 own.readFile reads at most its limit, a file past it refused, and readFileSentinel ends what it read" {
     var tmp = t.tmpDir(.{});
     defer tmp.cleanup();
     try tmp.dir.writeFile(t.io, .{ .sub_path = "four", .data = "four" });
     const exact = try a.own.readFile(t.io, tmp.dir, "four", t.allocator, .fromRaw(4));
     defer t.allocator.free(exact);
     try t.expectEqualStrings("four", exact);
-    var failing: std.testing.FailingAllocator = .init(t.allocator, .{ .fail_index = 0 });
-    try t.expectError(error.StreamTooLong, a.own.readFile(t.io, tmp.dir, "four", failing.allocator(), .fromRaw(3)));
+    try t.expectError(error.StreamTooLong, a.own.readFile(t.io, tmp.dir, "four", t.allocator, .fromRaw(3)));
+    try t.expectError(error.StreamTooLong, a.own.readFile(t.io, tmp.dir, "four", t.allocator, .fromRaw(0)));
     try t.expectError(error.FileNotFound, a.own.readFile(t.io, tmp.dir, "absent", t.allocator, .fromRaw(3)));
     const text = try a.own.readFileSentinel(t.io, tmp.dir, "four", t.allocator, .fromRaw(4), 0);
     defer t.allocator.free(text);

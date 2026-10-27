@@ -607,6 +607,24 @@ pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
         pub inline fn saturatingMul(self: Self, rhs: Repr) Self {
             return fromRaw(@backingInt(self) *| rhs);
         }
+        /// A division by zero, and on a signed representation the one quotient past it: the minimum by -1.
+        pub const DivError = if (@typeInfo(Repr).int.signedness == .signed) error{ DivisionByZero, Overflow } else error{DivisionByZero};
+        /// A part of the span, such as a quarter of a wait, rounded toward zero.
+        pub inline fn divTrunc(self: Self, rhs: Repr) DivError!Self {
+            try divisible(self, rhs);
+            return fromRaw(@divTrunc(@backingInt(self), rhs));
+        }
+        /// A part of the span rounded toward negative infinity: a negative span's part is never shorter.
+        pub inline fn divFloor(self: Self, rhs: Repr) DivError!Self {
+            try divisible(self, rhs);
+            return fromRaw(@divFloor(@backingInt(self), rhs));
+        }
+        inline fn divisible(self: Self, rhs: Repr) DivError!void {
+            if (rhs == 0) return error.DivisionByZero;
+            if (comptime @typeInfo(Repr).int.signedness == .signed) {
+                if (@backingInt(self) == std.math.minInt(Repr) and rhs == -1) return error.Overflow;
+            }
+        }
         /// The same value in another unit and representation. It carries no error where every value of this
         /// representation converts exactly, no range check where none can fail, and only the errors that can
         /// occur otherwise (`ConvertError` is the widest set).

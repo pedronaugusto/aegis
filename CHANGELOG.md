@@ -7,9 +7,11 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 ### Added
 
 - `units.Instant.floor(tick)`: the start of the tick an instant falls in, ticks counted from the clock's zero, rounded toward negative infinity and saturating at the representation's minimum; `tick` is positive. For bucketing time by a span that is not a unit, such as a filesystem's two-second tick.
+- `units.Duration.divTrunc(count)` and `divFloor(count)`: a part of a span, such as a quarter of a wait, rounded toward zero or negative infinity. `DivError` is `DivisionByZero`, plus `Overflow` on a signed representation for its minimum by -1. (cloak's DTLS timers: RFC 9147's ACK timer is a quarter of the retransmission wait.)
 
 ### Fixed
 
+- `own.readFile` and `readFileSentinel` read a file to its end and judge the limit by what they read. They refused a pseudo-file by the length it states: sysfs states 4096 and procfs 0 whatever they hold, so a 256-byte limit refused a 16-byte sysfs attribute as `StreamTooLong` before reading it (preflight 0.18's VM guest reading `/sys/class/virtio-ports/*/name`, which made the family's riscv64 nightly leg red; glyph's finding). The stated length is now only the first allocation's size. It is still read first, with its error returned, so a cancel there is still `Canceled`, and the reader never asks for it again. A file longer than the limit is `StreamTooLong` once the byte past the limit is read, no longer before anything is allocated, and bytes appended during the read are read.
 - `own.Owned` and `own.OwnedIo` bind their address once: Debug's witness stored the owner's address on every `borrow`, a data race when several tasks borrow one owner read-only at once (review-io's finding, chronicle under ThreadSanitizer). The first use binds it with one compare-and-swap, and every use after only reads it. A native test borrows one owner from 8 tasks at once, its first bind among them, and joins `test-native-races` (`-Dthread-sanitizer=true`), which reported the race before.
 
 ## [0.2.0] - 2026-10-25

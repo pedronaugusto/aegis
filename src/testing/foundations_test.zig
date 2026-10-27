@@ -117,6 +117,36 @@ test "A3 clock domains correspondence and Io adapters" {
     try t.expectError(error.Inexact, U.Duration(.millisecond, i64).fromIoDuration(.fromNanoseconds(1), .exact));
 }
 
+test "A3 a duration divides by a count, toward zero or negative infinity, refusing zero and the one overflow" {
+    const U = aegis.units;
+    const D = U.Duration(.millisecond, i8);
+    // A quarter of a wait, as a retransmission's ACK timer takes it.
+    try t.expectEqual(@as(i8, 25), (try D.fromRaw(100).divTrunc(4)).raw());
+    try t.expectEqual(@as(i8, 2), (try D.fromRaw(7).divTrunc(3)).raw());
+    try t.expectEqual(@as(i8, 2), (try D.fromRaw(7).divFloor(3)).raw());
+    try t.expectEqual(@as(i8, -2), (try D.fromRaw(-7).divTrunc(3)).raw());
+    try t.expectEqual(@as(i8, -3), (try D.fromRaw(-7).divFloor(3)).raw());
+    try t.expectEqual(@as(i8, 127), (try D.fromRaw(-127).divTrunc(-1)).raw());
+    try t.expectError(error.DivisionByZero, D.fromRaw(1).divTrunc(0));
+    try t.expectError(error.DivisionByZero, D.fromRaw(1).divFloor(0));
+    try t.expectError(error.Overflow, D.fromRaw(-128).divTrunc(-1));
+    try t.expectError(error.Overflow, D.fromRaw(-128).divFloor(-1));
+    // Unsigned: zero is the one refusal, and the error set says so.
+    const M = U.Duration(.second, u8);
+    try t.expectEqual(@as(u8, 63), (try M.fromRaw(255).divFloor(4)).raw());
+    try t.expectError(error.DivisionByZero, M.fromRaw(1).divTrunc(0));
+    comptime std.debug.assert(M.DivError == error{DivisionByZero});
+    // Exhaustive against std's own division on a wider integer.
+    var x: i16 = -128;
+    while (x <= 127) : (x += 1) {
+        for ([_]i8{ -128, -3, -1, 1, 2, 7, 127 }) |d| {
+            if (x == -128 and d == -1) continue;
+            try t.expectEqual(@as(i8, @intCast(@divTrunc(x, d))), (try D.fromRaw(@intCast(x)).divTrunc(d)).raw());
+            try t.expectEqual(@as(i8, @intCast(@divFloor(x, d))), (try D.fromRaw(@intCast(x)).divFloor(d)).raw());
+        }
+    }
+}
+
 test "A3 an instant floors to the start of its tick, toward negative infinity, saturating at the minimum" {
     const U = aegis.units;
     const Real = U.Instant(.real, .second, i8);

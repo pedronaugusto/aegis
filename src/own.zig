@@ -119,11 +119,12 @@ pub const ReadFileError = std.Io.File.OpenError || std.Io.File.StatError || std.
 };
 
 /// The bytes of the file at `sub_path` in `dir`, at most `limit` of them; the caller owns them and frees
-/// them with `gpa`. The file's length is read first and its error returned, so a cancel that lands there
-/// is `Canceled`: std's `Dir.readFileAlloc` takes a failed length as a guess and reads on, losing it. A
-/// file longer than `limit` is `StreamTooLong` before anything is allocated. The read is as long as the
-/// length said: bytes appended after it was read are not read (a reader that asked again would reopen
-/// the lost cancel), and a file cut short under the read gives what was there.
+/// them with `gpa`. The file is read to its end, and one that holds more than `limit` bytes is
+/// `StreamTooLong` once the byte past the limit is read. The length the file system states is only the
+/// first allocation's size: a pseudo-file's is not its content's (sysfs states 4096 and procfs 0 whatever
+/// they hold), and a file may grow or shrink under the read. That length is read first and its error
+/// returned, so a cancel that lands there is `Canceled`: std's `Dir.readFileAlloc` takes a failed length
+/// as a guess and reads on, losing it. The reader never asks for the length again.
 pub fn readFile(io: std.Io, dir: std.Io.Dir, sub_path: []const u8, gpa: std.mem.Allocator, limit: units.Bytes(u64)) ReadFileError![]u8 {
     return readWhole(io, dir, sub_path, gpa, limit, null);
 }
@@ -136,17 +137,22 @@ pub fn readFileSentinel(io: std.Io, dir: std.Io.Dir, sub_path: []const u8, gpa: 
 fn readWhole(io: std.Io, dir: std.Io.Dir, sub_path: []const u8, gpa: std.mem.Allocator, limit: units.Bytes(u64), comptime sentinel: ?u8) ReadFileError!(if (sentinel) |s| [:s]u8 else []u8) {
     var file = try dir.openFile(io, sub_path, .{ .allow_directory = builtin.os.tag != .windows });
     defer file.close(io);
-    const length = (try file.stat(io)).size;
-    if (length > limit.raw()) return error.StreamTooLong;
-    // The reader knows the length, so it never asks again, and ends there: it is given room for one
-    // byte more, which it never reads, so the end it finds is the length's.
-    const room = std.math.cast(usize, length) orelse return error.OutOfMemory;
-    if (room == std.math.maxInt(usize)) return error.OutOfMemory;
-    var reader: std.Io.File.Reader = .initSize(file, io, &.{}, length);
-    return reader.interface.allocRemainingAlignedSentinel(gpa, .limited(room + 1), .of(u8), sentinel) catch |err| switch (err) {
+    const stated = (try file.stat(io)).size;
+    // Room for one byte past the limit: reading it is what says the file is longer.
+    const most = std.math.cast(usize, limit.raw()) orelse std.math.maxInt(usize);
+    const room: std.Io.Limit = if (most == std.math.maxInt(usize)) .unlimited else .limited(most + 1);
+    var bytes: std.ArrayList(u8) = .empty;
+    defer bytes.deinit(gpa);
+    try bytes.ensureTotalCapacityPrecise(gpa, @min(std.math.cast(usize, stated) orelse most, most) +| 1);
+    // A length stated as unknown, so the reader reads to the end and never stats (a stat whose cancel
+    // it would swallow); reading by `read` alone, as no writer here moves a file by its length.
+    var reader: std.Io.File.Reader = .initStreaming(file, io, &.{});
+    reader.mode = .streaming_simple;
+    reader.interface.appendRemaining(gpa, &bytes, room) catch |err| switch (err) {
         error.ReadFailed => return reader.err.?,
         error.OutOfMemory, error.StreamTooLong => |e| return e,
     };
+    return if (sentinel) |s| bytes.toOwnedSliceSentinel(gpa, s) else bytes.toOwnedSlice(gpa);
 }
 
 /// A copy of a resource an owner keeps, lent out: the type says it is not the holder's to release, and it
