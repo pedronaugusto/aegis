@@ -4,6 +4,8 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-27
+
 ### Added
 
 - `Shared.createWith(gpa, context, init_fn)`: a block whose value `init_fn(context, &value)` builds in place before any handle exists, so a value that must not be copied, such as key material, is never anywhere but in the block. On `init_fn`'s error the whole block is erased and then freed, without `cleanup`; releasing what `init_fn` acquired before it failed stays `init_fn`'s (its `errdefer`). `CreateWithError(init_fn)` is its error set; an `init_fn` that cannot fail adds none. (cloak's `PrivateKey` built its key on the stack and moved it in with `createFrom`.)
