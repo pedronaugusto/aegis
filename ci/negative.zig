@@ -262,6 +262,16 @@ const cases = [_]Case{
     \\    return @sizeOf(a.Atomic([]u8));
     \\}
     },
+    .{ .name = "state_no_edge", .message = "state: no edge from .closed on .dial", .source =
+    \\const state = @import("aegis").state;
+    \\const S = enum { idle, closed };
+    \\const E = enum { dial, close };
+    \\const edges = [_]state.Edge(S, E){.{ .from = .idle, .on = .close, .to = .closed }};
+    \\const M = state.Machine(S, E, .{ .initial = .idle, .terminal = &.{.closed}, .edges = &edges });
+    \\export fn bad(phase: *S) void {
+    \\    phase.* = M.after(.closed, .dial);
+    \\}
+    },
 };
 
 pub fn main(init: std.process.Init) !void {

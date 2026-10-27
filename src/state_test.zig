@@ -44,6 +44,18 @@ test "A10 the table answers every state and event exactly as the declared edges"
     try t.expectEqual(States.idle, Link.initial);
 }
 
+/// A runtime function that moves a phase by a comptime edge, as a hand-kept decoder does.
+fn moveLink(phase: *States, comptime from: States, comptime on: Events) void {
+    phase.* = Link.after(from, on);
+}
+
+test "A10 after answers at comptime when a runtime function calls it" {
+    var phase: States = .idle;
+    moveLink(&phase, .idle, .dial);
+    moveLink(&phase, .dialing, .up);
+    try t.expectEqual(States.open, phase);
+}
+
 test "A10 a stage is its payload outside Debug and costs one flag inside" {
     const Open = Link.At(.open, u64);
     if (builtin.optimize == .debug) try t.expect(@sizeOf(Open) >= @sizeOf(u64)) else {

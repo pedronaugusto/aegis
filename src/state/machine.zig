@@ -150,9 +150,10 @@ pub fn Machine(comptime S: type, comptime E: type, comptime spec: Spec(S, E)) ty
         }
 
         /// The state `event` leads to from `from`, known at comptime; an undeclared edge does not compile.
+        /// It is evaluated at comptime wherever it is called, a runtime function's body too.
         pub fn after(comptime from: S, comptime event: E) S {
-            return table[index(S, from)][index(E, event)] orelse
-                @compileError("state: no edge from " ++ name(from) ++ " on " ++ name(event));
+            return comptime (table[index(S, from)][index(E, event)] orelse
+                @compileError("state: no edge from " ++ name(from) ++ " on " ++ name(event)));
         }
 
         /// Whether `value` ends the machine: a comparison for one terminal state, a table lookup for several.
