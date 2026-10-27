@@ -47,10 +47,14 @@ pub fn Shared(comptime T: type, comptime cleanup: fn (*T) void) type {
             return .{ .block = block };
         }
 
-        /// What `createWith` fails with: `init_fn`'s errors, or the block's allocation.
+        /// What `createWith` fails with: `init_fn`'s errors, or the block's allocation. An `init_fn`
+        /// that cannot fail adds none.
         pub fn CreateWithError(comptime init_fn: anytype) type {
             const Return = @typeInfo(@TypeOf(init_fn)).@"fn".return_type.?;
-            return @typeInfo(Return).error_union.error_set || std.mem.Allocator.Error;
+            return switch (@typeInfo(Return)) {
+                .error_union => |info| info.error_set || std.mem.Allocator.Error,
+                else => std.mem.Allocator.Error,
+            };
         }
 
         /// A new block whose value `init_fn(context, &value)` builds in place, before any handle
@@ -63,6 +67,11 @@ pub fn Shared(comptime T: type, comptime cleanup: fn (*T) void) type {
             const block = try gpa.create(Block);
             block.gpa = gpa;
             block.count = .init(1);
+            const Return = @typeInfo(@TypeOf(init_fn)).@"fn".return_type.?;
+            if (comptime @typeInfo(Return) != .error_union) {
+                init_fn(context, &block.data);
+                return .{ .block = block };
+            }
             init_fn(context, &block.data) catch |err| {
                 const bytes = std.mem.asBytes(block);
                 std.crypto.secureZero(u8, bytes);

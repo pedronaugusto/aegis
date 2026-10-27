@@ -312,6 +312,9 @@ const Keyed = struct {
         self.key = @splat(byte);
         if (byte == 0x5a) return error.Late;
     }
+    fn set(byte: u8, self: *Keyed) void {
+        self.key = @splat(byte);
+    }
 };
 const SharedKeyed = a.Shared(Keyed, Keyed.drop);
 
@@ -345,6 +348,11 @@ test "A6 Shared createWith builds the value in its block, and erases a block who
     // The init writes the key, then fails: the block it wrote is erased before its free.
     try t.expectError(error.Late, SharedKeyed.createWith(gpa, @as(u8, 0x5a), Keyed.fill));
     try t.expectEqual(@as(usize, 1), erased.frees);
+    // An init that cannot fail: the block's allocation is the only error.
+    comptime std.debug.assert(SharedKeyed.CreateWithError(Keyed.set) == std.mem.Allocator.Error);
+    var plain = try SharedKeyed.createWith(t.allocator, @as(u8, 9), Keyed.set);
+    try t.expectEqualSlices(u8, &@as([32]u8, @splat(9)), &plain.get().key);
+    plain.release();
 }
 
 fn sharedWithAllocation(gpa: std.mem.Allocator) !void {
