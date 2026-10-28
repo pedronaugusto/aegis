@@ -884,8 +884,11 @@ test "A6 native Atomic checked adds race to exactly the maximum and never past i
 
 /// One whole-file read under `everyFault`: the file is there before each run, and what the run read is
 /// freed after it. Each run allocates from a heap of its own, so a remap answers alike in every run.
+/// `opened` reads through `readOpened` a file opened before the run, so every fault lands in the read.
 const WholeRead = struct {
+    opened: bool = false,
     tmp: t.TmpDir = undefined,
+    file: ?Io.File = null,
     heap: std.heap.SafeAllocator = undefined,
     gpa: std.mem.Allocator = undefined,
     read: ?[]u8 = null,
@@ -894,12 +897,14 @@ const WholeRead = struct {
         r.tmp = t.tmpDir(.{});
         errdefer r.tmp.cleanup();
         try r.tmp.dir.writeFile(t.io, .{ .sub_path = "whole", .data = "every byte of it" });
+        r.file = if (r.opened) try r.tmp.dir.openFile(t.io, "whole", .{}) else null;
+        errdefer if (r.file) |f| f.close(t.io);
         r.heap = .init(std.heap.page_allocator, .{});
         r.gpa = try fio.allocator(r.heap.allocator());
         r.read = null;
     }
     pub fn run(r: *WholeRead, io: Io) !void {
-        r.read = try a.own.readFile(io, r.tmp.dir, "whole", r.gpa, .fromRaw(64));
+        r.read = if (r.file) |f| try a.own.readOpened(io, f, r.gpa, .fromRaw(64)) else try a.own.readFile(io, r.tmp.dir, "whole", r.gpa, .fromRaw(64));
     }
     pub fn check(r: *WholeRead, io: Io, result: anyerror!void, injected: ?shake.Injected) !void {
         _ = io;
@@ -929,6 +934,7 @@ const WholeRead = struct {
     }
     pub fn tearDown(r: *WholeRead) void {
         if (r.read) |bytes| r.gpa.free(bytes);
+        if (r.file) |f| f.close(t.io);
         r.tmp.cleanup();
         if (r.heap.deinit() != 0) @panic("own.readFile leaked");
     }
@@ -936,6 +942,17 @@ const WholeRead = struct {
 
 test "A7 own.readFile returns a cancel wherever it lands, the length's read included, and every fault it is given" {
     var run: WholeRead = .{};
+    var report: shake.EveryFaultReport = .{};
+    defer report.deinit();
+    const done = shake.everyFault(t.allocator, t.io, &run, .{ .cancel = true, .diagnostics = &report }) catch |failure| {
+        if (report.failure) |f| std.debug.print("{s}\n", .{f.trace});
+        return failure;
+    };
+    try t.expect(done.runs > 1);
+}
+
+test "A7 own.readOpened returns a cancel wherever it lands in its read, the length's included, and every fault it is given" {
+    var run: WholeRead = .{ .opened = true };
     var report: shake.EveryFaultReport = .{};
     defer report.deinit();
     const done = shake.everyFault(t.allocator, t.io, &run, .{ .cancel = true, .diagnostics = &report }) catch |failure| {
@@ -996,4 +1013,40 @@ test "A7 own.readFile reads at most its limit, a file past it refused, and readF
     defer t.allocator.free(text);
     try t.expectEqualStrings("four", text);
     try t.expectEqual(@as(u8, 0), text[text.len]);
+}
+
+test "A7 own.readOpened reads what an open file holds, not the length it states, to its limit" {
+    var tmp = t.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(t.io, .{ .sub_path = "port", .data = "org.preflight.0\n" });
+    inline for (.{ 4096, 0, 4 }) |stated| {
+        const io = Lying(stated).io();
+        inline for (.{ 256, 16, 15 }) |limit| {
+            var file = try tmp.dir.openFile(t.io, "port", .{});
+            defer file.close(t.io);
+            if (limit < 16) {
+                try t.expectError(error.StreamTooLong, a.own.readOpened(io, file, t.allocator, .fromRaw(limit)));
+            } else {
+                const read = try a.own.readOpenedSentinel(io, file, t.allocator, .fromRaw(limit), 0);
+                defer t.allocator.free(read);
+                try t.expectEqualStrings("org.preflight.0\n", read);
+            }
+        }
+    }
+}
+
+test "A7 an in-tree .gitignore a symbolic link stands for is refused by the open, and readOpened reads the file opened so" {
+    // A link needs a privilege on Windows that a test does not have.
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+    var tmp = t.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(t.io, .{ .sub_path = "elsewhere", .data = "*.o\n" });
+    try tmp.dir.symLink(t.io, "elsewhere", ".gitignore", .{});
+    try tmp.dir.writeFile(t.io, .{ .sub_path = "kept", .data = "build/\n" });
+    try t.expectError(error.SymLinkLoop, tmp.dir.openFile(t.io, ".gitignore", .{ .follow_symlinks = false }));
+    var file = try tmp.dir.openFile(t.io, "kept", .{ .follow_symlinks = false });
+    defer file.close(t.io);
+    const read = try a.own.readOpened(t.io, file, t.allocator, .fromRaw(64));
+    defer t.allocator.free(read);
+    try t.expectEqualStrings("build/\n", read);
 }

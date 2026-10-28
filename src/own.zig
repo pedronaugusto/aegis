@@ -111,32 +111,57 @@ fn Owner(comptime T: type, comptime with_io: bool, comptime cleanup: if (with_io
     };
 }
 
+/// Why `readOpened` failed: reading the file's length, reading it, memory, or a file longer than the
+/// limit. A cancel is `Canceled` wherever it lands, the length's read included.
+pub const ReadOpenedError = std.Io.File.StatError || std.Io.File.Reader.Error || std.mem.Allocator.Error || error{
+    /// The file holds more than the limit's bytes.
+    StreamTooLong,
+};
+
 /// Why `readFile` failed: opening the file, reading its length, reading it, memory, or a file longer
-/// than the limit. A cancel is `Canceled` wherever it lands, the length's read included.
+/// than the limit (what `readOpened` says, and the open's errors). A cancel is `Canceled` wherever it
+/// lands, the length's read included.
 pub const ReadFileError = std.Io.File.OpenError || std.Io.File.StatError || std.Io.File.Reader.Error || std.mem.Allocator.Error || error{
     /// The file holds more than the limit's bytes.
     StreamTooLong,
 };
 
 /// The bytes of the file at `sub_path` in `dir`, at most `limit` of them; the caller owns them and frees
-/// them with `gpa`. The file is read to its end, and one that holds more than `limit` bytes is
-/// `StreamTooLong` once the byte past the limit is read. The length the file system states is only the
-/// first allocation's size: a pseudo-file's is not its content's (sysfs states 4096 and procfs 0 whatever
-/// they hold), and a file may grow or shrink under the read. That length is read first and its error
-/// returned, so a cancel that lands there is `Canceled`: std's `Dir.readFileAlloc` takes a failed length
-/// as a guess and reads on, losing it. The reader never asks for the length again.
+/// them with `gpa`. It opens the file (a symbolic link at `sub_path` followed) and reads it as
+/// `readOpened` does. A caller that opens otherwise, such as git's in-tree `.gitignore`, which a link
+/// may not stand for (`.follow_symlinks = false`, refused by the open itself), opens the file and
+/// calls `readOpened`.
 pub fn readFile(io: std.Io, dir: std.Io.Dir, sub_path: []const u8, gpa: std.mem.Allocator, limit: units.Bytes(u64)) ReadFileError![]u8 {
-    return readWhole(io, dir, sub_path, gpa, limit, null);
+    var file = try dir.openFile(io, sub_path, .{ .allow_directory = builtin.os.tag != .windows });
+    defer file.close(io);
+    return readWhole(io, file, gpa, limit, null);
 }
 
 /// `readFile`, its bytes followed by `sentinel` (source text a parser reads to its end: `0`).
 pub fn readFileSentinel(io: std.Io, dir: std.Io.Dir, sub_path: []const u8, gpa: std.mem.Allocator, limit: units.Bytes(u64), comptime sentinel: u8) ReadFileError![:sentinel]u8 {
-    return readWhole(io, dir, sub_path, gpa, limit, sentinel);
-}
-
-fn readWhole(io: std.Io, dir: std.Io.Dir, sub_path: []const u8, gpa: std.mem.Allocator, limit: units.Bytes(u64), comptime sentinel: ?u8) ReadFileError!(if (sentinel) |s| [:s]u8 else []u8) {
     var file = try dir.openFile(io, sub_path, .{ .allow_directory = builtin.os.tag != .windows });
     defer file.close(io);
+    return readWhole(io, file, gpa, limit, sentinel);
+}
+
+/// The bytes of an open `file` from where it stands to its end, at most `limit` of them; the caller
+/// owns them and frees them with `gpa`, and keeps the file, which it closes. The file is read to its
+/// end, and one that holds more than `limit` bytes is `StreamTooLong` once the byte past the limit is
+/// read. The length the file system states is only the first allocation's size: a pseudo-file's is
+/// not its content's (sysfs states 4096 and procfs 0 whatever they hold), and a file may grow or
+/// shrink under the read. That length is read first and its error returned, so a cancel that lands
+/// there is `Canceled`: std's `Dir.readFileAlloc` takes a failed length as a guess and reads on,
+/// losing it. The reader never asks for the length again.
+pub fn readOpened(io: std.Io, file: std.Io.File, gpa: std.mem.Allocator, limit: units.Bytes(u64)) ReadOpenedError![]u8 {
+    return readWhole(io, file, gpa, limit, null);
+}
+
+/// `readOpened`, its bytes followed by `sentinel`.
+pub fn readOpenedSentinel(io: std.Io, file: std.Io.File, gpa: std.mem.Allocator, limit: units.Bytes(u64), comptime sentinel: u8) ReadOpenedError![:sentinel]u8 {
+    return readWhole(io, file, gpa, limit, sentinel);
+}
+
+fn readWhole(io: std.Io, file: std.Io.File, gpa: std.mem.Allocator, limit: units.Bytes(u64), comptime sentinel: ?u8) ReadOpenedError!(if (sentinel) |s| [:s]u8 else []u8) {
     const stated = (try file.stat(io)).size;
     // Room for one byte past the limit: reading it is what says the file is longer.
     const most = std.math.cast(usize, limit.raw()) orelse std.math.maxInt(usize);

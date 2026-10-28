@@ -4,6 +4,14 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Added
+
+- `own.readOpened(io, file, gpa, limit)` and `readOpenedSentinel(..., sentinel)`: the bounded read to the end that `readFile` makes, of a file the caller opened and keeps. `readFile` and `readFileSentinel` are an open composed with it, their signatures unchanged. A caller that opens otherwise opens the file and calls it: git reads an in-tree `.gitignore` without following a symbolic link (`PATTERN_NOFOLLOW`), so sweep opens it with std's `.follow_symlinks = false`, which the open itself refuses (`SymLinkLoop` on POSIX), with no look at the path before it that the file could change under. `ReadOpenedError` is what it returns; `ReadFileError` is the same set as before, an open's errors and those. (sweep's ignore stacks; review-io's finding.)
+
+### Fixed
+
+- The README said `own.readFile` refuses a file past the limit before anything is allocated and reads only as long as the stated length. It reads to the end and judges the limit by what it reads (since 0.2.1).
+
 ## [0.2.3] - 2026-10-27
 
 ### Added
