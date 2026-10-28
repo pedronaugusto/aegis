@@ -46,7 +46,7 @@ export fn wrapperA67Array(owner: *a.bounded.Array(u64, 3), input: u64) bool {
 export fn baselineA67Queue(owner: *c.DirectQueue, input: u64) bool {
     return c.queue(false, owner, input);
 }
-export fn wrapperA67Queue(owner: *a.bounded.Queue(u64, 3), input: u64) bool {
+export fn wrapperA67Queue(owner: *a.bounded.Ring(u64, 3), input: u64) bool {
     return c.queue(true, owner, input);
 }
 export fn baselineA67Buffer(owner: *c.DirectBuffer, input: u64) bool {
@@ -100,8 +100,8 @@ comptime {
     std.debug.assert(@alignOf(c.DirectMutex) == @alignOf(a.BlockingGuarded(u64)));
     std.debug.assert(@sizeOf(c.DirectArray) == @sizeOf(a.bounded.Array(u64, 3)));
     std.debug.assert(@alignOf(c.DirectArray) == @alignOf(a.bounded.Array(u64, 3)));
-    std.debug.assert(@sizeOf(c.DirectQueue) == @sizeOf(a.bounded.Queue(u64, 3)));
-    std.debug.assert(@alignOf(c.DirectQueue) == @alignOf(a.bounded.Queue(u64, 3)));
+    std.debug.assert(@sizeOf(c.DirectQueue) == @sizeOf(a.bounded.Ring(u64, 3)));
+    std.debug.assert(@alignOf(c.DirectQueue) == @alignOf(a.bounded.Ring(u64, 3)));
     std.debug.assert(@sizeOf(c.DirectBuffer) == @sizeOf(a.bounded.Buffer(u64)));
     std.debug.assert(@alignOf(c.DirectBuffer) == @alignOf(a.bounded.Buffer(u64)));
     std.debug.assert(@sizeOf(c.DirectBudget) == @sizeOf(a.bounded.Budget(u64)));

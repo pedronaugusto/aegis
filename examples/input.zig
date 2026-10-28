@@ -22,7 +22,7 @@ pub fn main() !void {
     const wire = aegis.input.Untrusted([]const u8).init(&received);
     // `handle(wire)` does not compile: only a parsed header reaches it.
     const header = try wire.parse(@as(usize, 16), parseHeader);
-    aegis.assert.post(handle(header) == 3 and header.kind == 7, "parsed into its own type");
+    aegis.assert.invariant(handle(header) == 3 and header.kind == 7, "parsed into its own type");
 
     const short = aegis.input.Untrusted([]const u8).init(received[0..3]);
     if (short.parse(@as(usize, 16), parseHeader)) |_| unreachable else |err| aegis.assert.invariant(err == error.Truncated, "the parser's error, unchanged");

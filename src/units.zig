@@ -451,6 +451,16 @@ pub fn Bytes(comptime Repr: type) type {
         pub inline fn mul(self: Self, rhs: Repr) MulError!Self {
             return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).mul(rhs)).raw());
         }
+        /// A division by zero, and on a signed representation the one quotient past it: the minimum by -1.
+        pub const DivError = ints.Checked(Repr).DivError;
+        /// A share of the size, such as a third of a budget, rounded toward zero.
+        pub inline fn divTrunc(self: Self, rhs: Repr) DivError!Self {
+            return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).div(rhs)).raw());
+        }
+        /// How many times `rhs` fits in the size, rounded toward zero: a count, not a size.
+        pub inline fn ratio(self: Self, rhs: Self) DivError!Repr {
+            return (try ints.Checked(Repr).init(@backingInt(self)).div(@backingInt(rhs))).raw();
+        }
         /// No error where every value of this representation fits `Target` on every supported target.
         pub inline fn convert(self: Self, comptime Target: type) ints.Lifted(Repr, Target, Bytes(Target)) {
             const converted = ints.cast(Target, @backingInt(self));
@@ -745,7 +755,7 @@ pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: t
         /// negative infinity, so an instant before zero goes back to the start of the tick holding it. A start
         /// earlier than the representation holds saturates at its minimum. `tick` is positive.
         pub inline fn floor(self: Self, tick: Duration(unit, Repr)) Self {
-            assert.pre(tick.raw() > 0, "a tick is a positive span");
+            assert.invariant(tick.raw() > 0, "a tick is a positive span");
             const start = std.math.mul(Repr, @divFloor(@backingInt(self), tick.raw()), tick.raw()) catch return fromRaw(std.math.minInt(Repr));
             return fromRaw(start);
         }

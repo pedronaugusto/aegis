@@ -24,8 +24,6 @@ pub const Case = struct {
 
 pub const cases = [_]Case{
     .{ .module = "assert", .name = "invariant", .when = .always, .message = "required contract", .run = invariant },
-    .{ .module = "assert", .name = "pre", .when = .always, .message = "required contract", .run = pre },
-    .{ .module = "assert", .name = "post", .when = .always, .message = "required contract", .run = post },
     .{ .module = "assert", .name = "never", .when = .always, .message = "required contract", .run = never },
     .{ .module = "assert", .name = "assert-debug", .when = .debug, .message = "diagnostic contract", .run = debugOnly },
     .{ .module = "Secret", .name = "secret-move-overlap", .when = .always, .message = "@memcpy arguments alias", .run = secretMoveOverlap },
@@ -73,14 +71,6 @@ pub fn main(init: std.process.Init) !void {
 
 fn invariant(_: std.process.Init) !void {
     a.assert.invariant(false, "required contract");
-}
-
-fn pre(_: std.process.Init) !void {
-    a.assert.pre(false, "required contract");
-}
-
-fn post(_: std.process.Init) !void {
-    a.assert.post(false, "required contract");
 }
 
 fn never(_: std.process.Init) !void {
@@ -136,13 +126,13 @@ fn association(init: std.process.Init) !void {
     {
         var held = try first.acquire(init.io);
         defer held.deinit(init.io);
-        condition.wait(init.io, &held, .none) catch |err| {
+        held.wait(&condition, init.io, .none) catch |err| {
             if (err != error.WaiterLimit) return err;
         };
     }
     var other = try second.acquire(init.io);
     defer other.deinit(init.io);
-    condition.wait(init.io, &other, .none) catch |err| {
+    other.wait(&condition, init.io, .none) catch |err| {
         if (err != error.WaiterLimit) return err;
     };
 }

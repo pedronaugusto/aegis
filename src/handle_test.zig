@@ -70,7 +70,7 @@ test "A8 growth and dense swap preserve keys and fix both links" {
     const a = try map.insert(&one);
     try map.reserve(64);
     try t.expectEqual(@as(u32, 1), (try map.get(a)).*);
-    var dense = try h.Dense(u32, Tag).init(t.allocator, instance(), .{ .max_capacity = 64 });
+    var dense = try h.DenseSlotMap(u32, Tag).init(t.allocator, instance(), .{ .max_capacity = 64 });
     defer dense.deinit(ignore);
     var keys: [20]@TypeOf(dense).Key = undefined;
     for (&keys, 0..) |*key, i| {
@@ -104,7 +104,7 @@ const Resource = struct {
     }
 };
 fn allocated(comptime dense: bool, gpa: std.mem.Allocator) !void {
-    const Map = if (dense) h.Dense(Resource, Tag) else h.SlotMap(Resource, Tag);
+    const Map = if (dense) h.DenseSlotMap(Resource, Tag) else h.SlotMap(Resource, Tag);
     var map = try Map.init(gpa, instance(), .{ .capacity = 1, .max_capacity = 16 });
     defer map.deinit(Resource.cleanup);
     const key = try acquire(gpa, &map, 8);
@@ -135,7 +135,7 @@ test "A8 all allocation failures and owning cleanup on NoResize" {
 test "A8 secondary exact-key witness rejects stale associations and prune cleans" {
     var map = try h.SlotMap(u32, Tag).init(t.allocator, instance(), .{});
     defer map.deinit(ignore);
-    var secondary = h.SecondaryMap(@TypeOf(map).Key, u32).init(t.allocator);
+    var secondary = h.SecondaryMap(@TypeOf(map), u32).init(t.allocator);
     defer secondary.deinit(ignore);
     var value: u32 = 9;
     const old = try map.insert(&value);
@@ -205,7 +205,7 @@ fn secondaryAllocations(gpa: std.mem.Allocator) !void {
     var slots: [4]Primary.Slot = undefined;
     var primary = try Primary.initBuffer(&slots, instance());
     defer primary.deinit(ignore);
-    var secondary = h.SecondaryMap(Primary.Key, Resource).init(gpa);
+    var secondary = h.SecondaryMap(Primary, Resource).init(gpa);
     defer secondary.deinit(Resource.cleanup);
     for (0..4) |_| {
         var seed: u32 = 1;
@@ -217,7 +217,7 @@ fn secondaryAllocations(gpa: std.mem.Allocator) !void {
     try primary.remove(first, &removed);
     secondary.prune(&primary, Resource.cleanup);
 }
-fn putResource(gpa: std.mem.Allocator, secondary: anytype, primary: anytype, key: @typeInfo(@TypeOf(primary)).pointer.child.Key) !void {
+fn putResource(gpa: std.mem.Allocator, secondary: *h.SecondaryMap(h.Pool(u32, Tag), Resource), primary: *const h.Pool(u32, Tag), key: h.Pool(u32, Tag).Key) !void {
     var value: Resource = .{ .gpa = gpa, .allocation = try gpa.alloc(u8, 3) };
     errdefer value.cleanup();
     try secondary.put(primary, key, &value);
@@ -227,7 +227,7 @@ test "A8 secondary owning growth every allocation failure and stale prune cleanu
     try t.checkAllAllocationFailures(nr.allocator(), secondaryAllocations, .{});
 }
 fn denseTrace(_: void, c: *shake.Case) !void {
-    var map = try h.Dense(u32, Tag).init(t.allocator, instance(), .{ .max_capacity = 8 });
+    var map = try h.DenseSlotMap(u32, Tag).init(t.allocator, instance(), .{ .max_capacity = 8 });
     defer map.deinit(ignore);
     var keys: [8]?@TypeOf(map).Key = @splat(null);
     var values: [8]u32 = @splat(0);
@@ -278,7 +278,7 @@ test "A8 reserve admission failure preserves live keys values and borrows" {
 const owners = @import("own.zig");
 const OwnedResource = owners.Owned(Resource, Resource.cleanup);
 fn allocatedOwned(comptime dense: bool, gpa: std.mem.Allocator) !void {
-    const Map = if (dense) h.Dense(OwnedResource, Tag) else h.SlotMap(OwnedResource, Tag);
+    const Map = if (dense) h.DenseSlotMap(OwnedResource, Tag) else h.SlotMap(OwnedResource, Tag);
     var map = try Map.init(gpa, instance(), .{ .capacity = 1, .max_capacity = 4 });
     defer map.deinit(OwnedResource.deinit);
     var source = OwnedResource.init(.{ .gpa = gpa, .allocation = try gpa.dupe(u8, "owned") });

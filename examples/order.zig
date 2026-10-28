@@ -31,5 +31,5 @@ pub fn main(init: std.process.Init) !void {
     try transfer(init.io, &context, &books, &log, 30);
     try transfer(init.io, &context, &books, &log, 20);
     // Taking the ledger and then the accounts would stop a Debug build at the second acquire.
-    aegis.assert.post(books.teardown()[1] == 50 and log.teardown().* == 2, "both transfers landed");
+    aegis.assert.invariant(books.teardown()[1] == 50 and log.teardown().* == 2, "both transfers landed");
 }

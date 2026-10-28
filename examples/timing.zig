@@ -16,17 +16,17 @@ pub fn main() !void {
     const key: [32]u8 = @splat(3);
     // How deep the computation writes, measured: the scrub must reach at least that far.
     const reach = secret.stackReach(4096, mix, .{ &key, 1 });
-    aegis.assert.post(reach <= 4096, "the computation fits the measured window");
+    aegis.assert.invariant(reach <= 4096, "the computation fits the measured window");
 
     // `scrubbed` runs it under `Timing`, in a frame of its own, then scrubs 4 KiB below.
     const tag = secret.scrubbed(4096, mix, .{ &key, 1 });
-    aegis.assert.post(tag == mix(&key, 1), "the span changes timing and stack, not the answer");
+    aegis.assert.invariant(tag == mix(&key, 1), "the span changes timing and stack, not the answer");
 
     // The same span by hand: the mode is on inside, back to what it was after.
     {
         const timing = secret.Timing.begin();
         defer timing.end();
-        aegis.assert.post(secret.Timing.active() == secret.Timing.supported(), "on exactly where the processor has the mode");
+        aegis.assert.invariant(secret.Timing.active() == secret.Timing.supported(), "on exactly where the processor has the mode");
     }
     secret.scrubStack(256);
 }

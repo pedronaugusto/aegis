@@ -26,15 +26,15 @@ fn verify(chain_length: u8) Refusal {
 
 pub fn main() !void {
     const refusal = verify(3);
-    aegis.assert.post(refusal.cause == error.UntrustedRoot, "the cause is the error itself");
-    aegis.assert.post(refusal.context.frames().len == 2 and refusal.context.truncated, "the first two frames kept, the third marked");
+    aegis.assert.invariant(refusal.cause == error.UntrustedRoot, "the cause is the error itself");
+    aegis.assert.invariant(refusal.context.frames().len == 2 and refusal.context.truncated, "the first two frames kept, the third marked");
 
     var line: [128]u8 = undefined;
     var writer: std.Io.Writer = .fixed(&line);
     try refusal.context.format(&writer);
-    aegis.assert.post(std.mem.endsWith(u8, writer.buffered(), "[truncated]"), "written without allocating");
+    aegis.assert.invariant(std.mem.endsWith(u8, writer.buffered(), "[truncated]"), "written without allocating");
 
     // Runtime text enters a frame only by a stated classification, escaped into fixed storage.
     const name = err.PublicText(12).copy(.classify("a certificate subject is public", "CN=a\nb"));
-    aegis.assert.post(std.mem.eql(u8, name.view(), "CN=a\\x0ab"), "control bytes escaped");
+    aegis.assert.invariant(std.mem.eql(u8, name.view(), "CN=a\\x0ab"), "control bytes escaped");
 }

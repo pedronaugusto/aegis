@@ -17,19 +17,19 @@ pub fn main() !void {
 
     var timer: Timer = .{ .deadline_ms = 250 };
     const first = try timers.insert(&timer);
-    aegis.assert.post((try timers.get(first)).deadline_ms == 250, "a live key reaches its timer");
+    aegis.assert.invariant((try timers.get(first)).deadline_ms == 250, "a live key reaches its timer");
 
     var removed: Timer = undefined;
     try timers.remove(first, &removed);
     timer = .{ .deadline_ms = 900 };
     const second = try timers.insert(&timer); // the same slot, a new generation
     if (timers.get(first)) |_| unreachable else |err| aegis.assert.invariant(err == error.InvalidKey, "a stale key is refused, the slot's new timer untouched");
-    aegis.assert.post((try timers.get(second)).deadline_ms == 900, "the new key works");
+    aegis.assert.invariant((try timers.get(second)).deadline_ms == 900, "the new key works");
 
     // A position in a slice, branded and checked against the slice at every access.
     const Position = handle.Index(Timer, u16);
     const deadlines = [_]u64{ 10, 20, 30 };
     const at = try Position.from(2, deadlines.len);
-    aegis.assert.post((try at.get(deadlines[0..])).* == 30, "in bounds");
+    aegis.assert.invariant((try at.get(deadlines[0..])).* == 30, "in bounds");
     if (at.get(deadlines[0..2])) |_| unreachable else |err| aegis.assert.invariant(err == error.OutOfBounds, "checked against the slice it reads");
 }

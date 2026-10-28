@@ -1,12 +1,13 @@
-//! Full-key associations. Every resolve requires the primary's liveness witness.
+//! Full-key associations. Every resolve requires the primary's liveness witness: the primary map itself,
+//! typed, a `Pool`, `SlotMap` or `DenseSlotMap` whose keys this map holds.
 const std = @import("std");
 const move = @import("../move.zig");
 const overlap = @import("overlap.zig");
-pub fn SecondaryMap(comptime KeyType: type, comptime V: type) type {
+pub fn SecondaryMap(comptime Primary: type, comptime V: type) type {
     return struct {
         const Self = @This();
-        const Entry = struct { key: KeyType, value: V = undefined, live: bool = false, next: usize = std.math.maxInt(usize) };
-        pub const Key = KeyType;
+        pub const Key = Primary.Key;
+        const Entry = struct { key: Key, value: V = undefined, live: bool = false, next: usize = std.math.maxInt(usize) };
         pub const PutError = std.mem.Allocator.Error || error{ InvalidKey, AlreadyPresent, AliasedStorage };
         pub const KeyError = error{ InvalidKey, Missing, AliasedStorage };
         gpa: std.mem.Allocator,
@@ -16,7 +17,7 @@ pub fn SecondaryMap(comptime KeyType: type, comptime V: type) type {
         pub fn init(gpa: std.mem.Allocator) Self {
             return .{ .gpa = gpa };
         }
-        pub fn put(self: *Self, primary: anytype, key: Key, source: *V) PutError!void {
+        pub fn put(self: *Self, primary: *const Primary, key: Key, source: *V) PutError!void {
             if (!primary.contains(key)) return error.InvalidKey;
             if (self.index.contains(key)) return error.AlreadyPresent;
             if (overlap.overlapsOwner(V, source, self) or overlap.overlaps(V, source, self.entries)) return error.AliasedStorage;
@@ -45,12 +46,12 @@ pub fn SecondaryMap(comptime KeyType: type, comptime V: type) type {
             move.intoPoisoning(V, source, &self.entries[position].value);
             self.index.putAssumeCapacity(key, position);
         }
-        pub inline fn get(self: *Self, primary: anytype, key: Key) KeyError!*V {
+        pub inline fn get(self: *Self, primary: *const Primary, key: Key) KeyError!*V {
             if (!primary.contains(key)) return error.InvalidKey;
             const position = self.index.get(key) orelse return error.Missing;
             return &self.entries[position].value;
         }
-        pub inline fn getConst(self: *const Self, primary: anytype, key: Key) KeyError!*const V {
+        pub inline fn getConst(self: *const Self, primary: *const Primary, key: Key) KeyError!*const V {
             if (!primary.contains(key)) return error.InvalidKey;
             const position = self.index.get(key) orelse return error.Missing;
             return &self.entries[position].value;
@@ -66,7 +67,7 @@ pub fn SecondaryMap(comptime KeyType: type, comptime V: type) type {
             self.free_head = position;
         }
         /// Ascending association-slot order; may also reclaim stale associations.
-        pub fn prune(self: *Self, primary: anytype, comptime cleanup: fn (*V) void) void {
+        pub fn prune(self: *Self, primary: *const Primary, comptime cleanup: fn (*V) void) void {
             for (self.entries) |*entry| {
                 if (!entry.live or primary.contains(entry.key)) continue;
                 var detached: V = undefined;

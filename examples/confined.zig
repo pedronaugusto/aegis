@@ -15,6 +15,6 @@ pub fn main() !void {
     // Handed on at a quiescent point the caller synchronizes; from here only `writer` may use it.
     scratch.handOff(reader, writer);
     scratch.value(writer).depth += 1;
-    aegis.assert.post(scratch.valueConst(writer).tokens == 3, "the state moved with the hand-off");
+    aegis.assert.invariant(scratch.valueConst(writer).tokens == 3, "the state moved with the hand-off");
     // `scratch.value(reader)` now stops a Debug or ReleaseSafe build: `reader` gave it away.
 }

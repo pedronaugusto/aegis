@@ -135,13 +135,22 @@ fn Capability(comptime Base: type, comptime Context: type) type {
             if (diagnostics) self.context.pop(@ptrCast(self.base.owner)); // safe: ordered owner has base as its first/only field
             self.base.deinit(io);
         }
-        /// Rank remains reserved throughout suspension; context cannot acquire another lock.
-        pub fn waitCondition(self: *Self, condition: *Condition, io: std.Io, timeout: std.Io.Timeout) Condition.WaitError!void {
+        /// The base guard's `wait`. Rank remains reserved throughout suspension; context cannot acquire
+        /// another lock.
+        pub fn wait(self: *Self, condition: *Condition, io: std.Io, timeout: std.Io.Timeout) Condition.WaitError!void {
             if (diagnostics) self.context.suspended = true;
             defer if (diagnostics) {
                 self.context.suspended = false;
             };
             return condition.waitMutex(io, &self.base.owner.mutex, timeout);
+        }
+        /// The base guard's `waitUncancelable`, the rank reserved as `wait` reserves it.
+        pub fn waitUncancelable(self: *Self, condition: *Condition, io: std.Io, timeout: std.Io.Timeout) Condition.UncancelableWaitError!void {
+            if (diagnostics) self.context.suspended = true;
+            defer if (diagnostics) {
+                self.context.suspended = false;
+            };
+            return condition.waitMutexUncancelable(io, &self.base.owner.mutex, timeout);
         }
     };
 }

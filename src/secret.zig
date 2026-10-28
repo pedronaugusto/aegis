@@ -1,6 +1,4 @@
-//! Independently importable secret owners and audited value kernels.
-pub const Secret = @import("secret/inline.zig").Secret;
-pub const SecretBytes = @import("secret/SecretBytes.zig");
+//! Audited secret value kernels. The owners are the root's `Secret` and `SecretBytes`.
 const value = @import("secret/value.zig");
 pub const Choice = value.Choice;
 /// The builds whose Choice lowering `zig build check-choices` inspects (`Choice.audited`).

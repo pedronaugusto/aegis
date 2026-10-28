@@ -149,7 +149,7 @@ pub export fn wrapperInputDiagnostics(bytes: [*]const u8, len: usize, limit: usi
     };
     return @as(usize, parsed.kind) + parsed.body.len;
 }
-const Dense = a.handle.Dense(u32, Tag);
+const Dense = a.handle.DenseSlotMap(u32, Tag);
 pub export fn baselineDenseSum(values: [*]const u32, len: usize) u32 {
     var sum: u32 = 0;
     for (values[0..len]) |v| sum +%= v;

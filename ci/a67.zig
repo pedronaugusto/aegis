@@ -126,7 +126,7 @@ pub fn condition(comptime wrapped: bool, io: Io, changed: if (wrapped) *a.Condit
     if (wrapped) {
         var guard = try owner.acquire(io);
         defer guard.deinit(io);
-        try changed.wait(io, &guard, timeout);
+        try guard.wait(changed, io, timeout);
         return guard.value().*;
     }
     try owner.mutex.lock(io);
@@ -145,7 +145,7 @@ pub fn array(comptime wrapped: bool, owner: if (wrapped) *a.bounded.Array(u64, 3
     owner.used += 1;
     return true;
 }
-pub fn queue(comptime wrapped: bool, owner: if (wrapped) *a.bounded.Queue(u64, 3) else *DirectQueue, input: u64) bool {
+pub fn queue(comptime wrapped: bool, owner: if (wrapped) *a.bounded.Ring(u64, 3) else *DirectQueue, input: u64) bool {
     if (wrapped) {
         var value = input;
         owner.push(&value) catch return false;

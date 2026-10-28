@@ -12,9 +12,9 @@ const Pool = struct {
     fn take(pool: *Pool) error{Exhausted}!u32 {
         // Running out is an event a caller handles: an error, never an assertion.
         if (pool.free == 0) return error.Exhausted;
-        assert.pre(pool.free <= pool.total, "free buffers never exceed the pool");
+        assert.invariant(pool.free <= pool.total, "free buffers never exceed the pool");
         pool.free -= 1;
-        assert.post(pool.free < pool.total, "a taken buffer is not free");
+        assert.invariant(pool.free < pool.total, "a taken buffer is not free");
         return pool.total - pool.free - 1;
     }
 
@@ -36,7 +36,7 @@ pub fn main() !void {
     var pool: Pool = .{ .free = 2, .total = 2 };
     const slot = try pool.take();
     assert.invariant(Pool.consistent(&pool), "the pool's counts agree");
-    aegis.assert.post(std.mem.eql(u8, Pool.kind(slot), "even"), "the first slot is 0");
+    aegis.assert.invariant(std.mem.eql(u8, Pool.kind(slot), "even"), "the first slot is 0");
     _ = try pool.take();
     if (pool.take()) |_| unreachable else |err| assert.invariant(err == error.Exhausted, "an empty pool says so");
 

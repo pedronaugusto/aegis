@@ -27,9 +27,9 @@ pub fn main(init: std.process.Init) !void {
     var loader: Loader = .{};
 
     if (table.getOrInit(init.io, &task, &loader, Loader.load)) |_| unreachable else |err| aegis.assert.invariant(err == error.Interrupted, "a failed load leaves it empty");
-    aegis.assert.post(table.get() == null, "nothing was published");
+    aegis.assert.invariant(table.get() == null, "nothing was published");
 
     const loaded = try table.getOrInit(init.io, &task, &loader, Loader.load);
-    aegis.assert.post(loaded.entries[3] == 4 and loader.attempts == 2, "the retry loaded it");
-    aegis.assert.post(try table.getOrInit(init.io, &task, &loader, Loader.load) == loaded and loader.attempts == 2, "later callers get the same table, never a second load");
+    aegis.assert.invariant(loaded.entries[3] == 4 and loader.attempts == 2, "the retry loaded it");
+    aegis.assert.invariant(try table.getOrInit(init.io, &task, &loader, Loader.load) == loaded and loader.attempts == 2, "later callers get the same table, never a second load");
 }

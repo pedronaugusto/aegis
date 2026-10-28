@@ -27,8 +27,8 @@ pub fn main(init: std.process.Init) !void {
     {
         var held = jobs.acquireUncancelable(init.io);
         defer held.deinit(init.io);
-        aegis.assert.post(jobs.isHeld(), "the lock reads held while a guard is live");
+        aegis.assert.invariant(jobs.isHeld(), "the lock reads held while a guard is live");
     }
     const finished = jobs.teardown();
-    aegis.assert.post(finished.done == 300 and finished.pending == 0, "each job ran exactly once");
+    aegis.assert.invariant(finished.done == 300 and finished.pending == 0, "each job ran exactly once");
 }

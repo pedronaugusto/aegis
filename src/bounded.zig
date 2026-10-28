@@ -142,9 +142,6 @@ pub fn Ring(comptime T: type, comptime N: usize) type {
         }
     };
 }
-/// FIFO spelling of the same bounded ring policy; no concurrent/MPMC promise.
-pub const Queue = Ring;
-
 /// Explicit caller-backed or allocated prefix with an immutable finite growth ceiling.
 /// Allocated storage retains gpa; caller-backed reserve refuses growth.
 pub fn Buffer(comptime T: type) type {
@@ -305,9 +302,6 @@ pub fn RingBuffer(comptime T: type) type {
         }
     };
 }
-/// Dynamic FIFO spelling of the bounded ring policy.
-pub const QueueBuffer = RingBuffer;
-
 fn unsigned(comptime Repr: type) void {
     switch (@typeInfo(Repr)) {
         .int => |info| if (info.signedness != .unsigned or info.bits == 0) @compileError("limit repr must be an unsigned integer"),

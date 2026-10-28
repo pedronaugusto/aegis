@@ -1,5 +1,6 @@
 //! std.Io.Mutex semantics with guard-owned access, no stored Io.
 const std = @import("std");
+const Condition = @import("Condition.zig");
 /// Stable after publication. Join/drain users before moving or destroying the owner.
 pub fn BlockingGuarded(comptime T: type) type {
     return struct {
@@ -49,6 +50,16 @@ pub fn BlockingGuarded(comptime T: type) type {
             /// Exactly once, using the same Io execution domain. Does not clean T.
             pub inline fn deinit(self: *Guard, io: std.Io) void {
                 self.owner.mutex.unlock(io);
+            }
+            /// Waits on `condition`, releasing the lock for the wait; held again on every return. Reborrow
+            /// afterward; predicate loops retain one absolute deadline.
+            pub fn wait(self: *Guard, condition: *Condition, io: std.Io, timeout: std.Io.Timeout) Condition.WaitError!void {
+                return condition.waitMutex(io, &self.owner.mutex, timeout);
+            }
+            /// `wait` for a cleanup path that must see the state change it waits for: cancellation is
+            /// blocked for the wait, so it returns only on a wake, the timeout or the waiter limit.
+            pub fn waitUncancelable(self: *Guard, condition: *Condition, io: std.Io, timeout: std.Io.Timeout) Condition.UncancelableWaitError!void {
+                return condition.waitMutexUncancelable(io, &self.owner.mutex, timeout);
             }
         };
     };

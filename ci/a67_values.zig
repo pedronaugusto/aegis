@@ -15,7 +15,7 @@ comptime {
 }
 export fn pure(seed: u64) u64 {
     var array: a.bounded.Array(u64, 3) = .init;
-    var queue: a.bounded.Queue(u64, 3) = .init;
+    var queue: a.bounded.Ring(u64, 3) = .init;
     var input = seed;
     array.append(&input) catch return 0;
     queue.push(&input) catch return 0;

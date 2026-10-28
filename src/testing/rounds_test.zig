@@ -122,12 +122,13 @@ fn opened(log: *Log, descriptor: u32) Holding {
 
 const Keeper = struct {
     held: Holding,
-    fn lent(k: *Keeper) a.own.Lent(Copied) {
-        return k.held.lend();
+    /// Lent by `borrow`: a copy of the handle, which glint's rule keeps its holder from releasing.
+    fn lent(k: *Keeper) Copied {
+        return k.held.borrow().*;
     }
 };
 
-test "A7 OwnedIo moves by value once used, and lends a copy that is not the holder's to release" {
+test "A7 OwnedIo moves by value once used, and lends its payload by borrow" {
     const io = t.io;
     var log: Log = .{};
     // Returned by value and moved again before its first use, as an owner opened and stored is.
@@ -135,9 +136,8 @@ test "A7 OwnedIo moves by value once used, and lends a copy that is not the hold
     var keeper: Keeper = .{ .held = returned };
     try t.expectEqual(@as(usize, 0), log.closed);
     const copy = keeper.lent();
-    try t.expectEqual(@as(u32, 5), copy.get().descriptor);
-    try t.expect(!@hasDecl(a.own.Lent(Copied), "deinit"));
-    try t.expectEqual(@sizeOf(Copied), @sizeOf(a.own.Lent(Copied)));
+    try t.expectEqual(@as(u32, 5), copy.descriptor);
+    try t.expect(!@hasDecl(a.own, "Lent"));
     keeper.held.deinit(io);
     try t.expectEqual(@as(usize, 1), log.closed);
     try t.expectEqual(io.userdata, log.io_seen);
@@ -522,7 +522,7 @@ const Drain = struct {
         defer held.deinit(io);
         self.started.set(io);
         // A cleanup path: it waits for the state change however it was asked to stop.
-        while (held.value().* == 0) try self.changed.waitUncancelable(io, &held, .none);
+        while (held.value().* == 0) try held.waitUncancelable(&self.changed, io, .none);
         return held.value().*;
     }
     fn cancelIt(io: Io, future: *Io.Future(a.Condition.UncancelableWaitError!u32), done: *Io.Event) a.Condition.UncancelableWaitError!u32 {
@@ -560,7 +560,7 @@ const DrainTimeout = struct {
         var held = self.owner.acquireUncancelable(io);
         defer held.deinit(io);
         const deadline = (Io.Timeout{ .duration = .{ .raw = .fromMilliseconds(10), .clock = .awake } }).toDeadline(io);
-        try t.expectError(error.Timeout, self.changed.waitUncancelable(io, &held, deadline));
+        try t.expectError(error.Timeout, held.waitUncancelable(&self.changed, io, deadline));
         // The guard is held on every return, and the registration is gone.
         try t.expect(self.owner.tryAcquire() == null);
         try t.expectEqual(@as(usize, 0), self.changed.count);
@@ -578,7 +578,7 @@ test "A6 Condition waitUncancelable still ends at its deadline and at the waiter
     var changed = a.Condition.initLimit(0);
     var held = owner.acquireUncancelable(t.io);
     defer held.deinit(t.io);
-    try t.expectError(error.WaiterLimit, changed.waitUncancelable(t.io, &held, .none));
+    try t.expectError(error.WaiterLimit, held.waitUncancelable(&changed, t.io, .none));
     try t.expect(owner.tryAcquire() == null);
 }
 

@@ -30,12 +30,12 @@ pub fn main() !void {
     var authenticated: Authenticated = undefined;
     if (pending.transitionWith(.verify, &authenticated, @as(u64, 41), verify)) |_| unreachable else |err| aegis.assert.invariant(err == error.BadToken, "a wrong token is refused");
     try pending.transitionWith(.verify, &authenticated, @as(u64, 42), verify); // consumes `pending`
-    aegis.assert.post(send(&authenticated, "hello") == 12, "a message is sent on the authenticated stage");
+    aegis.assert.invariant(send(&authenticated, "hello") == 12, "a message is sent on the authenticated stage");
 
     // Events from a peer arrive at run time: an undeclared one is an error, never a state change.
     var link = Session.Runtime(u32).init(0);
     _ = try link.step(.verify);
     if (link.step(.verify)) |_| unreachable else |err| aegis.assert.invariant(err == error.IllegalEvent, "an undeclared event is refused");
-    aegis.assert.post(link.current() == .authenticated, "the refused event changed nothing");
+    aegis.assert.invariant(link.current() == .authenticated, "the refused event changed nothing");
 }
 // --- README:state ---

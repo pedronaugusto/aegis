@@ -24,7 +24,7 @@ test "A7 array prefix boundary and destination conservation" {
     try t.expectError(error.Full, zero.append(&v));
 }
 fn fifo(_: void, c: *shake.Case) anyerror!void {
-    var q: b.Queue(u32, 3) = .init;
+    var q: b.Ring(u32, 3) = .init;
     var oracle: std.ArrayList(u32) = .empty;
     defer oracle.deinit(t.allocator);
     for (0..256) |_| {
@@ -169,7 +169,7 @@ test "A7 Owned allocation failure transfer and exactly one static cleanup" {
 }
 test "A7 owning ring eviction cleanup happens outside the container" {
     var cleaned: usize = 0;
-    var q: b.Queue(Resource, 1) = .init;
+    var q: b.Ring(Resource, 1) = .init;
     defer q.deinit(Resource.deinit);
     var first: Resource = .{ .gpa = t.allocator, .bytes = try t.allocator.alloc(u8, 1), .cleaned = &cleaned };
     try q.push(&first);
@@ -195,7 +195,7 @@ test "A7 MustUse take and documented acknowledgment discharge" {
 test "A7 containers explicitly move bound Owned values and retain cleanup identity" {
     const O = own.Owned(Resource, Resource.deinit);
     var cleaned: usize = 0;
-    var queue: b.Queue(O, 2) = .init;
+    var queue: b.Ring(O, 2) = .init;
     defer queue.deinit(O.deinit);
     var owner = O.init(.{ .gpa = t.allocator, .bytes = try t.allocator.alloc(u8, 1), .cleaned = &cleaned });
     owner.borrowMut().bytes[0] = 42;
@@ -248,7 +248,7 @@ test "A7 dynamic FIFO wrap growth ownership and every allocation failure" {
     var no_resize = shake.alloc.NoResize.init(t.allocator);
     try t.checkAllAllocationFailures(no_resize.allocator(), ringConstruction, .{});
     var storage: [3]u32 = undefined;
-    var queue = try b.QueueBuffer(u32).initBuffer(&storage);
+    var queue = try b.RingBuffer(u32).initBuffer(&storage);
     defer queue.deinit(noop);
     try t.expectError(error.InvalidCapacity, b.RingBuffer(u32).initBuffer(&.{}));
     try t.expectError(error.CapacityExceeded, queue.reserve(4));

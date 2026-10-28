@@ -1,20 +1,12 @@
 //! Executable programmer contracts. Peer failures belong in error returns.
 const builtin = @import("builtin");
 
-/// Fail-stop in every build; does not unwind cleanup or assume unreachable.
+/// Fail-stop in every build; does not unwind cleanup or assume unreachable. The one always-on
+/// contract: a caller's precondition, a result's postcondition and a state's invariant alike, the
+/// condition evaluated once.
 // ziglint-ignore: Z023 condition then static message is the specified scalar contract
 pub fn invariant(condition: bool, comptime message: []const u8) void {
     if (!condition) @panic(message);
-}
-/// Always-on caller precondition, evaluated once.
-// ziglint-ignore: Z023 condition then static message is the specified scalar contract
-pub fn pre(condition: bool, comptime message: []const u8) void {
-    invariant(condition, message);
-}
-/// Always-on result postcondition, evaluated once.
-// ziglint-ignore: Z023 condition then static message is the specified scalar contract
-pub fn post(condition: bool, comptime message: []const u8) void {
-    invariant(condition, message);
 }
 /// A path that must never run, as a contract: stops with `message` in every build and ends control
 /// flow, so it stands where a value is needed (`else => assert.never("only file slots arrive")`,

@@ -56,6 +56,11 @@ fn Owner(comptime T: type, comptime with_io: bool, comptime cleanup: if (with_io
             moves.into(T, source, &self.data);
             return self;
         }
+        /// The one way to lend: the payload in place, for the task's use and not its release. A payload
+        /// released through `*T` (a list, a map) cannot be released through `*const T`; a handle released
+        /// by value (a file, a directory, a stream) is lent as `borrow().*`, and glint's lending rule
+        /// keeps a holder from releasing it: only what a body acquired, or took out of an owner, is its
+        /// to close. The lend ends on mutation, transfer or cleanup of the owner.
         pub fn borrow(self: *Self) *const T {
             bind(&self.state, self);
             return &self.data;
@@ -79,15 +84,6 @@ fn Owner(comptime T: type, comptime with_io: bool, comptime cleanup: if (with_io
             var destination: Self = undefined;
             self.moveInto(&destination);
             return destination;
-        }
-        /// What `lend` gives.
-        pub const Lending = Lent(T);
-        /// A copy of the payload that is not the caller's to release, as `borrow` lends it. It ends on
-        /// mutation, transfer or cleanup of the owner; nothing checks a `Lent` that outlives it.
-        pub fn lend(self: *Self) Lending {
-            if (comptime moves.declares(T)) @compileError("lend copies its payload; a payload that moves by moveInto is reached by borrow");
-            bind(&self.state, self);
-            return .{ .data = self.data };
         }
         /// Transfers payload into uninitialized disjoint storage; deinit is no longer owed.
         pub fn take(self: *Self, destination: *T) void {
@@ -178,20 +174,6 @@ fn readWhole(io: std.Io, file: std.Io.File, gpa: std.mem.Allocator, limit: units
         error.OutOfMemory, error.StreamTooLong => |e| return e,
     };
     return if (sentinel) |s| bytes.toOwnedSliceSentinel(gpa, s) else bytes.toOwnedSlice(gpa);
-}
-
-/// A copy of a resource an owner keeps, lent out: the type says it is not the holder's to release, and it
-/// has no `deinit`. It ends on mutation, transfer or cleanup of the owner, as a borrow does; nothing checks
-/// one that outlives it. What an accessor hands out of a handle its owner closes.
-pub fn Lent(comptime T: type) type {
-    return struct {
-        const Self = @This();
-        /// Private: reached through `get`.
-        data: T,
-        pub fn get(self: Self) T {
-            return self.data;
-        }
-    };
 }
 
 /// Result obligation with explicit discharge, not a resource destructor.

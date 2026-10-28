@@ -15,7 +15,7 @@ pub fn main(init: std.process.Init) !void {
         defer reader.deinit(io);
         var other = try config.read(io);
         defer other.deinit(io);
-        aegis.assert.post(reader.value().timeout_ms == other.value().timeout_ms, "readers share one view");
+        aegis.assert.invariant(reader.value().timeout_ms == other.value().timeout_ms, "readers share one view");
         if (config.tryRead(io)) |_| unreachable else |err| aegis.assert.invariant(err == error.AdmissionLimit, "a third holder is past the limit");
     }
 
@@ -27,5 +27,5 @@ pub fn main(init: std.process.Init) !void {
 
     var reader = try config.readUncancelable(io);
     defer reader.deinit(io);
-    aegis.assert.post(reader.value().retries == 5, "readers see the reload");
+    aegis.assert.invariant(reader.value().retries == 5, "readers see the reload");
 }

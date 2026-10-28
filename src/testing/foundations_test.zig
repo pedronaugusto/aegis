@@ -10,8 +10,9 @@ test "A3 checked extremes stay checked in release" {
     try t.expectError(error.Overflow, C.init(-128).div(-1));
     try t.expectError(error.DivisionByZero, C.init(1).rem(0));
     try t.expectEqual(@as(i8, 0), (try C.init(-128).rem(-1)).raw());
-    try t.expectError(error.InvalidShift, C.init(1).shl(-1));
-    try t.expectError(error.InvalidShift, C.init(1).shl(8));
+    // A shift past the width is not a `Log2Int(i8)`: it does not compile, and one read from input is
+    // narrowed first.
+    try t.expectError(error.Overflow, aegis.int.cast(std.math.Log2Int(i8), @as(usize, 8)));
     try t.expectError(error.Overflow, C.init(64).shl(1));
     try t.expectError(error.Underflow, aegis.int.Checked(u8).init(0).sub(1));
     try t.expectError(error.Overflow, aegis.int.Checked(usize).init(std.math.maxInt(usize)).add(1));
@@ -78,6 +79,22 @@ test "A3 IDs exhaustion and endian encoding" {
     try t.expectEqual(@as(u8, 255), (try counter.next()).raw());
     try t.expectError(error.IdExhausted, counter.next());
     try t.expectError(error.IdExhausted, counter.next());
+}
+
+test "A3 a size divides into a size or a count, every quotient checked" {
+    const B = aegis.units.Bytes(u64);
+    try t.expectEqual(B.fromRaw(21), try B.fromRaw(64).divTrunc(3));
+    try t.expectError(error.DivisionByZero, B.fromRaw(64).divTrunc(0));
+    try t.expectEqual(@as(u64, 16), try B.fromRaw(64 * 1024).ratio(.fromRaw(4096)));
+    try t.expectError(error.DivisionByZero, B.fromRaw(1).ratio(.fromRaw(0)));
+    const S = aegis.units.Bytes(i32);
+    try t.expectEqual(S.fromRaw(-3), try S.fromRaw(-7).divTrunc(2));
+    try t.expectError(error.Overflow, S.fromRaw(std.math.minInt(i32)).divTrunc(-1));
+    // An oracle over every u8 pair.
+    const B8 = aegis.units.Bytes(u8);
+    for (0..256) |a| for (1..256) |b| {
+        try t.expectEqual(@as(u8, @intCast(a / b)), (try B8.fromRaw(@intCast(a)).divTrunc(@intCast(b))).raw()); // safe: a and b are u8's domain
+    };
 }
 
 test "A3 units negative rounding range and byte conversion" {
@@ -193,8 +210,6 @@ test "A3 scalar layout and all-build scalar contracts" {
         }
     }
     aegis.assert.invariant(true, "test invariant");
-    aegis.assert.pre(true, "test pre");
-    aegis.assert.post(true, "test post");
     aegis.assert.maybe(false);
     aegis.assert.maybe(true);
     var hits: aegis.assert.Coverage = .{};
@@ -248,7 +263,7 @@ test "A3 fake clock step suspend and epoch conversion" {
 test "A3 one-bit arithmetic" {
     try t.expectError(error.Overflow, aegis.int.Checked(u1).init(1).add(1));
     try t.expectEqual(@as(u1, 1), (try aegis.int.Checked(u1).init(1).shl(0)).raw());
-    try t.expectError(error.InvalidShift, aegis.int.Checked(u1).init(1).shl(1));
+    try t.expectEqual(u0, std.math.Log2Int(u1));
 }
 
 test "A3 shifts encodings and side effects" {
@@ -258,7 +273,7 @@ test "A3 shifts encodings and side effects" {
             const x: R = @intCast(a); // safe: loop traverses R's domain
             for (0..8) |shift| {
                 const expected: i32 = @as(i32, a) * (@as(i32, 1) << @as(u3, @intCast(shift))); // safe: range is 0..8
-                const got = aegis.int.Checked(R).init(x).shl(shift);
+                const got = aegis.int.Checked(R).init(x).shl(@intCast(shift)); // safe: range is 0..8
                 if (got) |v| {
                     if (expected < std.math.minInt(R) or expected > std.math.maxInt(R)) {
                         return error.ShiftOverflowAccepted;
@@ -267,7 +282,7 @@ test "A3 shifts encodings and side effects" {
                 } else |err| {
                     if (expected < std.math.minInt(R)) try t.expectEqual(error.Underflow, err) else if (expected > std.math.maxInt(R)) try t.expectEqual(error.Overflow, err) else return err;
                 }
-                try t.expectEqual(std.math.clamp(expected, std.math.minInt(R), std.math.maxInt(R)), @as(i32, (try aegis.int.Saturating(R).init(x).shl(shift)).raw()));
+                try t.expectEqual(std.math.clamp(expected, std.math.minInt(R), std.math.maxInt(R)), @as(i32, aegis.int.Saturating(R).init(x).shl(@intCast(shift)).raw()));
             }
         }
     }
@@ -279,7 +294,7 @@ test "A3 shifts encodings and side effects" {
     try t.expectError(error.OutOfRange, R.fromBytes(.{0}, .big));
     try t.expectError(error.InvalidId, aegis.id.NonZero(struct {}, u8).fromBytes(.{0}, .little));
     var evaluated: usize = 0;
-    aegis.assert.pre(evaluate(&evaluated), "predicate exactly once");
+    aegis.assert.invariant(evaluate(&evaluated), "predicate exactly once");
     try t.expectEqual(@as(usize, 1), evaluated);
     aegis.assert.debugCheck(evaluate, &evaluated);
     try t.expectEqual(@as(usize, if (builtin.optimize == .debug) 2 else 1), evaluated);

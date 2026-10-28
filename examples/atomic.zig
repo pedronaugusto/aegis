@@ -19,16 +19,16 @@ pub fn main(init: std.process.Init) !void {
     defer group.cancel(init.io);
     for (0..4) |_| try group.concurrent(init.io, churn, .{ &open, 1000 });
     try group.await(init.io);
-    aegis.assert.post(open.load(.acquire).eql(.fromRaw(0)), "every open was closed");
+    aegis.assert.invariant(open.load(.acquire).eql(.fromRaw(0)), "every open was closed");
 
     // At the top of the range the add is refused and the cell keeps its value.
     open.store(.fromRaw(std.math.maxInt(u16)), .monotonic);
     if (open.fetchAdd(.fromRaw(1), .monotonic)) |_| unreachable else |err| aegis.assert.invariant(err == error.Overflow, "a count never wraps");
-    aegis.assert.post(open.load(.monotonic).eql(.fromRaw(std.math.maxInt(u16))), "the refused add changed nothing");
+    aegis.assert.invariant(open.load(.monotonic).eql(.fromRaw(std.math.maxInt(u16))), "the refused add changed nothing");
 
     // A counter whose width cannot be reached takes the hardware add by name.
     const events = aegis.Atomic(aegis.units.Count(Connection, u64));
     var seen = events.init(.fromRaw(0));
     _ = seen.fetchAddWrapping(.fromRaw(1), .monotonic);
-    aegis.assert.post(seen.load(.monotonic).eql(.fromRaw(1)), "the wrapping form is the plain add");
+    aegis.assert.invariant(seen.load(.monotonic).eql(.fromRaw(1)), "the wrapping form is the plain add");
 }

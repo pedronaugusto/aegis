@@ -66,7 +66,7 @@ pub fn Checked(comptime Repr: type) type {
         pub const MulError = error{ Overflow, Underflow };
         pub const DivError = error{ DivisionByZero, Overflow };
         pub const RemError = error{DivisionByZero};
-        pub const ShlError = error{ InvalidShift, Overflow, Underflow };
+        pub const ShlError = error{ Overflow, Underflow };
         pub inline fn init(value: Repr) Self {
             return .{ .value = value };
         }
@@ -102,10 +102,10 @@ pub fn Checked(comptime Repr: type) type {
             }
             return init(@rem(self.value, rhs));
         }
-        pub inline fn shl(self: Self, amount: anytype) ShlError!Self {
-            const n = std.math.cast(usize, amount) orelse return error.InvalidShift;
-            if (n >= @bitSizeOf(Repr)) return error.InvalidShift;
-            const shift: std.math.Log2Int(Repr) = @intCast(n); // safe: validated representation width
+        /// `amount` is a shift the representation has, by its type, as Zig's own `<<` takes it: one
+        /// read from input is narrowed first (`int.cast(std.math.Log2Int(Repr), n)`).
+        pub inline fn shl(self: Self, amount: std.math.Log2Int(Repr)) ShlError!Self {
+            const shift = amount;
             const wide = @Int(@typeInfo(Repr).int.signedness, @bitSizeOf(Repr) * 2);
             const result = @as(wide, self.value) << shift;
             if (result > std.math.maxInt(Repr)) return error.Overflow;
@@ -135,7 +135,6 @@ pub fn Saturating(comptime Repr: type) type {
         value: Repr,
         pub const DivError = error{DivisionByZero};
         pub const RemError = error{DivisionByZero};
-        pub const ShlError = error{InvalidShift};
         pub inline fn init(value: Repr) Self {
             return .{ .value = value };
         }
@@ -161,9 +160,9 @@ pub fn Saturating(comptime Repr: type) type {
         pub inline fn rem(self: Self, rhs: Repr) RemError!Self {
             return init((try Checked(Repr).init(self.value).rem(rhs)).raw());
         }
-        pub inline fn shl(self: Self, amount: anytype) ShlError!Self {
+        /// `amount` typed as `Checked.shl` takes it; the result saturates, so nothing fails.
+        pub inline fn shl(self: Self, amount: std.math.Log2Int(Repr)) Self {
             const checked = Checked(Repr).init(self.value).shl(amount) catch |err| switch (err) {
-                error.InvalidShift => return error.InvalidShift,
                 error.Overflow => return init(std.math.maxInt(Repr)),
                 error.Underflow => return init(std.math.minInt(Repr)),
             };
@@ -230,7 +229,7 @@ pub fn Ranged(comptime Repr: type, comptime min: Repr, comptime max: Repr) type 
         pub fn rem(self: Self, rhs: Repr) RemError!Self {
             return init((try Checked(Repr).init(@backingInt(self)).rem(rhs)).raw());
         }
-        pub fn shl(self: Self, amount: anytype) ShlError!Self {
+        pub fn shl(self: Self, amount: std.math.Log2Int(Repr)) ShlError!Self {
             return init((try Checked(Repr).init(@backingInt(self)).shl(amount)).raw());
         }
         pub fn toBytes(self: Self, endian: std.lang.Endian) scalar.Bytes(Repr) {

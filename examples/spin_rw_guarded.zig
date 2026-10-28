@@ -33,13 +33,13 @@ pub fn main(init: std.process.Init) !void {
     try group.concurrent(init.io, publish, .{ &routes, 500 });
     for (0..3) |_| try group.concurrent(init.io, consult, .{ &routes, 2000, &torn });
     try group.await(init.io);
-    aegis.assert.post(torn.load(.monotonic) == 0, "no reader saw a half-written table");
+    aegis.assert.invariant(torn.load(.monotonic) == 0, "no reader saw a half-written table");
 
     // Readers share; a writer waits for them.
     var first = routes.read();
     var second = routes.tryRead() orelse unreachable; // unreachable: readers share the lock
-    aegis.assert.post(routes.tryWrite() == null, "a writer is refused while readers hold it");
+    aegis.assert.invariant(routes.tryWrite() == null, "a writer is refused while readers hold it");
     first.deinit();
     second.deinit();
-    aegis.assert.post(routes.teardown().version == 500, "the last version stands");
+    aegis.assert.invariant(routes.teardown().version == 500, "the last version stands");
 }

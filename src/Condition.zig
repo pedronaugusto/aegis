@@ -25,27 +25,20 @@ pub fn initLimit(limit: usize) Condition {
     return .{ .limit = limit };
 }
 
-/// BlockingGuarded or Ordered blocking guard only; spin guards cannot wait.
-/// Guard held on every return. Reborrow afterward; predicate loops retain one absolute deadline.
-pub fn wait(self: *Condition, io: Io, guard: anytype, timeout: Io.Timeout) WaitError!void {
-    if (@hasDecl(@TypeOf(guard.*), "waitCondition")) return guard.waitCondition(self, io, timeout);
-    return self.waitMutex(io, &guard.owner.mutex, timeout);
-}
-
-/// `wait` for a cleanup path that must see the state change it waits for: cancellation is blocked for the wait,
-/// so it returns only on a wake, the timeout or the waiter limit, with the guard held as `wait` leaves it. With
-/// no timeout it waits as long as the predicate needs; the signaling side must be sure to come.
-pub fn waitUncancelable(self: *Condition, io: Io, guard: anytype, timeout: Io.Timeout) UncancelableWaitError!void {
+/// The kernel a blocking guard's `waitUncancelable` runs: `waitMutex` with cancellation blocked for the
+/// wait, so it returns only on a wake, the timeout or the waiter limit, the mutex held again as `waitMutex`
+/// leaves it. With no timeout it waits as long as the predicate needs; the signaling side must be sure to come.
+pub fn waitMutexUncancelable(self: *Condition, io: Io, owner_mutex: *Io.Mutex, timeout: Io.Timeout) UncancelableWaitError!void {
     const before = io.swapCancelProtection(.blocked);
     defer _ = io.swapCancelProtection(before);
-    return self.wait(io, guard, timeout) catch |err| switch (err) {
+    return self.waitMutex(io, owner_mutex, timeout) catch |err| switch (err) {
         error.Canceled => unreachable, // unreachable: cancellation is blocked for the wait
         error.Timeout => error.Timeout,
         error.WaiterLimit => error.WaiterLimit,
     };
 }
 
-/// Internal kernel seam. Caller holds this mutex; no value borrow survives the call.
+/// The kernel a blocking guard's `wait` runs. Caller holds this mutex; no value borrow survives the call.
 /// Association misuse fails in every mode, before releasing the caller's lock.
 pub fn waitMutex(self: *Condition, io: Io, owner_mutex: *Io.Mutex, timeout: Io.Timeout) WaitError!void {
     const deadline = timeout.toDeadline(io);

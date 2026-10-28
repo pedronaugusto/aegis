@@ -17,7 +17,7 @@ pub fn main(init: std.process.Init) !void {
     // A second handle by `retain`, never by copying one; it may go to another task.
     var connection = parsed.retain();
     parsed.release();
-    aegis.assert.post(!cleaned and connection.get().serial == 7, "one handle still holds it");
+    aegis.assert.invariant(!cleaned and connection.get().serial == 7, "one handle still holds it");
     connection.release(); // the last release runs the cleanup and frees the block
-    aegis.assert.post(cleaned, "cleaned once, by the last release");
+    aegis.assert.invariant(cleaned, "cleaned once, by the last release");
 }

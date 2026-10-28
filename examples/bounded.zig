@@ -8,7 +8,7 @@ const Frame = struct { id: u32, len: u32 };
 fn forget(_: *u32) void {}
 
 pub fn main() !void {
-    var outgoing: bounded.Queue(Frame, 2) = .init;
+    var outgoing: bounded.Ring(Frame, 2) = .init;
     var frame: Frame = .{ .id = 1, .len = 100 };
     try outgoing.push(&frame);
     frame = .{ .id = 2, .len = 200 };
@@ -16,10 +16,10 @@ pub fn main() !void {
     // Full is an answer, and the frame stays with the caller.
     frame = .{ .id = 3, .len = 300 };
     if (outgoing.push(&frame)) |_| unreachable else |err| aegis.assert.invariant(err == error.Full, "a full queue refuses");
-    aegis.assert.post(outgoing.isFull() and frame.id == 3, "nothing was overwritten");
+    aegis.assert.invariant(outgoing.isFull() and frame.id == 3, "nothing was overwritten");
     var sent: Frame = undefined;
     try outgoing.pop(&sent);
-    aegis.assert.post(sent.id == 1, "first in, first out");
+    aegis.assert.invariant(sent.id == 1, "first in, first out");
 
     // Bytes in flight: an allocation is charged before it is made, released if it fails,
     // consumed once it succeeds.
@@ -30,7 +30,7 @@ pub fn main() !void {
     if (in_flight.reserveKeeping(400, 100)) |_| unreachable else |err| aegis.assert.invariant(err == error.LimitExceeded, "ordinary work cannot take the kept room");
     var cancel = try in_flight.reserve(100);
     defer cancel.release();
-    aegis.assert.post(in_flight.remaining() == 324, "the budget never holds more than its maximum");
+    aegis.assert.invariant(in_flight.remaining() == 324, "the budget never holds more than its maximum");
 
     // A growable array with a hard ceiling, its storage the caller's.
     var storage: [4]u32 = undefined;
@@ -40,5 +40,5 @@ pub fn main() !void {
         var id: u32 = @intCast(i);
         try ids.append(&id);
     }
-    aegis.assert.post(ids.isFull() and ids.items()[3] == 3, "four in four");
+    aegis.assert.invariant(ids.isFull() and ids.items()[3] == 3, "four in four");
 }

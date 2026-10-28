@@ -26,10 +26,10 @@ pub fn main(init: std.process.Init) !void {
     {
         var held = stats.tryAcquire() orelse unreachable; // unreachable: every worker has finished
         defer held.deinit();
-        aegis.assert.post(stats.tryAcquire() == null, "a held lock is not taken twice");
+        aegis.assert.invariant(stats.tryAcquire() == null, "a held lock is not taken twice");
     }
 
     // The last user hands the data over with no lock and no Io.
     const totals = stats.teardown();
-    aegis.assert.post(totals.requests == 4000 and totals.bytes == 4000 * 512, "every update counted, none torn");
+    aegis.assert.invariant(totals.requests == 4000 and totals.bytes == 4000 * 512, "every update counted, none torn");
 }

@@ -37,7 +37,11 @@ pub fn operation(comptime name: []const u8, comptime wrapped: bool, x: u64, y: u
         return @bitCast(@rem(sx, sy)); // safe: preserve signed representation
     }
     if (comptime std.mem.eql(u8, name, "shift")) {
-        if (wrapped) return (a.int.Checked(u64).init(x).shl(y) catch return 0).raw();
+        if (wrapped) {
+            // The amount narrowed to a shift the representation has, as a caller with one from input does.
+            const amount = a.int.cast(u6, y) catch return 0;
+            return (a.int.Checked(u64).init(x).shl(amount) catch return 0).raw();
+        }
         if (y >= 64) return 0;
         const n: u6 = @intCast(y); // safe: preceding y < 64 check
         const result = @as(u128, x) << n;

@@ -26,8 +26,8 @@ pub fn main(init: std.process.Init) !void {
         defer held.deinit(io);
         // A predicate loop: a wake proves nothing, the letter does. Each wait returns with the
         // guard held again, whatever ended it.
-        while (held.value().* == null) try mailbox.arrived.wait(io, &held, .none);
-        aegis.assert.post(held.value().* == 42, "the letter arrived under the lock");
+        while (held.value().* == null) try held.wait(&mailbox.arrived, io, .none);
+        aegis.assert.invariant(held.value().* == 42, "the letter arrived under the lock");
     }
     try group.await(io);
 }

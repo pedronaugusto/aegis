@@ -20,20 +20,20 @@ fn flush(written: usize) own.MustUse(Report, "a flush's report says how much rea
 
 pub fn main() !void {
     var file = Descriptor.init(3);
-    aegis.assert.post(file.borrow().* == 3, "borrowed in place");
+    aegis.assert.invariant(file.borrow().* == 3, "borrowed in place");
 
     // Ownership moves into disjoint storage; the source owes nothing after.
     var kept: Descriptor = undefined;
     file.moveInto(&kept);
     kept.deinit();
-    aegis.assert.post(closed == 1, "closed once, by the owner that had it");
+    aegis.assert.invariant(closed == 1, "closed once, by the owner that had it");
 
     // A result that must be looked at: taken, or acknowledged with a stated reason.
     var report = flush(512);
     var read: Report = undefined;
     report.take(&read);
     report.deinit();
-    aegis.assert.post(read.written == 512, "the report was read");
+    aegis.assert.invariant(read.written == 512, "the report was read");
     var ignored = flush(0);
     ignored.acknowledge("an empty flush writes nothing to report");
     ignored.deinit();

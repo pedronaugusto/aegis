@@ -4,6 +4,22 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Breaking
+
+One release of the breaking cleanups an independent review (2026-10-28) asked for, so the family's wave cars adopt them once.
+
+- `own.Lent`, `Owned.Lending` and `Owned.lend()` are gone: lending is `borrow()`, the one way. A payload released through `*T` is lent as `*const T`, which cannot reach its release; a handle released by value (a file, a directory, a stream) is lent as `borrow().*`. `Lent.get()` handed back the whole releasable value, so the type named a role and enforced nothing; glint's lending rule, which ships in the same toolchain, enforces it: a body releases only what it acquired or took out of an owner, never a parameter or a borrow, through callee summaries. Migration: `x.lend().get()` is `x.borrow().*`, and `own.Lent(T)` in a signature is `T`.
+- One name each: `bounded.Queue` (use `Ring`), `bounded.QueueBuffer` (`RingBuffer`), `handle.typedIndex` (`Index`) and `handle.Dense` (`DenseSlotMap`) are gone; `aegis.sync` is no longer exported (its types are the root's: `aegis.Guarded`, `aegis.Atomic`, ...), and `secret.Secret` and `secret.SecretBytes` are the root's `aegis.Secret` and `aegis.SecretBytes` only.
+- `assert.pre` and `assert.post` are gone: they were `assert.invariant` under two more names, with no check of their own. `invariant` is the one always-on contract.
+- A condition wait is the guard's: `held.wait(&condition, io, timeout)` and `held.waitUncancelable(&condition, io, timeout)` on a `BlockingGuarded` guard and an `Order` ordered guard, where `Condition.wait(io, guard: anytype, timeout)` reached into the guard's owner for its mutex. `Condition.waitMutexUncancelable` is the kernel beside `waitMutex`; the ordered guard's `waitCondition` is `wait`.
+- `handle.SecondaryMap(Primary, V)` takes the primary map's type, where it took the key type, and `put`, `get`, `getConst` and `prune` take `*const Primary`, where they took `anytype`. `Key` is `Primary.Key`.
+- `int.Checked.shl`, `Saturating.shl` and `Ranged.shl` take the amount as `std.math.Log2Int(Repr)`, as Zig's `<<` does, where they took `anytype` and checked it: `InvalidShift` is gone from `Checked.ShlError`, `Saturating.shl` returns its value with no error, and an amount read from input is narrowed with `int.cast` first.
+
+### Added
+
+- `units.Bytes.divTrunc(rhs)`, a share of a size rounded toward zero, and `Bytes.ratio(other)`, how many times one size fits in another, each checked (`DivisionByZero`, and a signed minimum by -1 `Overflow`). relic divided a batch budget through `raw()` for want of it.
+- The design page documents lending by `borrow` and recovering a callback's context through the interface field with `@fieldParentPtr`, which glint reads as clean, so no erase-and-recover helper is needed (docs/design.md, "Lending, one way" and "Recovering a callback's context").
+
 ## [0.2.4] - 2026-10-28
 
 ### Added

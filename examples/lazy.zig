@@ -24,6 +24,6 @@ pub fn main(init: std.process.Init) !void {
     defer group.cancel(init.io);
     for (0..4) |_| try group.concurrent(init.io, worker, .{ init.io, &squares, &calls, &sum });
     try group.await(init.io);
-    aegis.assert.post(calls.load(.monotonic) == 1, "computed exactly once, whoever came first");
-    aegis.assert.post(sum.load(.monotonic) == 4 * 225, "every caller saw the finished table");
+    aegis.assert.invariant(calls.load(.monotonic) == 1, "computed exactly once, whoever came first");
+    aegis.assert.invariant(sum.load(.monotonic) == 4 * 225, "every caller saw the finished table");
 }

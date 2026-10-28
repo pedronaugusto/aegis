@@ -64,7 +64,7 @@ const WaitState = struct {
         defer held.deinit(io);
         self.started.set(io);
         const deadline = (Io.Timeout{ .duration = .{ .raw = .fromMilliseconds(10), .clock = .awake } }).toDeadline(io);
-        while (held.value().* == 0) try self.changed.wait(io, &held, deadline);
+        while (held.value().* == 0) try held.wait(&self.changed, io, deadline);
         return held.value().*;
     }
     fn signal(self: *WaitState, io: Io) !void {
@@ -134,7 +134,7 @@ test "A6 condition waiter ceiling preserves held guard" {
     var changed = a.Condition.initLimit(0);
     var held = try owner.acquire(t.io);
     defer held.deinit(t.io);
-    try t.expectError(error.WaiterLimit, changed.wait(t.io, &held, .none));
+    try t.expectError(error.WaiterLimit, held.wait(&changed, t.io, .none));
     try t.expectEqual(@as(u32, 1), held.value().*);
     try t.expect(owner.tryAcquire() == null);
 }
@@ -154,7 +154,7 @@ test "A6 condition cancellation wins raced signal and returns with guard" {
     var layer = CancelSignal.L.init(t.io, .{ .condition = &changed });
     var held = try owner.acquire(layer.io());
     defer held.deinit(layer.io());
-    try t.expectError(error.Canceled, changed.wait(layer.io(), &held, .none));
+    try t.expectError(error.Canceled, held.wait(&changed, layer.io(), .none));
     try t.expectEqual(@as(usize, 0), changed.count);
     try t.expectEqual(@as(u32, 3), held.value().*);
     try t.expect(owner.tryAcquire() == null);
@@ -181,7 +181,7 @@ test "A6 condition accepts pending cancellation after a normally returned signal
     var layer = PendingCancelSignal.L.init(t.io, .{ .condition = &changed });
     var held = try owner.acquire(layer.io());
     defer held.deinit(layer.io());
-    try t.expectError(error.Canceled, changed.wait(layer.io(), &held, .none));
+    try t.expectError(error.Canceled, held.wait(&changed, layer.io(), .none));
     try t.expectEqual(@as(usize, 0), changed.count);
     try t.expectEqual(@as(u32, 3), held.value().*);
     try t.expect(owner.tryAcquire() == null);
@@ -195,7 +195,7 @@ const ForwardedSignal = struct {
         var held = try self.owner.acquire(io);
         defer held.deinit(io);
         self.started.set(io);
-        try self.changed.wait(io, &held, .none);
+        try held.wait(&self.changed, io, .none);
         try t.expectEqual(@as(u32, 3), held.value().*);
     }
     fn main(self: *ForwardedSignal, io: Io) !void {
@@ -204,7 +204,7 @@ const ForwardedSignal = struct {
         // Taking the same owner proves the survivor registered before releasing it.
         var held = try self.owner.acquire(io);
         var layer = PendingCancelSignal.L.init(io, .{ .condition = &self.changed });
-        try t.expectError(error.Canceled, self.changed.wait(layer.io(), &held, .none));
+        try t.expectError(error.Canceled, held.wait(&self.changed, layer.io(), .none));
         held.deinit(io);
         try survivor_task.await(io);
         try t.expectEqual(@as(usize, 0), self.changed.count);
@@ -298,7 +298,7 @@ test "A6 logical-task rank checks before base lock waiting and reservation acros
     if (builtin.optimize == .debug) try t.expectError(error.Inversion, ctx.check(&equal, 0));
     child.deinit(t.io);
     var condition = a.Condition.initLimit(0);
-    try t.expectError(error.WaiterLimit, condition.wait(t.io, &held, .none));
+    try t.expectError(error.WaiterLimit, held.wait(&condition, t.io, .none));
     held.deinit(t.io);
     if (builtin.optimize != .debug) try t.expectEqual(@as(usize, 0), @sizeOf(O.Context));
 }
@@ -424,7 +424,7 @@ const BroadcastState = struct {
         var held = try self.owner.acquire(io);
         defer held.deinit(io);
         self.started[index].set(io);
-        while (held.value().* == 0) try self.changed.wait(io, &held, .none);
+        while (held.value().* == 0) try held.wait(&self.changed, io, .none);
     }
     fn main(self: *BroadcastState, io: Io) !void {
         var first = try io.concurrent(waiter, .{ self, io, 0 });
@@ -432,7 +432,7 @@ const BroadcastState = struct {
         for (&self.started) |*event| try event.wait(io);
         var held = try self.owner.acquire(io);
         try t.expectEqual(@as(usize, 2), self.changed.count);
-        try t.expectError(error.WaiterLimit, self.changed.wait(io, &held, .none));
+        try t.expectError(error.WaiterLimit, held.wait(&self.changed, io, .none));
         held.value().* = 1;
         self.changed.broadcast(io);
         held.deinit(io);

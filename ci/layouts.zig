@@ -78,7 +78,7 @@ pub const rows = [_]Row{
     .{ .module = "units", .label = "units.Duration(.millisecond, i64)", .aegis = a.units.Duration(.millisecond, i64), .direct = i64, .equal = .every },
     .{ .module = "units", .label = "units.Instant(.awake, .nanosecond, i96)", .aegis = a.units.Instant(.awake, .nanosecond, i96), .direct = i96, .equal = .every },
     .{ .module = "bounded", .label = "bounded.Array(u64, 4)", .aegis = a.bounded.Array(u64, 4), .direct = struct { storage: [4]u64, used: usize }, .equal = .every },
-    .{ .module = "bounded", .label = "bounded.Queue(u64, 4)", .aegis = a.bounded.Queue(u64, 4), .direct = struct { storage: [4]u64, head: usize, used: usize }, .equal = .every },
+    .{ .module = "bounded", .label = "bounded.Ring(u64, 4)", .aegis = a.bounded.Ring(u64, 4), .direct = struct { storage: [4]u64, head: usize, used: usize }, .equal = .every },
     .{ .module = "bounded", .label = "bounded.Buffer(u64)", .aegis = a.bounded.Buffer(u64), .direct = struct { storage: []u64, gpa: ?std.mem.Allocator, maximum: usize, used: usize }, .equal = .every },
     .{ .module = "bounded", .label = "bounded.Limit(u32)", .aegis = a.bounded.Limit(u32), .direct = u32, .equal = .every },
     .{ .module = "bounded", .label = "bounded.Budget(u32)", .aegis = a.bounded.Budget(u32), .direct = struct { ceiling: u32, taken: u32 }, .equal = .release },
