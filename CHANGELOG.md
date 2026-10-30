@@ -4,6 +4,8 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+## [0.1.19] - 2026-10-30
+
 ### Fixed
 
 - `own.Owned` and `own.OwnedIo` bind their address once, 0.2.4's fix on the 0.1 line: Debug's witness stored the owner's address on every `borrow` and `lend`, a data race when several tasks borrow or lend one owner read-only at once (review-io's finding, chronicle under ThreadSanitizer; relic's object database lending one source directory to its reading tasks, 306 reports in relic's nightly ThreadSanitizer shards). The first use binds it with one compare-and-swap, and every use after only reads it. A native test borrows one owner from 8 tasks at once, its first bind among them, and joins `test-native-races` (`-Dthread-sanitizer=true`), which reported the race before.
