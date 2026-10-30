@@ -155,6 +155,28 @@ test "A7 OwnedIo and Owned are the same size and OwnedIo takes no Io until it is
     try t.expectEqual(@as(usize, 1), log.closed);
 }
 
+const Reading = struct {
+    owner: Closing,
+    fn read(self: *Reading, rounds: usize) void {
+        for (0..rounds) |_| std.debug.assert(self.owner.borrow().descriptor == 11);
+    }
+};
+
+test "A7 native OwnedIo lends to many tasks at once: read-only borrows of one owner, its first bind among them" {
+    if (builtin.single_threaded) return error.SkipZigTest;
+    var log: Log = .{};
+    // A fresh owner each round, so the tasks race on its first bind as well as on the borrows after it.
+    for (0..64) |_| {
+        var state: Reading = .{ .owner = Closing.init(.{ .descriptor = 11, .log = &log }) };
+        var group: Io.Group = .init;
+        defer group.cancel(t.io);
+        for (0..8) |_| try group.concurrent(t.io, Reading.read, .{ &state, 200 });
+        try group.await(t.io);
+        state.owner.deinit(t.io);
+    }
+    try t.expectEqual(@as(usize, 64), log.closed);
+}
+
 test "A3 durations and instants hold std's i96 nanoseconds exactly" {
     const U = a.units;
     const D = U.Duration(.nanosecond, i96);
