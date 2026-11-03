@@ -11,7 +11,7 @@ pub fn main(init: std.process.Init) !void {
     const run: Run = .{ .gpa = init.gpa, .arena = arena, .io = init.io, .zig = args[1] };
     try rejections(run);
     var out = std.Io.File.stdout().writer(init.io, &.{});
-    try out.interface.writeAll("A10: 16 compiler rejections passed\n");
+    try out.interface.writeAll("A10: 19 compiler rejections passed\n");
     try out.interface.flush();
 }
 
@@ -49,6 +49,9 @@ fn rejections(run: Run) !void {
         .{ "var s = Link.At(.idle, u8).init(1); var d: Link.At(.open, u8) = undefined; try s.transitionWith(.dial, &d, {}, struct { fn f(_: void, _: *u8, _: *u8) u8 { return 0; } }.f);", "a state preparation returns void or an error union of void" },
         .{ "const Other = a.state.Machine(enum { idle, open }, enum { dial }, .{ .initial = .idle, .terminal = &.{.open}, .edges = &.{.{ .from = .idle, .on = .dial, .to = .open }} }); var s = Link.At(.idle, u8).init(1); var d: Other.At(.open, u8) = undefined; s.transition(.dial, &d);", "expected type" },
         .{ "var r = Link.Runtime(u8).init(1); _ = try r.step(.nonsense);", "no member named 'nonsense'" },
+        .{ "const C = Link.Carrying(u8); _ = C;", "a carrying machine's value is a tagged union whose tag is the machine's state" },
+        .{ "const C = Link.Carrying(union(enum) { idle: u8, open: u8, closed }); _ = C;", "a carrying machine's union is tagged by the machine's state" },
+        .{ "const U = union(Link.State) { idle: u8, open: u16, closed }; var c = Link.Carrying(U).init(1); _ = try c.step(.dial, .{ .open = 2 }, {}, struct { fn f(_: u8, _: *U) void {} }.f);", "expected type" },
     };
     try std.Io.Dir.cwd().createDirPath(run.io, ".zig-cache/a10/negative");
     inline for (cases, 0..) |case, i| {

@@ -1,5 +1,6 @@
 //! Necessary handwritten operations paired with typestate machines, stages and the runtime table.
 const builtin = @import("builtin");
+const std = @import("std");
 const a = @import("aegis");
 
 pub const Link = a.state.Machine(enum(u8) { idle, dialing, open, closed }, enum(u8) { dial, up, down, close }, .{
@@ -201,6 +202,63 @@ pub fn planCommit(comptime wrapped: bool, machine: *Machine(wrapped), event: Eve
     if (machine.state != from) return -2;
     machine.state = to;
     return @backingInt(to);
+}
+
+/// What each state of `Link` holds, for the carrying machine and its hand-written union.
+pub const Cell = union(State) { idle: u32, dialing: u16, open: u64, closed };
+pub const DirectCarrying = struct { value: Cell };
+pub const Carrying = Link.Carrying(Cell);
+pub fn CarryingMachine(comptime wrapped: bool) type {
+    return if (wrapped) Carrying else DirectCarrying;
+}
+
+/// The release a step runs on the payload it leaves: here a count, so the compiler cannot drop it.
+fn left(count: *u32, _: *Cell) void {
+    count.* += 1;
+}
+
+/// The hand-written union's state, read through the machine as a carrying machine reads its own.
+fn held(machine: *const DirectCarrying) State {
+    return std.meta.activeTag(machine.value);
+}
+
+fn directCarry(machine: *DirectCarrying, event: Event, into: Cell, count: *u32) error{IllegalEvent}!DirectEdge {
+    const from = held(machine);
+    const to = directLink(from, event) orelse return error.IllegalEvent;
+    if (std.meta.activeTag(into) != to) return error.IllegalEvent;
+    count.* += 1;
+    machine.value = into;
+    return .{ .from = from, .on = event, .to = to };
+}
+
+pub fn carry(comptime wrapped: bool, machine: *CarryingMachine(wrapped), event: Event, into: *const Cell, count: *u32) i16 {
+    const edge = (if (wrapped) machine.step(event, into.*, count, left) else directCarry(machine, event, into.*, count)) catch return -1;
+    return @backingInt(edge.to);
+}
+
+/// Plan, do work the machine cannot see, then commit the next state's value, read before the work: the commit
+/// re-reads the state.
+pub fn carryPlanCommit(comptime wrapped: bool, machine: *CarryingMachine(wrapped), event: Event, into: *const Cell, count: *u32) i16 {
+    const value = into.*;
+    if (wrapped) {
+        const edge = machine.plan(event) catch return -1;
+        if (std.meta.activeTag(value) != edge.to) return -3;
+        asm volatile ("" ::: .{ .memory = true });
+        machine.commit(edge, value, count, left) catch return -2;
+        return @backingInt(edge.to);
+    }
+    const from = held(machine);
+    const to = directLink(from, event) orelse return -1;
+    if (std.meta.activeTag(value) != to) return -3;
+    asm volatile ("" ::: .{ .memory = true });
+    directCommit(machine, from, value, count) catch return -2;
+    return @backingInt(to);
+}
+
+fn directCommit(machine: *DirectCarrying, from: State, value: Cell, count: *u32) error{Stale}!void {
+    if (held(machine) != from) return error.Stale;
+    count.* += 1;
+    machine.value = value;
 }
 
 pub const Key = a.Secret([32]u8);

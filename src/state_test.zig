@@ -285,3 +285,142 @@ test "A10 large machines use wider cells and map sparse state values" {
         try t.expectEqual(@as(usize, value), @as(usize, @backingInt(link.current())));
     }
 }
+
+/// A parent directory by stand-ins: one opened here (an owner), one lent, or none.
+const Hold = enum { owned, lent, closed };
+const HoldEvent = enum { close, adopt };
+const Holding = state.Machine(Hold, HoldEvent, .{ .initial = .owned, .edges = &.{
+    .{ .from = .owned, .on = .close, .to = .closed },
+    .{ .from = .lent, .on = .close, .to = .closed },
+    .{ .from = .closed, .on = .adopt, .to = .lent },
+} });
+var closed_handles: u32 = 0;
+fn closeHandle(handle: *u32) void {
+    closed_handles += handle.*;
+}
+const Handle = a.own.Owned(u32, closeHandle);
+const Parent = union(Hold) { owned: Handle, lent: u32, closed };
+const Held = Holding.Carrying(Parent);
+/// Ends what the state being left holds, in place: an opened handle is closed, a lent one is not.
+fn leave(released: *u32, value: *Parent) void {
+    released.* += 1;
+    switch (value.*) {
+        .owned => |*h| h.deinit(),
+        .lent, .closed => {},
+    }
+}
+
+test "A10 a carrying machine releases the payload it leaves in place, then holds the next" {
+    closed_handles = 0;
+    var released: u32 = 0;
+    var parent = Held.init(.init(7));
+    try t.expectEqual(Hold.owned, parent.current());
+    try t.expectEqual(@as(u32, 7), parent.at(.owned).?.borrow().*); // used where it is held: bound there
+    try t.expect(parent.at(.lent) == null);
+    const edge = try parent.step(.close, .closed, &released, leave);
+    try t.expectEqual(Hold.owned, edge.from);
+    try t.expectEqual(Hold.closed, edge.to);
+    try t.expectEqual(@as(u32, 1), released);
+    try t.expectEqual(@as(u32, 7), closed_handles);
+    _ = try parent.step(.adopt, .{ .lent = 9 }, &released, leave);
+    try t.expectEqual(@as(u32, 9), parent.atConst(.lent).?.*);
+    _ = try parent.step(.close, .closed, &released, leave);
+    try t.expectEqual(@as(u32, 3), released);
+    try t.expectEqual(@as(u32, 7), closed_handles); // a lent handle is never closed here
+    try t.expectEqual(Hold.closed, parent.current());
+}
+
+test "A10 a carrying machine refuses an undeclared event, or one leading elsewhere, and changes nothing" {
+    closed_handles = 0;
+    var released: u32 = 0;
+    var parent = Held.init(.init(5));
+    try t.expectError(error.IllegalEvent, parent.step(.adopt, .{ .lent = 1 }, &released, leave));
+    // `close` is declared from `owned`, but to `closed`, not to `lent`.
+    try t.expectError(error.IllegalEvent, parent.step(.close, .{ .lent = 1 }, &released, leave));
+    try t.expectError(error.IllegalEvent, parent.plan(.adopt));
+    try t.expectEqual(Hold.owned, parent.current());
+    try t.expectEqual(@as(u32, 0), released);
+    try t.expectEqual(@as(u32, 5), parent.at(.owned).?.borrow().*);
+    _ = try parent.step(.close, .closed, &released, leave);
+    try t.expectEqual(@as(u32, 5), closed_handles);
+}
+
+test "A10 a carrying machine's planned edge commits once and is stale after the machine moved on" {
+    closed_handles = 0;
+    var released: u32 = 0;
+    var parent = Held.init(.init(2));
+    const pending = try parent.plan(.close);
+    try t.expectEqual(Hold.owned, parent.current());
+    try t.expectEqual(@as(u32, 0), released);
+    try parent.commit(pending, .closed, &released, leave);
+    try t.expectEqual(Hold.closed, parent.current());
+    try t.expectEqual(@as(u32, 2), closed_handles);
+    try t.expectError(error.Stale, parent.commit(pending, .closed, &released, leave));
+    try t.expectEqual(@as(u32, 1), released);
+    const adopt = try parent.plan(.adopt);
+    _ = try parent.step(.adopt, .{ .lent = 4 }, &released, leave); // the machine moved on first
+    try t.expectError(error.Stale, parent.commit(adopt, .{ .lent = 8 }, &released, leave));
+    try t.expectEqual(@as(u32, 4), parent.atConst(.lent).?.*);
+}
+
+const Carried = union(States) { idle: Token, dialing: u16, open: u64, closed };
+fn dropCarried(_: void, _: *Carried) void {}
+
+test "A10 a carrying machine's initial payload moves in by its moveInto" {
+    var source: Token = .{ .value = 11 };
+    var link = Link.Carrying(Carried).initFrom(&source);
+    try t.expectEqual(@as(u32, 11), link.at(.idle).?.value);
+    try t.expectEqual(@as(u32, 1), link.at(.idle).?.moves);
+    try t.expectEqual(@as(u32, 0xdead), source.value);
+    _ = try link.step(.dial, .{ .dialing = 3 }, {}, dropCarried);
+    _ = try link.step(.up, .{ .open = 1 << 40 }, {}, dropCarried);
+    try t.expectEqual(@as(u64, 1 << 40), link.atConst(.open).?.*);
+    try t.expect(!link.isTerminal());
+    _ = try link.step(.close, .closed, {}, dropCarried);
+    try t.expect(link.isTerminal());
+}
+
+/// The payload a trace's carrying machine holds at each state: the state's position, so a stale payload shows.
+fn carriedAt(s: States) Carried {
+    return switch (s) {
+        .idle => .{ .idle = .{ .value = 0 } },
+        .dialing => .{ .dialing = 1 },
+        .open => .{ .open = 2 },
+        .closed => .closed,
+    };
+}
+fn countLeft(left: *u32, _: *Carried) void {
+    left.* += 1;
+}
+
+fn carryingTrace(_: void, case: *shake.Case) anyerror!void {
+    var link = Link.Carrying(Carried).init(.{ .value = 0 });
+    var oracle: Oracle = .{};
+    var left: u32 = 0;
+    var taken: u32 = 0;
+    for (0..64) |_| {
+        const on: Events = @fromBackingInt(@intCast(shake.gen.intRange(case.source, u8, 0, @typeInfo(Events).@"enum".field_names.len - 1)));
+        const aim: States = @fromBackingInt(@intCast(shake.gen.intRange(case.source, u8, 0, @typeInfo(States).@"enum".field_names.len - 1)));
+        const before = link.current();
+        const legal = expected(before, on) == aim;
+        const result = link.step(on, carriedAt(aim), &left, countLeft);
+        if (legal) {
+            _ = oracle.step(on);
+            taken += 1;
+            const edge = try result;
+            try t.expectEqual(before, edge.from);
+            try t.expectEqual(aim, edge.to);
+        } else {
+            try t.expectError(error.IllegalEvent, result);
+            try t.expectEqual(before, link.current());
+        }
+        try t.expectEqual(oracle.state, link.current());
+        try t.expectEqual(taken, left);
+        try t.expectEqual(std.meta.activeTag(carriedAt(link.current())), std.meta.activeTag(link.value));
+        if (link.isTerminal()) break;
+    }
+}
+
+test "A10 generated carrying traces agree with an independent model" {
+    try shake.check(t.allocator, {}, carryingTrace, .{ .cases = 512, .seed = 0xa1c });
+}

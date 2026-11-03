@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const std = @import("std");
 const stage = @import("stage.zig");
 const runtime = @import("runtime.zig");
+const carrying = @import("carrying.zig");
 const edge = @import("edge.zig");
 
 /// The specification a machine is built from. Terminal states end the machine and have no edges out.
@@ -176,6 +177,13 @@ pub fn Machine(comptime S: type, comptime E: type, comptime spec: Spec(S, E)) ty
         /// against the table in every build mode.
         pub fn Runtime(comptime Payload: type) type {
             return runtime.Runtime(Self, Payload);
+        }
+
+        /// The machine as the tag of `Value`, a tagged union whose member at each state is what that state
+        /// holds, for states that carry different payloads. Its edges are checked against the table in every
+        /// build mode, and taking one releases the payload being left in place.
+        pub fn Carrying(comptime Value: type) type {
+            return carrying.Carrying(Self, Value);
         }
     };
 }

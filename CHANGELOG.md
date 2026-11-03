@@ -17,6 +17,7 @@ One release of the breaking cleanups an independent review (2026-10-28) asked fo
 
 ### Added
 
+- `state.Machine.Carrying(Value)`: a machine whose states carry their own payloads, `Value` being a union tagged by the states. `step(event, next, context, release)` and `commit(edge, next, context, release)` take an edge only along the table, in every build mode, and release the payload being left in place before storing `next`, so an owner held in one state is released where it was used, never copied out; an event the state does not declare, or one leading elsewhere than `next`'s state, is `error.IllegalEvent` and changes nothing. `init`, `initFrom` (by the payload's `moveInto`), `at` and `atConst` (a state's payload, null at any other), `current`, `isTerminal` and `plan` complete it. For a parent directory a holder opened or was lent, which glint's A017 sent to `Runtime` and its single payload beside the state. Paired with a hand-written union in check-parity; its compile rejections are in check-a10.
 - `units.Bytes.divTrunc(rhs)`, a share of a size rounded toward zero, and `Bytes.ratio(other)`, how many times one size fits in another, each checked (`DivisionByZero`, and a signed minimum by -1 `Overflow`). relic divided a batch budget through `raw()` for want of it.
 - The design page documents lending by `borrow` and recovering a callback's context through the interface field with `@fieldParentPtr`, which glint reads as clean, so no erase-and-recover helper is needed (docs/design.md, "Lending, one way" and "Recovering a callback's context").
 

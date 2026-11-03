@@ -62,6 +62,18 @@ export fn baselineStateTake(source: *c.Key, destination: *c.Key) void {
 export fn wrapperStateTake(source: *c.Closed, destination: *c.Key) void {
     c.take(true, source, destination);
 }
+export fn baselineStateCarry(machine: *c.DirectCarrying, e: c.Event, into: *const c.Cell, count: *u32) i16 {
+    return c.carry(false, machine, e, into, count);
+}
+export fn wrapperStateCarry(machine: *c.Carrying, e: c.Event, into: *const c.Cell, count: *u32) i16 {
+    return c.carry(true, machine, e, into, count);
+}
+export fn baselineStateCarryPlanCommit(machine: *c.DirectCarrying, e: c.Event, into: *const c.Cell, count: *u32) i16 {
+    return c.carryPlanCommit(false, machine, e, into, count);
+}
+export fn wrapperStateCarryPlanCommit(machine: *c.Carrying, e: c.Event, into: *const c.Cell, count: *u32) i16 {
+    return c.carryPlanCommit(true, machine, e, into, count);
+}
 comptime {
     std.debug.assert(@sizeOf(c.Runtime) == @sizeOf(c.DirectRuntime));
     std.debug.assert(@alignOf(c.Runtime) == @alignOf(c.DirectRuntime));
@@ -70,4 +82,6 @@ comptime {
     std.debug.assert(@sizeOf(c.Open) == @sizeOf(c.Session));
     std.debug.assert(@alignOf(c.Open) == @alignOf(c.Session));
     std.debug.assert(@sizeOf(c.Closed) == @sizeOf(c.Key));
+    std.debug.assert(@sizeOf(c.Carrying) == @sizeOf(c.DirectCarrying));
+    std.debug.assert(@alignOf(c.Carrying) == @alignOf(c.DirectCarrying));
 }
