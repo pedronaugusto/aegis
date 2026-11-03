@@ -48,7 +48,7 @@ pub const modules = [_]Module{
     .{
         .name = "Secret",
         .required = .{ .rule = "A008" },
-        .names = &.{ "Secret", "secret.Secret" },
+        .names = &.{"Secret"},
         .release = "exactly `T`",
         .always = "the whole representation, padding included, wiped by volatile stores at `deinit` and after `moveInto`; a move into overlapping storage stops; formatting refused at compile time",
         .kernels = &.{ "secret_s32", "transfer_s32", "secret_s48", "transfer_s48", "secret_material", "transfer_material", "cleanup", "cleanup_material" },
@@ -57,7 +57,7 @@ pub const modules = [_]Module{
     .{
         .name = "SecretBytes",
         .required = .{ .rule = "A008" },
-        .names = &.{ "SecretBytes", "secret.SecretBytes" },
+        .names = &.{"SecretBytes"},
         .release = "allocation and live length, as a hand-written owner; the allocator is passed in",
         .always = "full capacity wiped before free and on `reserve`; capacity and overlap errors before any change; a move into overlapping storage stops",
         .kernels = &.{ "bytes_dead", "bytes_cleanup", "bytes_resize", "bytes_reserve", "bytes_move", "bytes_adopt_dead", "bytes_replace" },
@@ -84,7 +84,7 @@ pub const modules = [_]Module{
     .{
         .name = "Guarded",
         .required = .{ .rule = "A007" },
-        .names = &.{ "Guarded", "sync.Guarded" },
+        .names = &.{"Guarded"},
         .release = "a lock word beside `T`; a guard is one pointer",
         .always = "acquire is one swap and release one store",
         .checked = "`teardown` while the lock is held stops",
@@ -94,7 +94,7 @@ pub const modules = [_]Module{
     .{
         .name = "SpinRwGuarded",
         .required = .{ .rule = "A007" },
-        .names = &.{ "SpinRwGuarded", "sync.SpinRwGuarded" },
+        .names = &.{"SpinRwGuarded"},
         .release = "one state word beside `T`; a guard is one pointer",
         .always = "readers share and a writer excludes them, a waiting writer holding off new readers",
         .checked = "`teardown` while the lock is held stops",
@@ -104,7 +104,7 @@ pub const modules = [_]Module{
     .{
         .name = "BlockingGuarded",
         .required = .{ .rule = "A007" },
-        .names = &.{ "BlockingGuarded", "sync.BlockingGuarded" },
+        .names = &.{"BlockingGuarded"},
         .release = "a `std.Io.Mutex` beside `T`; a guard is one pointer",
         .always = "the mutex's own operations; a canceled acquire grants nothing",
         .checked = "`teardown` while the lock is held stops",
@@ -114,7 +114,7 @@ pub const modules = [_]Module{
     .{
         .name = "RwGuarded",
         .required = .{ .rule = "A007" },
-        .names = &.{ "RwGuarded", "sync.RwGuarded" },
+        .names = &.{"RwGuarded"},
         .release = "a `std.Io.RwLock`, an admission count and its limit beside `T`",
         .always = "admission past the limit is `AdmissionLimit`, before std's packed counters can overflow",
         .checked = "`teardown` while the lock is held stops",
@@ -124,7 +124,7 @@ pub const modules = [_]Module{
     .{
         .name = "Condition",
         .required = .{ .rule = "A007" },
-        .names = &.{ "Condition", "sync.Condition" },
+        .names = &.{"Condition"},
         .release = "the hand-written waiter registry",
         .always = "the waiter limit; the guard held again on every return; a wait with another owner's guard stops",
         .kernels = &.{ "a67_condition", "gaps_wait_uncancelable" },
@@ -133,7 +133,7 @@ pub const modules = [_]Module{
     .{
         .name = "Once",
         .required = .{ .rule = "A007" },
-        .names = &.{ "Once", "InitContext", "sync.Once", "sync.InitContext" },
+        .names = &.{ "Once", "InitContext" },
         .release = "state, mutex, a condition and `T`; `InitContext` is empty",
         .always = "initialized once and published by a release store; the waiter limit",
         .debug = "a recursive initializer stops",
@@ -143,7 +143,7 @@ pub const modules = [_]Module{
     .{
         .name = "Lazy",
         .required = .{ .rule = "A007" },
-        .names = &.{ "Lazy", "sync.Lazy" },
+        .names = &.{"Lazy"},
         .release = "state, mutex and `T`",
         .always = "initialized once and published by a release store; only the initializer's errors",
         .kernels = &.{ "gaps_lazy_ready", "gaps_lazy_cold", "gaps_lazy_infallible" },
@@ -152,7 +152,7 @@ pub const modules = [_]Module{
     .{
         .name = "Atomic",
         .required = .{ .rule = "A007" },
-        .names = &.{ "Atomic", "sync.Atomic" },
+        .names = &.{"Atomic"},
         .release = "the backing integer's atomic cell",
         .always = "checked `fetchAdd` and `fetchSub` report overflow with the cell unchanged",
         .kernels = &.{ "gaps_atomic_load", "gaps_atomic_store", "gaps_atomic_swap", "gaps_atomic_compare_exchange", "gaps_atomic_max", "gaps_atomic_add_wrapping", "gaps_atomic_add" },
@@ -161,7 +161,7 @@ pub const modules = [_]Module{
     .{
         .name = "Shared",
         .required = .{ .rule = "A007" },
-        .names = &.{ "Shared", "sync.Shared" },
+        .names = &.{"Shared"},
         .release = "one pointer",
         .always = "the static cleanup runs once, at the last release; a count past its limit stops",
         .debug = "a handle released twice stops",
@@ -171,7 +171,7 @@ pub const modules = [_]Module{
     .{
         .name = "Order",
         .required = .{ .rule = "A021" },
-        .names = &.{ "Order", "sync.Order" },
+        .names = &.{"Order"},
         .release = "`Context` is empty; an ordered lock is its lock",
         .always = "the lock's own operations",
         .debug = "an acquire out of rank or of an owner already held stops",
@@ -181,7 +181,7 @@ pub const modules = [_]Module{
     .{
         .name = "Confined",
         .required = .{ .rule = "A007" },
-        .names = &.{ "Confined", "TaskIdentity", "sync.Confined", "sync.TaskIdentity" },
+        .names = &.{ "Confined", "TaskIdentity" },
         .release = "exactly `T`",
         .always = "nothing: the payload is plain data",
         .checked = "access or hand-off by a task that does not own it stops",
@@ -296,7 +296,7 @@ pub const modules = [_]Module{
 };
 
 /// The namespaces whose members are claimed one by one; every other public name is a module.
-const namespaces = [_][]const u8{ "secret", "sync" };
+const namespaces = [_][]const u8{"secret"};
 
 /// The Choice harness's callers, as the catalogue names them.
 const choice_kernels = blk: {
