@@ -315,7 +315,7 @@ pub fn waitUncancelable(comptime wrapped: bool, io: *const Io, changed: if (wrap
     if (wrapped) {
         var guard = owner.acquireUncancelable(io.*);
         defer guard.deinit(io.*);
-        try changed.waitUncancelable(io.*, &guard, timeout);
+        try guard.waitUncancelable(changed, io.*, timeout);
         return guard.value().*;
     }
     owner.mutex.lockUncancelable(io.*);

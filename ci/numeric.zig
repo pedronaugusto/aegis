@@ -42,7 +42,10 @@ pub fn operation(comptime name: []const u8, comptime wrapped: bool, x: u64, y: u
             const amount = a.int.cast(u6, y) catch return 0;
             return (a.int.Checked(u64).init(x).shl(amount) catch return 0).raw();
         }
-        if (y >= 64) return 0;
+        if (y >= 64) {
+            @branchHint(.unlikely);
+            return 0;
+        }
         const n: u6 = @intCast(y); // safe: preceding y < 64 check
         const result = @as(u128, x) << n;
         if (result > std.math.maxInt(u64)) return 0;
