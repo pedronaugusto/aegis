@@ -176,7 +176,6 @@ pub export fn baselineDenseSum(values: [*]const u32, len: usize) u32 {
 pub export fn wrapperDenseSum(values: [*]const u32, len: usize) u32 {
     // The owner descriptor is borrowed only for its live dense prefix.
     var d: Dense = undefined;
-    // aegis: internal: the parity check builds a Dense from its fields to measure the wrapper loop against the baseline; nothing else holds it
     d.values = @constCast(values); // safe: only itemsConst is used; never writes
     d.used = len;
     var sum: u32 = 0;
