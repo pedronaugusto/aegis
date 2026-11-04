@@ -249,11 +249,11 @@ pub const modules = [_]Module{
         .name = "state",
         .required = .{ .rule = "A017" },
         .names = &.{"state"},
-        .release = "a stage is its payload; a runtime machine is its payload and state",
+        .release = "a stage is its payload; a runtime machine is its payload and state; a carrying machine is the union its states tag",
         .always = "an undeclared event is `IllegalEvent` and changes nothing; a commit of an edge the machine does not declare stops",
         .checked = "a transition into its own source stops",
         .debug = "a stage used after its payload moved on stops",
-        .kernels = &.{ "state_next", "state_next_wide", "state_next_switch", "state_next_wide_switch", "state_terminal", "state_step", "state_plan_commit", "state_transition", "state_transition_with", "state_take" },
+        .kernels = &.{ "state_next", "state_next_wide", "state_next_switch", "state_next_wide_switch", "state_terminal", "state_step", "state_plan_commit", "state_transition", "state_transition_with", "state_take", "state_carry", "state_carry_plan_commit" },
         .example = "examples/state.zig",
     },
     .{
