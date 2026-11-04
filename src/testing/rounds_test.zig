@@ -288,10 +288,14 @@ fn saturatingProperty(_: void, case: *shake.Case) anyerror!void {
         try t.expectEqual(difference, @as(i64, T.fromRaw(x).saturatingSub(D.fromRaw(y)).raw()));
         // The span from x to y is y - x, clamped.
         try t.expectEqual(std.math.clamp(@as(i64, y) - @as(i64, x), low, high), @as(i64, T.fromRaw(x).saturatingDurationTo(T.fromRaw(y)).raw()));
-        // Where the checked form succeeds, the saturating form agrees with it.
+        // Where the checked form succeeds, the saturating form agrees with it; where it fails, the span is
+        // past the representation, and the saturating form gives the bound it passed.
+        const clamped = T.fromRaw(x).saturatingDurationTo(T.fromRaw(y));
         if (T.fromRaw(x).durationTo(T.fromRaw(y))) |span| {
-            try t.expectEqual(span, T.fromRaw(x).saturatingDurationTo(T.fromRaw(y)));
-        } else |_| {}
+            try t.expectEqual(span, clamped);
+        } else |_| {
+            try t.expect(clamped.raw() == std.math.minInt(Repr) or clamped.raw() == std.math.maxInt(Repr));
+        }
     }
 }
 
@@ -859,11 +863,14 @@ test "A6 native Atomic pointer cell takes every push of a lock-free list from ta
 const Counting = struct {
     cell: a.Atomic(Hits) = .init(.fromRaw(0)),
     won: std.atomic.Value(u32) = .init(0),
+    refused: std.atomic.Value(u32) = .init(0),
     fn worker(self: *Counting) void {
         for (0..100) |_| {
             if (self.cell.fetchAdd(.fromRaw(1), .monotonic)) |_| {
                 _ = self.won.fetchAdd(1, .monotonic);
-            } else |_| {}
+            } else |_| {
+                _ = self.refused.fetchAdd(1, .monotonic);
+            }
         }
     }
 };
@@ -876,8 +883,9 @@ test "A6 native Atomic checked adds race to exactly the maximum and never past i
         defer group.cancel(t.io);
         for (0..4) |_| try group.concurrent(t.io, Counting.worker, .{&state});
         try group.await(t.io);
-        // 400 attempts at a u8: exactly 255 succeed, and the cell holds exactly that many.
+        // 400 attempts at a u8: exactly 255 succeed, the other 145 are refused, and the cell holds exactly 255.
         try t.expectEqual(@as(u32, 255), state.won.load(.monotonic));
+        try t.expectEqual(@as(u32, 145), state.refused.load(.monotonic));
         try t.expectEqual(Hits.fromRaw(255), state.cell.load(.monotonic));
     }
 }
