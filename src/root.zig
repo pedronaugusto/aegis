@@ -50,6 +50,12 @@ pub const TaskIdentity = sync.TaskIdentity;
 /// Copyable choices and audited byte comparison/select kernels.
 pub const secret = @import("secret.zig");
 
+/// Memory whose live part never moves: a reservation or a buffer, a bump top, marks released at
+/// once, and one growing tail.
+pub const Region = @import("Region.zig");
+/// One flat layout for a value: a block with no pointers, read in place, written at its exact
+/// size, and checked before untrusted bytes become one.
+pub const flat = @import("flat.zig");
 /// Checked generational keys and typed positions; owners require external synchronization.
 pub const handle = @import("handle.zig");
 /// Boundary markers preserving each parser's exact error and refined result contract.

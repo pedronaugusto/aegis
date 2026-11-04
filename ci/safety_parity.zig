@@ -1,15 +1,19 @@
 //! Correct handwritten operations paired with A8/A9 enclosing caller paths.
 const std = @import("std");
 const a = @import("aegis");
+const region = @import("region.zig");
 const Tag = struct {};
-pub const Pool = a.handle.Pool(u32, Tag);
+pub const Pool = a.handle.SlotPool(u32, Tag, .{ .generation = u64 });
 pub const Key = Pool.Key;
+/// The hand-written keyed pool: slots growing one at a time on bump memory of their own.
 pub const Direct = struct {
     pub const Slot = struct { generation: u64 = 1, next: usize = std.math.maxInt(usize), state: enum { free, live, retired } = .free, value: u32 = undefined };
-    slots: []Slot,
+    region: region.Direct,
+    slots: [*]Slot,
     instance: a.handle.Instance,
-    free_head: usize,
-    len: usize = 0,
+    count: usize = 0,
+    free_head: usize = std.math.maxInt(usize),
+    used: usize = 0,
     retired: usize = 0,
 };
 pub const Frame = struct {
@@ -38,7 +42,7 @@ comptime {
     std.debug.assert(@sizeOf(a.input.Untrusted([]const u8)) == @sizeOf([]const u8));
 }
 inline fn live(p: *const Direct, key: Key) bool {
-    if (p.instance.namespace != key.instance.namespace or p.instance.serial != key.instance.serial or key.index >= p.slots.len) return false;
+    if (p.instance.namespace != key.instance.namespace or p.instance.serial != key.instance.serial or key.index >= p.count) return false;
     const slot = &p.slots[key.index];
     return slot.state == .live and slot.generation == key.generation;
 }
@@ -56,21 +60,31 @@ inline fn overlap(value: *const u32, storage: anytype) bool {
     const bytes = std.math.mul(usize, storage.len, @sizeOf(@typeInfo(@TypeOf(storage)).pointer.child)) catch return true;
     return if (x >= y) x - y < bytes else y - x < @sizeOf(u32);
 }
-inline fn alias(value: *const u32, p: *const Direct) bool {
-    return overlap(value, @as([]const u8, std.mem.asBytes(p))) or overlap(value, p.slots);
+fn slotsOf(p: *const Direct) []Direct.Slot {
+    return p.slots[0..p.count];
 }
-inline fn insertDirect(p: *Direct, source: *u32) error{ AliasedStorage, Full }!Key {
+inline fn alias(value: *const u32, p: *const Direct) bool {
+    return overlap(value, @as([]const u8, std.mem.asBytes(p))) or overlap(value, slotsOf(p));
+}
+fn growDirect(p: *Direct) error{ OutOfMemory, LimitExceeded }!void {
+    @branchHint(.unlikely);
+    const at = try region.bump(&p.region, @sizeOf(Direct.Slot), @alignOf(Direct.Slot));
+    const slot: *Direct.Slot = @ptrFromInt(at); // safe: bump returned a committed slot's bytes, aligned
+    slot.* = .{};
+    p.free_head = p.count;
+    p.count += 1;
+}
+inline fn insertDirect(p: *Direct, source: *u32) error{ AliasedStorage, OutOfMemory, LimitExceeded }!Key {
     if (overlap(source, @as([]const u8, std.mem.asBytes(p)))) return error.AliasedStorage;
-    const slots = p.slots;
-    if (overlap(source, slots)) return error.AliasedStorage;
-    if (p.free_head == std.math.maxInt(usize)) return error.Full;
+    if (overlap(source, slotsOf(p))) return error.AliasedStorage;
+    if (p.free_head == std.math.maxInt(usize)) try growDirect(p);
     const i = p.free_head;
-    const slot = &slots[i];
+    const slot = &p.slots[i];
     p.free_head = slot.next;
     slot.value = source.*;
     source.* = undefined;
     slot.state = .live;
-    p.len += 1;
+    p.used += 1;
     return .{ .instance = p.instance, .index = i, .generation = slot.generation };
 }
 pub export fn baselineHandleInsert(p: *Direct, source: *u32) u64 {
@@ -86,7 +100,7 @@ inline fn removeDirect(p: *Direct, key: Key, out: *u32) error{ InvalidKey, Alias
     const slot = &p.slots[index];
     out.* = slot.value;
     slot.value = undefined;
-    p.len -= 1;
+    p.used -= 1;
     if (slot.generation == std.math.maxInt(u64)) {
         slot.state = .retired;
         p.retired += 1;
@@ -151,15 +165,19 @@ pub export fn wrapperInputDiagnostics(bytes: [*]const u8, len: usize, limit: usi
 }
 const Dense = a.handle.DenseSlotMap(u32, Tag);
 pub export fn baselineDenseSum(values: [*]const u32, len: usize) u32 {
+    // Hand-written dense storage: the values and how many are live.
+    var d: struct { values: [*]const u32, used: usize } = undefined;
+    d.values = values;
+    d.used = len;
     var sum: u32 = 0;
-    for (values[0..len]) |v| sum +%= v;
+    for (d.values[0..d.used]) |v| sum +%= v;
     return sum;
 }
 pub export fn wrapperDenseSum(values: [*]const u32, len: usize) u32 {
     // The owner descriptor is borrowed only for its live dense prefix.
     var d: Dense = undefined;
     // aegis: internal: the parity check builds a Dense from its fields to measure the wrapper loop against the baseline; nothing else holds it
-    d.values = @constCast(values[0..len]); // safe: only itemsConst is used; never writes
+    d.values = @constCast(values); // safe: only itemsConst is used; never writes
     d.used = len;
     var sum: u32 = 0;
     for (d.itemsConst()) |v| sum +%= v;

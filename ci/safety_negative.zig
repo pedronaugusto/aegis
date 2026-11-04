@@ -8,7 +8,7 @@ pub fn main(init: std.process.Init) !void {
     try dir.createDirPath(init.io, ".zig-cache/a8-a9-negative");
     const cases = .{
         .{ "const A = a.handle.Index(struct {}, u32); const B = a.handle.Index(struct {}, u32); const x: B = try A.from(0, 1); _ = x;", "expected type" },
-        .{ "const P = a.handle.Pool(u32, struct {}); const Q = a.handle.Pool(u32, struct {}); var p: P = undefined; const k: Q.Key = undefined; _ = try p.get(k);", "expected type" },
+        .{ "const P = a.handle.SlotPool(u32, struct {}, .{ .generation = u64 }); const Q = a.handle.SlotPool(u32, struct {}, .{ .generation = u64 }); var p: P = undefined; const k: Q.Key = undefined; _ = try p.get(k);", "expected type" },
         .{ "const U = a.input.Untrusted(u32); const Parser = struct { fn run(_: void, _: u32) error{Invalid}!bool { return true; } }; _ = try U.init(1).parse({}, Parser.run);", "distinct refined result" },
         .{ "const U = a.input.Untrusted(u32); const Parser = struct { fn run(_: void, x: u32) error{Invalid}!u32 { return x; } }; _ = try U.init(1).parse({}, Parser.run);", "distinct refined result" },
         .{ "const U = a.input.Untrusted(u32); const Parser = struct { fn run(_: void, x: u32) anyerror!struct { x: u32 } { return .{.x=x}; } }; _ = try U.init(1).parse({}, Parser.run);", "named error set" },

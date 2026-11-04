@@ -1,30 +1,43 @@
-//! Dense values with two-way slot links. Swap removal invalidates affected borrows.
+//! Dense values with two-way slot links, each part on a region of its own, so growth moves
+//! nothing. Swap removal moves the last value into the hole, and invalidates that value's borrows.
 const std = @import("std");
+const Region = @import("../Region.zig");
 const Domain = @import("Domain.zig");
-const maps = @import("slot_map.zig");
+const SlotPool = @import("slot_pool.zig").SlotPool;
 const move = @import("../move.zig");
 const overlap = @import("overlap.zig");
 pub fn DenseSlotMap(comptime T: type, comptime Tag: type) type {
     return struct {
         const Self = @This();
-        const Primary = maps.SlotMap(usize, Tag);
+        const Primary = SlotPool(usize, Tag, .{ .generation = u64 });
         pub const Key = Primary.Key;
-        pub const Options = Primary.Options;
+        /// The three regions a map grows on, each its own: the key slots, the values and the
+        /// values' keys.
+        pub const Regions = struct { slots: Region, values: Region, keys: Region };
         pub const InitError = Primary.InitError;
-        pub const ReserveError = Primary.ReserveError;
         pub const InsertError = Primary.InsertError;
         pub const KeyError = Primary.KeyError;
         primary: Primary,
-        values: []T,
-        keys: []Key,
+        /// Private: the regions the values and their keys grow on.
+        value_region: Region,
+        key_region: Region,
+        /// Private: the first value and the first value's key.
+        values: [*]T,
+        keys: [*]Key,
+        /// Private: the values and keys pushed so far.
+        value_room: usize = 0,
+        key_room: usize = 0,
+        /// Private: the live values, the first `used` of them.
         used: usize = 0,
-        pub fn init(gpa: std.mem.Allocator, instance: Domain.Instance, options: Options) InitError!Self {
-            var primary = try Primary.init(gpa, instance, options);
-            errdefer primary.deinit(ignore);
-            const values = try gpa.alloc(T, options.capacity);
-            errdefer gpa.free(values);
-            const keys = try gpa.alloc(Key, options.capacity);
-            return .{ .primary = primary, .values = values, .keys = keys };
+        /// The map owns `regions` from here on.
+        pub fn init(regions: Regions, instance: Domain.Instance) InitError!Self {
+            return .{
+                .primary = try Primary.init(regions.slots, instance),
+                .value_region = regions.values,
+                .key_region = regions.keys,
+                .values = @ptrFromInt(std.mem.alignForward(usize, regions.values.top, @alignOf(T))), // safe: the values start at the region's top, aligned as its pushes align them
+                .keys = @ptrFromInt(std.mem.alignForward(usize, regions.keys.top, @alignOf(Key))), // safe: the keys start at the region's top, aligned as its pushes align them
+            };
         }
         fn ignore(_: *usize) void {}
         pub fn items(self: *Self) []T {
@@ -36,30 +49,16 @@ pub fn DenseSlotMap(comptime T: type, comptime Tag: type) type {
         pub fn len(self: *const Self) usize {
             return self.used;
         }
-        pub fn reserve(self: *Self, count: usize) ReserveError!void {
-            if (count <= self.values.len and count <= self.primary.capacity()) return;
-            if (count > self.primary.max_capacity) return error.CapacityExceeded;
-            const next_count = @max(count, self.values.len);
-            const gpa = self.primary.gpa;
-            const values = try gpa.alloc(T, next_count);
-            errdefer gpa.free(values);
-            const keys = try gpa.alloc(Key, next_count);
-            errdefer gpa.free(keys);
-            try self.primary.reserve(count);
-            for (0..self.used) |i| move.intoPoisoning(T, &self.values[i], &values[i]);
-            @memcpy(keys[0..self.used], self.keys[0..self.used]);
-            gpa.free(self.values);
-            gpa.free(self.keys);
-            self.values = values;
-            self.keys = keys;
-        }
         pub fn insert(self: *Self, source: *T) InsertError!Key {
-            if (overlap.overlapsOwner(T, source, self) or overlap.overlaps(T, source, self.values)) return error.AliasedStorage;
-            if (self.used == self.values.len or self.primary.storage.free_head == std.math.maxInt(usize)) {
-                const old = self.primary.capacity();
-                if (old == self.primary.max_capacity) return error.Full;
-                const grown = std.math.add(usize, old, old / 2 + 1) catch self.primary.max_capacity;
-                try self.reserve(@min(grown, self.primary.max_capacity));
+            if (overlap.overlapsOwner(T, source, self) or overlap.overlaps(T, source, self.values[0..self.value_room])) return error.AliasedStorage;
+            // Room first, so a failure leaves the map as it was; room left over serves the next insert.
+            if (self.used == self.value_room) {
+                _ = try self.value_region.create(T);
+                self.value_room += 1;
+            }
+            if (self.used == self.key_room) {
+                _ = try self.key_region.create(Key);
+                self.key_room += 1;
             }
             var position = self.used;
             const key = try self.primary.insert(&position);
@@ -81,7 +80,7 @@ pub fn DenseSlotMap(comptime T: type, comptime Tag: type) type {
         }
         pub fn remove(self: *Self, key: Key, destination: *T) KeyError!void {
             if (!self.contains(key)) return error.InvalidKey;
-            if (overlap.overlapsOwner(T, destination, self) or overlap.overlaps(T, destination, self.values)) return error.AliasedStorage;
+            if (overlap.overlapsOwner(T, destination, self) or overlap.overlaps(T, destination, self.values[0..self.value_room])) return error.AliasedStorage;
             var position: usize = undefined;
             try self.primary.remove(key, &position);
             move.intoPoisoning(T, &self.values[position], destination);
@@ -102,10 +101,9 @@ pub fn DenseSlotMap(comptime T: type, comptime Tag: type) type {
         }
         pub fn deinit(self: *Self, comptime cleanup: fn (*T) void) void {
             self.clear(cleanup);
-            const gpa = self.primary.gpa;
             self.primary.deinit(ignore);
-            gpa.free(self.values);
-            gpa.free(self.keys);
+            self.value_region.deinit();
+            self.key_region.deinit();
             self.* = undefined;
         }
     };

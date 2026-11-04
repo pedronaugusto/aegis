@@ -52,6 +52,21 @@ pub const cases = [_]Case{
     .{ .module = "scope", .name = "ref-after-end", .when = .checked, .message = "scope used after it ended", .run = refAfterEnd },
     .{ .module = "scope", .name = "reborrow-expired", .when = .checked, .message = "scope reference used after its scope ended", .run = reborrowExpired },
     .{ .module = "scope", .name = "table-open", .when = .checked, .message = "scope table torn down with a scope still open", .run = tableOpen },
+    .{ .module = "Region", .name = "region-second-grower", .when = .checked, .message = "region pushed while a tail is open", .run = regionSecondGrower },
+    .{ .module = "Region", .name = "region-release-twice", .when = .checked, .message = "region mark released twice", .run = regionReleaseTwice },
+    .{ .module = "Region", .name = "region-release-outer", .when = .checked, .message = "region mark released twice", .run = regionReleaseOuter },
+    .{ .module = "Region", .name = "region-release-tail", .when = .checked, .message = "region released with a tail open", .run = regionReleaseTail },
+    .{ .module = "Region", .name = "region-tail-sealed", .when = .checked, .message = "region tail used after it was sealed", .run = regionTailSealed },
+    .{ .module = "handle", .name = "slot-free-twice", .when = .checked, .message = "slot freed twice", .run = slotFreeTwice },
+    .{ .module = "handle", .name = "slot-out-of-range", .when = .always, .message = "slot handle out of range", .run = slotOutOfRange },
+    .{ .module = "handle", .name = "run-free-twice", .when = .always, .message = "run freed twice", .run = runFreeTwice },
+    .{ .module = "Region", .name = "region-tail-shrink", .when = .always, .message = "region tail shrunk past its length", .run = regionTailShrink },
+    .{ .module = "flat", .name = "flat-wrong-variant", .when = .always, .message = "Flat union read as a variant it does not hold", .run = flatWrongVariant },
+    .{ .module = "flat", .name = "flat-element-past", .when = .always, .message = "Flat element past its slice", .run = flatElementPast },
+    .{ .module = "flat", .name = "flat-field-unset", .when = .always, .message = "Flat builder ended with a field unset", .run = flatFieldUnset },
+    .{ .module = "flat", .name = "flat-set-twice", .when = .always, .message = "Flat field set twice", .run = flatSetTwice },
+    .{ .module = "flat", .name = "flat-put-past", .when = .always, .message = "Flat element put past what was appended", .run = flatPutPast },
+    .{ .module = "flat", .name = "flat-inner-open", .when = .always, .message = "Flat builder used while a part inside it is open", .run = flatInnerOpen },
 };
 
 /// One line, the message, and a failing exit on every host: no stack trace to symbolize, so
@@ -324,4 +339,151 @@ fn tableOpen(_: std.process.Init) !void {
     // The scope stays open: the teardown below is the violation.
     _ = try open.open();
     open.deinit();
+}
+
+fn region() !a.Region {
+    return a.Region.reserve(.init(1 << 20));
+}
+
+fn regionSecondGrower(_: std.process.Init) !void {
+    var r = try region();
+    defer r.deinit();
+    var items = try r.tail(u64);
+    _ = try items.append(1);
+    std.mem.doNotOptimizeAway(try r.create(u64));
+}
+
+fn regionReleaseTwice(_: std.process.Init) !void {
+    var r = try region();
+    defer r.deinit();
+    const m = r.mark();
+    _ = try r.push(u8, 16);
+    r.release(m);
+    r.release(m);
+}
+
+fn regionReleaseOuter(_: std.process.Init) !void {
+    var r = try region();
+    defer r.deinit();
+    const outer = r.mark();
+    _ = try r.push(u8, 16);
+    const inner = r.mark();
+    r.release(outer);
+    _ = try r.push(u8, 64);
+    r.release(inner);
+}
+
+fn regionReleaseTail(_: std.process.Init) !void {
+    var r = try region();
+    defer r.deinit();
+    const m = r.mark();
+    var items = try r.tail(u64);
+    _ = try items.append(1);
+    r.release(m);
+}
+
+fn regionTailSealed(_: std.process.Init) !void {
+    var r = try region();
+    defer r.deinit();
+    var items = try r.tail(u64);
+    _ = items.seal();
+    std.mem.doNotOptimizeAway(try items.append(2));
+}
+
+fn regionTailShrink(_: std.process.Init) !void {
+    var r = try region();
+    defer r.deinit();
+    var items = try r.tail(u64);
+    _ = try items.append(1);
+    items.shrink(2);
+}
+
+const Slots = a.handle.SlotPool(u64, struct {}, .{});
+
+fn slotFreeTwice(_: std.process.Init) !void {
+    var pool = Slots.init(try region());
+    defer pool.deinit();
+    const h = try pool.alloc(1);
+    pool.free(h);
+    pool.free(h);
+}
+
+fn slotOutOfRange(_: std.process.Init) !void {
+    var pool = Slots.init(try region());
+    defer pool.deinit();
+    _ = try pool.alloc(1);
+    std.mem.doNotOptimizeAway(pool.get(@fromBackingInt(1)).*);
+}
+
+fn runFreeTwice(_: std.process.Init) !void {
+    var pool = a.handle.RunPool(u64, struct {}).init(try region(), try region());
+    defer pool.deinit();
+    const first = try pool.alloc(4);
+    _ = try pool.alloc(4);
+    pool.free(first);
+    pool.free(first);
+}
+
+const FlatPick = union(enum) { n: u32, s: []const u8 };
+const FlatPair = struct { a: u32, s: []const u8 };
+
+fn flatWrongVariant(_: std.process.Init) !void {
+    var buffer: [64]u8 align(a.flat.alignment) = undefined;
+    const n = try a.flat.Flat(FlatPick).write(.{ .n = 1 }, &buffer);
+    std.mem.doNotOptimizeAway(a.flat.Flat(FlatPick).view(buffer[0..n]).get(.s).len);
+}
+
+fn flatElementPast(_: std.process.Init) !void {
+    var buffer: [64]u8 align(a.flat.alignment) = undefined;
+    const n = try a.flat.Flat([]const u16).write(&.{ 1, 2 }, &buffer);
+    std.mem.doNotOptimizeAway(a.flat.Flat([]const u16).view(buffer[0..n]).at(2));
+}
+
+/// A root builder on an image in its own region; `run` gets the root.
+fn flatBuild(comptime run: fn (*a.flat.Flat(FlatPair).Builder) anyerror!void) !void {
+    var r = try region();
+    defer r.deinit();
+    var tail = try r.tail(u8);
+    var image = try a.flat.Image.init(&tail, .init(4));
+    var root = try a.flat.Flat(FlatPair).builder(&image);
+    try run(&root);
+}
+
+fn flatFieldUnset(_: std.process.Init) !void {
+    try flatBuild(struct {
+        fn run(root: *a.flat.Flat(FlatPair).Builder) !void {
+            try root.set(.a, 1);
+            root.end();
+        }
+    }.run);
+}
+
+fn flatSetTwice(_: std.process.Init) !void {
+    try flatBuild(struct {
+        fn run(root: *a.flat.Flat(FlatPair).Builder) !void {
+            try root.set(.a, 1);
+            try root.set(.a, 2);
+        }
+    }.run);
+}
+
+fn flatInnerOpen(_: std.process.Init) !void {
+    try flatBuild(struct {
+        fn run(root: *a.flat.Flat(FlatPair).Builder) !void {
+            var s = try root.begin(.s);
+            try s.append('x');
+            try root.set(.a, 1);
+        }
+    }.run);
+}
+
+fn flatPutPast(_: std.process.Init) !void {
+    var r = try region();
+    defer r.deinit();
+    var tail = try r.tail(u8);
+    var image = try a.flat.Image.init(&tail, .init(4));
+    var root = try a.flat.Flat(FlatPair).builder(&image);
+    var s = try root.begin(.s);
+    try s.append('x');
+    s.put(1, 'y');
 }

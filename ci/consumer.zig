@@ -16,9 +16,9 @@ pub fn main() !void {
     const bytes = try aegis.units.Bits(u64).fromRaw(identifier.raw()).toBytesRounded(.up);
     aegis.assert.invariant(bytes.eql(.fromRaw(8)), "checked byte conversion");
     var domain = aegis.handle.Domain.init(0x1234);
-    const Pool = aegis.handle.Pool(u32, struct {});
-    var slots: [1]Pool.Slot = undefined;
-    var pool = try Pool.initBuffer(&slots, try domain.issue());
+    const Pool = aegis.handle.SlotPool(u32, struct {}, .{ .generation = u64 });
+    var slots: [@sizeOf(Pool.Slot)]u8 align(@alignOf(Pool.Slot)) = undefined;
+    var pool = try Pool.init(.fixed(&slots), try domain.issue());
     defer pool.deinit(ignore);
     var item: u32 = 5;
     const key = try pool.insert(&item);
@@ -45,9 +45,10 @@ const Frame = struct {
 // Every namespace is reachable from the one module a consumer imports.
 comptime {
     _ = .{
-        aegis.secret.Choice, aegis.Guarded,         aegis.Condition,   aegis.Once,
-        aegis.int.Checked,   aegis.id.Id,           aegis.units.Bytes, aegis.assert.invariant,
-        aegis.handle.Pool,   aegis.input.Untrusted, aegis.err.Context, aegis.bounded.Array,
-        aegis.own.Owned,     aegis.state.Machine,   aegis.scope.Table, aegis.scope.Ref,
+        aegis.secret.Choice,   aegis.Guarded,         aegis.Condition,   aegis.Once,
+        aegis.int.Checked,     aegis.id.Id,           aegis.units.Bytes, aegis.assert.invariant,
+        aegis.handle.SlotPool, aegis.input.Untrusted, aegis.err.Context, aegis.bounded.Array,
+        aegis.own.Owned,       aegis.state.Machine,   aegis.scope.Table, aegis.scope.Ref,
+        aegis.Region,
     };
 }

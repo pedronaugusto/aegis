@@ -250,10 +250,16 @@ const gaps_parity = @import("gaps_parity.zig");
 const state_parity = @import("state_parity.zig");
 const scope_parity = @import("scope_parity.zig");
 const a11_parity = @import("a11_parity.zig");
+const region_parity = @import("region_parity.zig");
+const pool_parity = @import("pool_parity.zig");
+const flat_parity = @import("flat_parity.zig");
 comptime {
     _ = a67_parity;
     _ = gaps_parity;
     _ = state_parity;
     _ = scope_parity;
     _ = a11_parity;
+    _ = region_parity;
+    _ = pool_parity;
+    _ = flat_parity;
 }

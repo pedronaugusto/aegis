@@ -8,8 +8,11 @@ const gaps_names = [_][]const u8{ "gaps_try_acquire", "gaps_teardown", "gaps_laz
 const state_names = [_][]const u8{ "state_next", "state_next_wide", "state_next_switch", "state_next_wide_switch", "state_terminal", "state_step", "state_plan_commit", "state_transition", "state_transition_with", "state_take", "state_carry", "state_carry_plan_commit" };
 const scope_names = [_][]const u8{ "scope_get", "scope_get_slice", "scope_make", "scope_reborrow", "scope_open", "scope_end", "scope_cycle" };
 const a11_names = [_][]const u8{ "a11_spin_rw_read", "a11_spin_rw_write", "a11_timing_span", "a11_scrub_stack" };
+const region_names = [_][]const u8{ "region_create", "region_push", "region_append", "region_mark", "region_release", "region_scratch" };
+const pool_names = [_][]const u8{ "pool_alloc", "pool_free", "pool_get", "run_slice" };
+const flat_names = [_][]const u8{ "flat_get", "flat_nested" };
 /// Every pair this check compares, by the name its exports are spelled from.
-pub const names = owner_names ++ numeric_names ++ bytes_names ++ a67_names ++ gaps_names ++ state_names ++ scope_names ++ a11_names;
+pub const names = owner_names ++ numeric_names ++ bytes_names ++ a67_names ++ gaps_names ++ state_names ++ scope_names ++ a11_names ++ region_names ++ pool_names ++ flat_names;
 pub fn main(init: std.process.Init) !void {
     const a = init.arena.allocator();
     const args = try init.minimal.args.toSlice(a);
@@ -94,7 +97,7 @@ fn owner(name: []const u8) bool {
     return false;
 }
 fn reported(name: []const u8) bool {
-    inline for (.{ "a67_", "gaps_", "state_", "scope_", "a11_" }) |prefix| if (std.mem.startsWith(u8, name, prefix)) return true;
+    inline for (.{ "a67_", "gaps_", "state_", "scope_", "a11_", "region_", "pool_", "run_", "flat_" }) |prefix| if (std.mem.startsWith(u8, name, prefix)) return true;
     return false;
 }
 pub fn alias(a: std.mem.Allocator, ir: []const u8, name: []const u8) ![]const u8 {
@@ -306,12 +309,15 @@ fn normalized(a: std.mem.Allocator, text: []const u8, name: []const u8, target: 
     return output.written();
 }
 
-/// The function symbol an operand names, when this assembly defines it, or null.
+/// The function symbol an operand names, when this assembly defines it, or null. A local
+/// function (`.L` and a name, as a generic's instance is) is returned without its `.L`, as
+/// `normalized` finds it.
 fn callee(a: std.mem.Allocator, text: []const u8, token: []const u8) !?[]const u8 {
     const symbol = if (std.mem.endsWith(u8, token, "@PLT")) token[0 .. token.len - 4] else token;
-    if (symbol.len == 0 or !(std.ascii.isAlphabetic(symbol[0]) or symbol[0] == '_')) return null;
+    const name = if (std.mem.startsWith(u8, symbol, ".L")) symbol[2..] else symbol;
+    if (name.len == 0 or !(std.ascii.isAlphabetic(name[0]) or name[0] == '_')) return null;
     for ([_][]const u8{ "@function", "%function" }) |kind| {
-        if (std.mem.find(u8, text, try a.print(".type\t{s},{s}\n", .{ symbol, kind })) != null) return symbol;
+        if (std.mem.find(u8, text, try a.print(".type\t{s},{s}\n", .{ symbol, kind })) != null) return name;
     }
     return null;
 }

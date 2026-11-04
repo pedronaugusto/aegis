@@ -40,7 +40,10 @@ const Frame = struct {
 fn cleanup(_: *u64) void {}
 fn cleanupIo(_: *u64, _: std.Io) void {}
 const Ranks = a.Order(&.{.{ .name = "root" }});
-const Pool = a.handle.Pool(u64, Tag);
+const Keys = a.handle.SlotPool(u64, Tag, .{ .generation = u64 });
+const Slots = a.handle.SlotPool(u64, Tag, .{});
+const FlatRecord = struct { id: u32, size: u64, name: []const u8 };
+const DirectRegion = struct { base: [*]u8, top: usize, committed_end: usize, reservation_end: usize };
 
 pub const rows = [_]Row{
     .{ .module = "Secret", .label = "Secret([32]u8)", .aegis = a.Secret([32]u8), .direct = [32]u8, .equal = .every },
@@ -91,7 +94,19 @@ pub const rows = [_]Row{
     .{ .module = "scope", .label = "scope.Ref(Brand, *u64)", .aegis = a.scope.Ref(Tag, *u64), .direct = *u64, .equal = .unchecked },
     .{ .module = "scope", .label = "scope.Ref(Brand, []u8)", .aegis = a.scope.Ref(Tag, []u8), .direct = []u8, .equal = .unchecked },
     .{ .module = "scope", .label = "scope.Table(Brand)", .aegis = a.scope.Table(Tag), .direct = void, .equal = .unchecked },
-    .{ .module = "handle", .label = "handle.Pool(u64, Tag).Key", .aegis = Pool.Key, .direct = struct { instance: struct { namespace: u128, serial: u64 }, index: usize, generation: u64 }, .equal = .every },
+    .{ .module = "Region", .label = "Region", .aegis = a.Region, .direct = DirectRegion, .equal = .unchecked },
+    .{ .module = "Region", .label = "Region.Mark", .aegis = a.Region.Mark, .direct = usize, .equal = .unchecked },
+    .{ .module = "Region", .label = "Region.Tail(u64)", .aegis = a.Region.Tail(u64), .direct = struct { region: *anyopaque, start: usize }, .equal = .unchecked },
+    .{ .module = "handle", .label = "handle.SlotPool(u64, Tag, .{})", .aegis = Slots, .direct = struct { region: DirectRegion, slots: [*]u64, count: u32, free_head: u32, used: u32 }, .equal = .unchecked },
+    .{ .module = "flat", .label = "flat.Flat(FlatRecord).View", .aegis = a.flat.Flat(FlatRecord).View, .direct = [*]const u8, .equal = .every },
+    .{ .module = "flat", .label = "flat.Flat(FlatRecord).Builder", .aegis = a.flat.Flat(FlatRecord).Builder, .direct = struct { image: *anyopaque, at: usize, depth: usize, done: u64 }, .equal = .every },
+    .{ .module = "flat", .label = "flat.Image", .aegis = a.flat.Image, .direct = struct { tail: *anyopaque, start: usize, open: usize, depth: usize }, .equal = .every },
+    .{ .module = "handle", .label = "handle.SlotPool(u64, Tag, .{}).Slot", .aegis = Slots.Slot, .direct = struct { value: u64, next: u32 }, .equal = .unchecked },
+    .{ .module = "handle", .label = "handle.SlotPool(u64, Tag, .{}).Handle", .aegis = Slots.Handle, .direct = u32, .equal = .every },
+    .{ .module = "handle", .label = "handle.RunPool(u64, Tag).Run", .aegis = a.handle.RunPool(u64, Tag).Run, .direct = struct { start: u32, len: u32 }, .equal = .every },
+    .{ .module = "handle", .label = "handle.OptionalIndex(Tag, u32)", .aegis = a.handle.OptionalIndex(Tag, u32), .direct = u32, .equal = .every },
+    .{ .module = "handle", .label = "handle.Offset(Tag, u32)", .aegis = a.handle.Offset(Tag, u32), .direct = u32, .equal = .every },
+    .{ .module = "handle", .label = "handle.SlotPool(u64, Tag, .{ .generation = u64 }).Key", .aegis = Keys.Key, .direct = struct { instance: struct { namespace: u128, serial: u64 }, index: usize, generation: u64 }, .equal = .every },
     .{ .module = "handle", .label = "handle.Index(Tag, u32)", .aegis = a.handle.Index(Tag, u32), .direct = u32, .equal = .every },
     .{ .module = "input", .label = "input.Untrusted([]const u8)", .aegis = a.input.Untrusted([]const u8), .direct = []const u8, .equal = .every },
     .{ .module = "input", .label = "input.Untrusted(u32)", .aegis = a.input.Untrusted(u32), .direct = u32, .equal = .every },

@@ -13,13 +13,25 @@ fn Owner(comptime wrapped: bool) type {
 fn Diagnostic(comptime wrapped: bool) type {
     return if (wrapped) c.Context else c.DirectContext;
 }
-fn slotStorage(comptime wrapped: bool, slots: []Owner(wrapped).Slot) Owner(wrapped) {
-    for (slots, 0..) |*slot, i| slot.* = .{ .state = .live, .value = @intCast(i) }; // safe: benchmark capacity is 256
-    return .{ .slots = slots, .instance = .{ .namespace = 17, .serial = 1 }, .free_head = std.math.maxInt(usize), .len = slots.len };
+/// An owner on a fixed region over `slots`, every slot filled through its own insert, so slot
+/// `i` holds `i` at generation 1.
+fn filled(comptime wrapped: bool, slots: []Owner(wrapped).Slot) Owner(wrapped) {
+    const bytes = std.mem.sliceAsBytes(slots);
+    const instance: @FieldType(Owner(wrapped), "instance") = .{ .namespace = 17, .serial = 1 };
+    var owner: Owner(wrapped) = if (wrapped)
+        c.Pool.init(.fixed(bytes), instance) catch |e| @panic(@errorName(e))
+    else
+        .{ .region = .{ .base = bytes.ptr, .top = @intFromPtr(bytes.ptr), .committed_end = @intFromPtr(bytes.ptr) + bytes.len, .reservation_end = 0 }, .slots = slots.ptr, .instance = instance };
+    for (0..slots.len) |i| {
+        var value: u32 = @intCast(i); // safe: benchmark capacity is 256
+        const generation = if (wrapped) c.wrapperHandleInsert(&owner, &value) else c.baselineHandleInsert(&owner, &value);
+        if (generation != 1) @panic("benchmark owner not filled");
+    }
+    return owner;
 }
 noinline fn measure(comptime name: []const u8, comptime wrapped: bool, io: std.Io, rounds: usize) f64 {
     var slots: [256]Owner(wrapped).Slot = undefined;
-    var owner = slotStorage(wrapped, &slots);
+    var owner = filled(wrapped, &slots);
     var keys: [256]c.Key = undefined;
     for (&keys, 0..) |*key, i| key.* = .{ .instance = owner.instance, .index = i, .generation = 1 };
     var values: [256]u32 = undefined;

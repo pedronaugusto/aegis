@@ -30,3 +30,21 @@ pub fn Index(comptime Tag: type, comptime Repr: type) type {
         }
     };
 }
+
+/// A position of `Index(Tag, Repr)` or none, in the same width: biased by one, so none is zero.
+pub fn OptionalIndex(comptime Tag: type, comptime Repr: type) type {
+    return enum(Repr) {
+        none = 0,
+        _,
+        const Self = @This();
+        /// A position at the type's largest value has no room for the bias, and stops in every build.
+        pub inline fn some(position: Index(Tag, Repr)) Self {
+            if (position.raw() == std.math.maxInt(Repr)) @panic("index past its optional's range");
+            return @fromBackingInt(position.raw() + 1);
+        }
+        pub inline fn unwrap(self: Self) ?Index(Tag, Repr) {
+            if (self == .none) return null;
+            return @fromBackingInt(@backingInt(self) - 1);
+        }
+    };
+}

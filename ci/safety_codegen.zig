@@ -18,6 +18,8 @@ pub fn main(init: std.process.Init) !void {
             var argv: std.ArrayList([]const u8) = .empty;
             try argv.appendSlice(arena, &.{ args[1], "build-obj", try arena.print("-O{s}", .{mode}), "-target", target, "-mcpu=baseline", "-fllvm", "-fstrip", "--dep", "aegis", "-Mroot=ci/safety_parity.zig", "-Maegis=src/root.zig", try arena.print("-femit-bin={s}.o", .{stem}) });
             if (paired) try argv.appendSlice(arena, &.{ try arena.print("-femit-llvm-ir={s}.ll", .{stem}), try arena.print("-femit-asm={s}.s", .{stem}) });
+            // A macOS program reaches the system through libSystem, as a region's commit does.
+            if (std.mem.endsWith(u8, target, "macos")) try argv.append(arena, "-lc");
             const result = try std.process.run(init.gpa, init.io, .{ .argv = argv.items, .stderr_limit = .limited(32768) });
             defer init.gpa.free(result.stdout);
             defer init.gpa.free(result.stderr);

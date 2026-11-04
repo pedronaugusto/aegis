@@ -190,6 +190,15 @@ pub fn dev(b: *std.Build, tools: type) void {
     run_safety_negative.setCwd(p.path("."));
     safety_check.dependOn(&run_safety_negative.step);
     portableProfiles(b, p, b.step("check-a67", "Compile the A6/A7 values for the portable profiles"), "ci/a67_values.zig", &.{ .safe, .fast });
+    // Flat's reads, checks and writes where its accessors swap: a 64-bit and a 32-bit big-endian target.
+    const flat_step = b.step("check-flat-profiles", "Compile Flat's reads, checks and writes for the big-endian profiles");
+    for ([_]std.Target.Query{
+        .{ .cpu_arch = .s390x, .os_tag = .linux, .abi = .gnu },
+        .{ .cpu_arch = .powerpc, .os_tag = .linux, .abi = .gnu },
+    }) |query| {
+        const big_endian = b.resolveTargetQuery(query);
+        for ([_]std.lang.Optimize{ .debug, .safe, .fast }) |mode| flat_step.dependOn(&b.addObject(.{ .name = "flat_profiles", .root_module = contractModule(b, p, "ci/flat_profiles.zig", big_endian, mode) }).step);
+    }
     const a10 = b.addExecutable(.{ .name = "aegis-a10-contracts", .root_module = b.createModule(.{ .root_source_file = p.path("ci/a10_check.zig"), .target = b.graph.host, .optimize = .safe }) });
     const run_a10 = b.addRunArtifact(a10);
     run_a10.addArg(b.graph.zig_exe);
@@ -244,6 +253,8 @@ const examples = [_][]const u8{
     "examples/own.zig",
     "examples/state.zig",
     "examples/scope.zig",
+    "examples/region.zig",
+    "examples/flat.zig",
     "examples/handle.zig",
     "examples/input.zig",
     "examples/err.zig",
@@ -291,7 +302,7 @@ fn contractModule(b: *std.Build, p: *std.Build, source: []const u8, target: std.
 // one hosted job, and `contracts` runs them all.
 fn contractGroups(b: *std.Build) void {
     const groups = [_]struct { name: []const u8, description: []const u8, steps: []const []const u8 }{
-        .{ .name = "contracts-values", .description = "Run the value and owner contracts: paired kernels, layouts, the ABI and the portable profiles", .steps = &.{ "check-negative", "check-parity", "check-contracts", "check-secret-bytes", "check-layouts" } },
+        .{ .name = "contracts-values", .description = "Run the value and owner contracts: paired kernels, layouts, the ABI and the portable profiles", .steps = &.{ "check-negative", "check-parity", "check-contracts", "check-secret-bytes", "check-layouts", "check-flat-profiles" } },
         .{ .name = "contracts-choices", .description = "Run the A5 choice contracts", .steps = &.{ "check-choices", "check-choices-negative" } },
         .{ .name = "contracts-published", .description = "Run the mode matrix and the published-module gates", .steps = &.{ "check-modes", "check-a67", "check-handles-input", "check-a10", "check-a12", "check-consumer" } },
     };

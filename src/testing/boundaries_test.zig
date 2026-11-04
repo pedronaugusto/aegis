@@ -76,10 +76,10 @@ const Completion = struct { request: u64, done: bool = false };
 fn ignoreCompletion(_: *Completion) void {}
 test "A8 signing completion fixture rejects late stale work and independent instances" {
     var domain = a.handle.Domain.init(0xc103);
-    const Map = a.handle.SlotMap(Completion, WorkTag);
-    var work = try Map.init(t.allocator, try domain.issue(), .{ .capacity = 1 });
+    const Map = a.handle.SlotPool(Completion, WorkTag, .{ .generation = u64 });
+    var work = try Map.init(try a.Region.reserve(.init(1 << 16)), try domain.issue());
     defer work.deinit(ignoreCompletion);
-    var other = try Map.init(t.allocator, try domain.issue(), .{ .capacity = 1 });
+    var other = try Map.init(try a.Region.reserve(.init(1 << 16)), try domain.issue());
     defer other.deinit(ignoreCompletion);
     var request: Completion = .{ .request = 12 };
     const late_event = try work.insert(&request);
