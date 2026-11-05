@@ -251,3 +251,21 @@ test "parts: a nested struct's counts are the counts its parent holds for it" {
     const engine: parts.Counts(Engine) = stream_counts.engine;
     try t.expectEqual(@as(usize, 100), engine.seqs);
 }
+
+fn Tables(comptime pairs: bool) type {
+    return struct { hash2: if (pairs) []u32 else void, hash4: []u32 };
+}
+
+test "parts: a part absent at compile time takes no bytes and no count" {
+    const With = parts.Block(Tables(true));
+    const Without = parts.Block(Tables(false));
+    const with = With.plan(.{ .hash2 = 1024, .hash4 = 16 });
+    const without = Without.plan(.{ .hash4 = 16 });
+    try t.expectEqual(@as(usize, 1040 * 4), with.size().raw());
+    try t.expectEqual(@as(usize, 16 * 4), without.size().raw());
+    const block = try without.alloc(t.allocator);
+    defer t.allocator.free(block.bytes());
+    const p = block.parts();
+    try t.expectEqual(@as(usize, 16), p.hash4.len);
+    try t.expectEqual({}, p.hash2);
+}

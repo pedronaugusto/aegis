@@ -11,7 +11,8 @@
 //! - a struct `S` of parts, nested: its parts follow one another, or, when `S` declares
 //!   `pub const arrangement: aegis.parts.Arrangement = .overlap`, all start at one place
 //!   (alternatives of which one is in use at a time), and the nest is as long as its longest;
-//! - `Repeat(S)`: `len` copies of `S`, each counted by the same `each`.
+//! - `Repeat(S)`: `len` copies of `S`, each counted by the same `each`;
+//! - `void`: a part absent at compile time (a field typed `if (c) []T else void`), no bytes.
 //!
 //! Every part starts at its type's alignment, a nested struct at the greatest of its parts', so
 //! a nested struct's size never depends on where it lies. The items are uninitialized; nothing in
@@ -124,7 +125,7 @@ pub fn Repeat(comptime S: type) type {
     };
 }
 
-const Kind = enum { slice, one, optional, nested, repeat };
+const Kind = enum { slice, one, optional, nested, repeat, absent };
 
 fn kindOf(comptime F: type) Kind {
     return switch (@typeInfo(F)) {
@@ -140,10 +141,12 @@ fn kindOf(comptime F: type) Kind {
         .optional => |o| switch (kindOf(o.child)) {
             .optional => @compileError("a part is optional once: " ++ @typeName(F)),
             .repeat => @compileError("an absent Repeat is one of no copies: " ++ @typeName(F)),
+            .absent => @compileError("an optional part of no bytes holds nothing: " ++ @typeName(F)),
             else => .optional,
         },
+        .void => .absent,
         .@"struct" => if (@hasDecl(F, "Element") and @TypeOf(F.Element) == type and F == Repeat(F.Element)) .repeat else .nested,
-        else => @compileError("a part is a slice, a pointer, an optional one, a struct of parts or a Repeat, not " ++ @typeName(F)),
+        else => @compileError("a part is a slice, a pointer, an optional one, a struct of parts, a Repeat or void or a Repeat, not " ++ @typeName(F)),
     };
 }
 
@@ -156,6 +159,7 @@ fn CountOf(comptime F: type) type {
     return switch (kindOf(F)) {
         .slice => usize,
         .one => void,
+        .absent => void,
         .optional => {
             const C = @typeInfo(F).optional.child;
             return if (CountOf(C) == void) bool else ?CountOf(C);
@@ -177,6 +181,7 @@ fn CountOf(comptime F: type) type {
 fn alignOf(comptime F: type) usize {
     return switch (kindOf(F)) {
         .slice, .one => @typeInfo(F).pointer.attrs.@"align" orelse @alignOf(@typeInfo(F).pointer.child),
+        .absent => 1,
         .optional => alignOf(@typeInfo(F).optional.child),
         .repeat => alignOf(F.Element),
         .nested => {
@@ -215,6 +220,7 @@ fn advance(comptime mode: Mode, at: usize, n: usize, comptime size: usize) usize
 /// The part `F` at `at`, counted by `count`; `at` moves past it.
 inline fn walk(comptime mode: Mode, comptime F: type, memory: Memory(mode), at: *usize, count: CountOf(F)) Out(mode, F) {
     switch (comptime kindOf(F)) {
+        .absent => return,
         .slice => {
             const p = @typeInfo(F).pointer;
             return take(mode, p.child, comptime alignOf(F), memory, at, count);
