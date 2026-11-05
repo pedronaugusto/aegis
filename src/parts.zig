@@ -11,6 +11,9 @@
 //! - a struct `S` of parts, nested: its parts follow one another, or, when `S` declares
 //!   `pub const arrangement: aegis.parts.Arrangement = .overlap`, all start at one place
 //!   (alternatives of which one is in use at a time), and the nest is as long as its longest;
+//!   every alternative is handed out over the same bytes, so an alternative holds only types each
+//!   bit pattern of which is a value (integers, floats, and arrays, vectors and extern or packed
+//!   structs of them), and reading bytes another alternative wrote is never illegal behavior;
 //! - `Repeat(S)`: `len` copies of `S`, each counted by the same `each`;
 //! - `void`: a part absent at compile time (a field typed `if (c) []T else void`), no bytes.
 //! - `Given(T)`: no bytes, a value given with the counts and handed back with the parts, so an
@@ -23,6 +26,7 @@
 const std = @import("std");
 const assert = @import("assert.zig");
 const units = @import("units.zig");
+const measure = @import("measure.zig");
 const Allocator = std.mem.Allocator;
 
 /// How a nested struct of parts lies: one part after another, or all at its start.
@@ -30,6 +34,8 @@ pub const Arrangement = enum { sequence, overlap };
 
 pub fn Block(comptime Parts: type) type {
     if (comptime kindOf(Parts) != .nested) @compileError("parts.Block lays out a struct of parts, not " ++ @typeName(Parts));
+    // Every part is checked when the type is made, not when its counts are first named.
+    comptime _ = CountOf(Parts);
     return struct {
         const Self = @This();
 
@@ -50,14 +56,15 @@ pub fn Block(comptime Parts: type) type {
             /// Private: the bytes the parts take, or maxInt(usize) when they pass the address space.
             end: usize,
 
-            /// The bytes a block of this plan takes; maxInt(usize) when they pass the address
-            /// space, which no block holds.
-            pub fn size(p: Plan) units.Bytes(usize) {
+            /// The bytes a block of this plan takes; `Overflow` when they pass the address space,
+            /// where no block holds them (`alloc` is then `OutOfMemory`, `fit` `BufferTooSmall`).
+            pub fn size(p: Plan) error{Overflow}!units.Bytes(usize) {
+                if (p.end == M.limit) return error.Overflow;
                 return .fromRaw(p.end);
             }
             /// A block from `gpa`, of exactly the plan's size; the caller frees `bytes()`.
             pub fn alloc(p: Plan, gpa: Allocator) Allocator.Error!Self {
-                if (p.end == std.math.maxInt(usize)) return error.OutOfMemory;
+                if (p.end == M.limit) return error.OutOfMemory;
                 const memory = try gpa.alignedAlloc(u8, comptime .fromByteUnits(alignment), p.end);
                 return .{ .memory = memory, .counts = p.counts };
             }
@@ -164,7 +171,7 @@ fn kindOf(comptime F: type) Kind {
             .given
         else
             .nested,
-        else => @compileError("a part is a slice, a pointer, an optional one, a struct of parts, a Repeat or void or a Repeat, not " ++ @typeName(F)),
+        else => @compileError("a part is a slice, a pointer, an optional one, a struct of parts, a Repeat, a Given or void, not " ++ @typeName(F)),
     };
 }
 
@@ -186,6 +193,7 @@ fn CountOf(comptime F: type) type {
         .repeat => F.Counts,
         .nested => {
             const s = @typeInfo(F).@"struct";
+            if (arrangementOf(F) == .overlap) for (s.field_types) |ft| checkAlternative(ft);
             var types: [s.field_names.len]type = undefined;
             var attrs: [s.field_names.len]std.lang.Type.Struct.FieldAttributes = undefined;
             for (s.field_types, 0..) |ft, i| {
@@ -195,6 +203,31 @@ fn CountOf(comptime F: type) type {
             return @Struct(.auto, null, s.field_names, &types, &attrs);
         },
     };
+}
+
+/// An overlap's alternatives share their bytes: each holds only items every bit pattern of which
+/// is a value, so reading what another alternative wrote is never illegal behavior.
+fn checkAlternative(comptime F: type) void {
+    switch (kindOf(F)) {
+        .slice, .one => checkEveryPattern(@typeInfo(F).pointer.child, F),
+        .optional => checkAlternative(@typeInfo(F).optional.child),
+        .repeat => checkAlternative(F.Element),
+        .nested => for (@typeInfo(F).@"struct".field_types) |ft| checkAlternative(ft),
+        .absent, .given => {},
+    }
+}
+
+fn checkEveryPattern(comptime T: type, comptime Part: type) void {
+    switch (@typeInfo(T)) {
+        .int, .float => {},
+        .array => |a| checkEveryPattern(a.child, Part),
+        .vector => |v| checkEveryPattern(v.child, Part),
+        .@"struct" => |s| {
+            if (s.layout == .auto) @compileError("an overlap alternative holds only items every bit pattern of which is a value; " ++ @typeName(T) ++ " in " ++ @typeName(Part) ++ " is an auto-layout struct, whose padding and fields are not");
+            for (s.field_types) |ft| checkEveryPattern(ft, Part);
+        },
+        else => @compileError("an overlap alternative holds only items every bit pattern of which is a value (integers, floats, and arrays, vectors and extern or packed structs of them); " ++ @typeName(T) ++ " in " ++ @typeName(Part) ++ " is not"),
+    }
 }
 
 /// A part's alignment, worked out once per type: a type-returning function is cached, so a
@@ -238,16 +271,17 @@ fn Memory(comptime mode: Mode) type {
     return if (mode == .place) []u8 else void;
 }
 
+const M = measure.Measure(usize, std.math.maxInt(usize));
+
 fn alignUp(comptime mode: Mode, at: usize, comptime a: usize) usize {
     if (mode == .place) return std.mem.alignForward(usize, at, a);
-    if (at > std.math.maxInt(usize) - (a - 1)) return std.math.maxInt(usize);
-    return std.mem.alignForward(usize, at, a);
+    return M.aligned(at, a);
 }
 
 fn advance(comptime mode: Mode, at: usize, n: usize, comptime size: usize) usize {
     if (mode == .place) return at + n * size;
     // A byte's count is its size: LLVM keeps a saturating multiply by one.
-    return if (size == 1) at +| n else at +| (n *| size);
+    return if (size == 1) M.add(at, n) else M.add(at, M.times(n, size));
 }
 
 /// The part `F` at `at`, counted by `count`; `at` moves past it.
@@ -276,7 +310,7 @@ inline fn walk(comptime mode: Mode, comptime F: type, memory: Memory(mode), at: 
             walk(.measure, S, {}, &one, count.each);
             const stride = alignUp(.measure, one, comptime alignOf(S));
             const start = alignUp(mode, at.*, comptime alignOf(S));
-            at.* = if (mode == .place) start + count.len * stride else start +| (count.len *| stride);
+            at.* = if (mode == .place) start + count.len * stride else M.add(start, M.times(count.len, stride));
             if (mode == .place) return .{ .memory = memory[start..at.*], .stride = stride, .count = count.len, .each = count.each } else return;
         },
         .nested => {

@@ -12,6 +12,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
 const Region = @import("Region.zig");
+const measure = @import("measure.zig");
 const bounded = @import("bounded.zig");
 const input = @import("input.zig");
 const assert = @import("assert.zig");
@@ -90,14 +91,13 @@ pub const alignment = max_align;
 /// offsets end, so a measure stops counting at `too_big` and never overflows.
 const Pos = u64;
 const too_big: Pos = 1 << 32;
-fn add(a: Pos, b: Pos) Pos {
-    return @min(a +| b, too_big);
-}
+const M = measure.Measure(Pos, too_big);
+const add = M.add;
 fn times(n: usize, stride: usize) Pos {
-    return @min(@as(Pos, n) *| stride, too_big);
+    return M.times(n, stride);
 }
 fn aligned(at: Pos, align_to: usize) Pos {
-    return if (at >= too_big) too_big else std.mem.alignForward(Pos, at, align_to);
+    return M.aligned(at, align_to);
 }
 
 pub fn Flat(comptime T: type) type {

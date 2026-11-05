@@ -4,6 +4,7 @@ test {
     _ = @import("Region_test.zig");
     _ = @import("flat_test.zig");
     _ = @import("parts_test.zig");
+    _ = @import("measure.zig");
     _ = @import("state_test.zig");
     _ = @import("scope_test.zig");
     _ = @import("input_test.zig");

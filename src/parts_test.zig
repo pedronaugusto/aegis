@@ -54,7 +54,7 @@ test "parts: a plan's size is the measure of its parts, each at its alignment" {
     at += 333;
     at = std.mem.alignForward(usize, at, 64) + (1 << 12);
     at += 77 + 10;
-    try t.expectEqual(at, plan.size().raw());
+    try t.expectEqual(at, (try plan.size()).raw());
 }
 
 test "parts: every part lies in the block, aligned, apart from the others but its alternatives" {
@@ -109,8 +109,8 @@ test "parts: an absent part takes no bytes and is null" {
     var counts = stream_counts;
     counts.engine.state = false;
     counts.engine.finders.chains = null;
-    const with = B.plan(stream_counts).size().raw();
-    const without = B.plan(counts).size().raw();
+    const with = (try B.plan(stream_counts).size()).raw();
+    const without = (try B.plan(counts).size()).raw();
     try t.expect(without < with);
     const block = try B.plan(counts).alloc(t.allocator);
     defer t.allocator.free(block.bytes());
@@ -123,7 +123,7 @@ test "parts: an absent part takes no bytes and is null" {
 test "parts: fit takes a buffer of the plan's size or longer and refuses a shorter one" {
     const B = parts.Block(Stream);
     const plan = B.plan(stream_counts);
-    const n = plan.size().raw();
+    const n = (try plan.size()).raw();
     const buffer = try t.allocator.alignedAlloc(u8, .@"64", n + 64);
     defer t.allocator.free(buffer);
     try t.expectError(error.BufferTooSmall, plan.fit(buffer[0 .. n - 1]));
@@ -139,16 +139,16 @@ test "parts: fit takes a buffer of the plan's size or longer and refuses a short
     try t.expectEqual(@intFromPtr(p.pending.ptr) - @intFromPtr(buffer.ptr), @intFromPtr(q.pending.ptr) - @intFromPtr(own.bytes().ptr));
 }
 
-test "parts: counts past the address space saturate the size, and no block holds it" {
+test "parts: counts past the address space are Overflow, and no block holds them" {
     const B = parts.Block(struct { a: []u64, b: []u8 });
     const plan = B.plan(.{ .a = std.math.maxInt(usize) / 4, .b = 1 });
-    try t.expectEqual(@as(usize, std.math.maxInt(usize)), plan.size().raw());
+    try t.expectError(error.Overflow, plan.size());
     try t.expectError(error.OutOfMemory, plan.alloc(t.allocator));
     var buffer: [64]u8 align(8) = undefined;
     try t.expectError(error.BufferTooSmall, plan.fit(&buffer));
     // Saturation holds wherever the overflow happens: in a count, an alignment or a sum.
-    try t.expectEqual(@as(usize, std.math.maxInt(usize)), B.plan(.{ .a = 1, .b = std.math.maxInt(usize) }).size().raw());
-    try t.expectEqual(@as(usize, std.math.maxInt(usize)), B.plan(.{ .a = std.math.maxInt(usize) / 8, .b = 9 }).size().raw());
+    try t.expectError(error.Overflow, B.plan(.{ .a = 1, .b = std.math.maxInt(usize) }).size());
+    try t.expectError(error.Overflow, B.plan(.{ .a = std.math.maxInt(usize) / 8, .b = 9 }).size());
 }
 
 const Worker = struct { engine: Engine, input: []align(64) u8, output: []align(64) u8 };
@@ -165,7 +165,7 @@ test "parts: a Repeat's copies lie one after another at a stride, each placed as
     defer t.allocator.free(block.bytes());
     const p = block.parts();
     try t.expectEqual(@as(usize, 5), p.workers.len());
-    const one = parts.Block(Worker).plan(each).size().raw();
+    const one = (try parts.Block(Worker).plan(each).size()).raw();
     var spans: [5][2]usize = undefined;
     for (0..5) |i| {
         const w = p.workers.at(i);
@@ -203,7 +203,7 @@ test "parts: generated counts always place every part inside its block, apart an
             .last = random.uintLessThan(usize, 9),
         };
         const plan = B.plan(counts);
-        const buffer = try t.allocator.alignedAlloc(u8, .@"32", plan.size().raw());
+        const buffer = try t.allocator.alignedAlloc(u8, .@"32", (try plan.size()).raw());
         defer t.allocator.free(buffer);
         const p = (try plan.fit(buffer)).parts();
         var spans: [64][2]usize = undefined;
@@ -261,8 +261,8 @@ test "parts: a part absent at compile time takes no bytes and no count" {
     const Without = parts.Block(Tables(false));
     const with = With.plan(.{ .hash2 = 1024, .hash4 = 16 });
     const without = Without.plan(.{ .hash4 = 16 });
-    try t.expectEqual(@as(usize, 1040 * 4), with.size().raw());
-    try t.expectEqual(@as(usize, 16 * 4), without.size().raw());
+    try t.expectEqual(@as(usize, 1040 * 4), (try with.size()).raw());
+    try t.expectEqual(@as(usize, 16 * 4), (try without.size()).raw());
     const block = try without.alloc(t.allocator);
     defer t.allocator.free(block.bytes());
     const p = block.parts();
@@ -286,4 +286,23 @@ test "parts: a Given value comes back with the parts, so an optional nest carrie
             try t.expect(disjoint(span(std.mem.asBytes(d.table)), span(std.mem.asBytes(p.table))));
         } else try t.expect(given == null);
     }
+}
+
+test "parts: overlap alternatives of integers, floats, arrays, vectors and extern structs share their start" {
+    const Pair = extern struct { a: u32, b: f32 };
+    const Shared = struct {
+        pub const arrangement: parts.Arrangement = .overlap;
+        words: []u64,
+        pairs: ?struct { pairs: []Pair, lanes: []@Vector(4, u32) },
+        rows: [][3][2]u16,
+    };
+    const B = parts.Block(struct { shared: Shared });
+    const block = try B.plan(.{ .shared = .{ .words = 4, .pairs = .{ .pairs = 2, .lanes = 1 }, .rows = 3 } }).alloc(t.allocator);
+    defer t.allocator.free(block.bytes());
+    const p = block.parts().shared;
+    try t.expectEqual(@intFromPtr(p.words.ptr), @intFromPtr(p.pairs.?.pairs.ptr));
+    try t.expectEqual(@intFromPtr(p.words.ptr), @intFromPtr(p.rows.ptr));
+    // Written as one alternative, read as another: a value either way.
+    @memset(p.words, 0x3f80_0000_3f80_0000);
+    try t.expectEqual(@as(f32, 1.0), p.pairs.?.pairs[0].b);
 }

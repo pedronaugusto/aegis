@@ -23,8 +23,8 @@ const Compressor = struct {
         return Block.plan(.{ .hash = @as(usize, 1) << options.hash_bits, .window = options.window, .dictionary = options.dictionary });
     }
 
-    /// The bytes `initBuffer` needs.
-    fn memory(options: Options) aegis.units.Bytes(usize) {
+    /// The bytes `initBuffer` needs; `Overflow` past the address space.
+    fn memory(options: Options) error{Overflow}!aegis.units.Bytes(usize) {
         return plan(options).size();
     }
 
@@ -60,7 +60,7 @@ pub fn main(init: std.process.Init) !void {
 
     // The caller's memory: exactly `memory(options)` bytes, and one fewer is refused.
     const options: Compressor.Options = .{ .hash_bits = 10 };
-    const n = Compressor.memory(options).raw();
+    const n = (try Compressor.memory(options)).raw();
     const buffer = try gpa.alignedAlloc(u8, .@"64", n);
     defer gpa.free(buffer);
     const in_place = try Compressor.initBuffer(buffer, options);

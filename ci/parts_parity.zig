@@ -50,7 +50,7 @@ export fn baselinePartsPlan(c: *const Counts) usize {
     return directSize(&k);
 }
 export fn wrapperPartsPlan(c: *const Counts) usize {
-    return Block.plan(counts(c)).size().raw();
+    return if (Block.plan(counts(c)).size()) |n| n.raw() else |_| std.math.maxInt(usize);
 }
 
 /// The last part's address and the window's length, after carving a block measured for `c`.
@@ -64,7 +64,8 @@ export fn baselinePartsPlace(memory: [*]align(64) u8, c: *const Counts) usize {
 export fn wrapperPartsPlace(memory: [*]align(64) u8, c: *const Counts) usize {
     const plan = Block.plan(counts(c));
     // The memory is the plan's size, so the refusal folds away.
-    const block = plan.fit(memory[0..plan.size().raw()]) catch return 0;
+    const n = plan.size() catch return 0;
+    const block = plan.fit(memory[0..n.raw()]) catch return 0;
     const p = block.parts();
     return @intFromPtr(p.window.ptr) +% p.lits.len;
 }

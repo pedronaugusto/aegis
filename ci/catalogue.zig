@@ -290,7 +290,7 @@ pub const modules = [_]Module{
         .required = .{ .rule = "A013" },
         .names = &.{"parts"},
         .release = "a block is its bytes and its counts; a plan is the counts and a size, measured and placed as a hand-written carving is",
-        .always = "a plan saturates past the address space to a size no block holds; `alloc` takes exactly the plan's size and `fit` refuses a shorter buffer; placing a block's parts has no failure; a `Repeat` read past its length stops",
+        .always = "a plan past the address space is `Overflow` from `size`, `OutOfMemory` from `alloc` and `BufferTooSmall` from `fit`; `alloc` takes exactly the plan's size and `fit` refuses a shorter buffer; an overlap alternative holding a type with a bit pattern that is no value does not compile; placing a block's parts has no failure; a `Repeat` read past its length stops",
         .kernels = &.{ "parts_plan", "parts_place" },
         .example = "examples/parts.zig",
     },

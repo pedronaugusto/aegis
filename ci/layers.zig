@@ -1,6 +1,6 @@
 const gantry = @import("gantry");
 pub const layers: []const gantry.rules.Layer = &.{
-    .{ .name = "base", .patterns = &.{ "src/scalar.zig", "src/int.zig", "src/id.zig", "src/units.zig", "src/assert.zig", "src/move.zig" } },
+    .{ .name = "base", .patterns = &.{ "src/scalar.zig", "src/int.zig", "src/id.zig", "src/units.zig", "src/assert.zig", "src/move.zig", "src/measure.zig" } },
     .{ .name = "secret", .patterns = &.{ "src/secret.zig", "src/secret/**" } },
     .{ .name = "sync", .patterns = &.{ "src/Guarded.zig", "src/SpinRwGuarded.zig", "src/sync.zig", "src/BlockingGuarded.zig", "src/RwGuarded.zig", "src/Condition.zig", "src/Confined.zig", "src/Once.zig", "src/Lazy.zig", "src/Shared.zig", "src/Atomic.zig", "src/interior.zig", "src/Order.zig" } },
     .{ .name = "boundary", .patterns = &.{ "src/input.zig", "src/err.zig" } },

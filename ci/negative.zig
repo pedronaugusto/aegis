@@ -272,6 +272,35 @@ const cases = [_]Case{
     \\    phase.* = M.after(.closed, .dial);
     \\}
     },
+    .{ .name = "parts_overlap_bool", .message = "an overlap alternative holds only items every bit pattern of which is a value", .source =
+    \\const parts = @import("aegis").parts;
+    \\const Shared = struct { pub const arrangement: parts.Arrangement = .overlap; counts: []u32, flags: []bool };
+    \\comptime {
+    \\    _ = parts.Block(struct { shared: Shared });
+    \\}
+    },
+    .{ .name = "parts_overlap_pointer", .message = "an overlap alternative holds only items every bit pattern of which is a value", .source =
+    \\const parts = @import("aegis").parts;
+    \\const Shared = struct { pub const arrangement: parts.Arrangement = .overlap; words: []usize, links: ?struct { next: []*u8 } };
+    \\comptime {
+    \\    _ = parts.Block(struct { shared: Shared });
+    \\}
+    },
+    .{ .name = "parts_overlap_enum", .message = "an overlap alternative holds only items every bit pattern of which is a value", .source =
+    \\const parts = @import("aegis").parts;
+    \\const Kind = enum(u8) { a, b };
+    \\const Shared = struct { pub const arrangement: parts.Arrangement = .overlap; bytes: []u8, kinds: []extern struct { kind: Kind, n: u8 } };
+    \\comptime {
+    \\    _ = parts.Block(struct { shared: Shared });
+    \\}
+    },
+    .{ .name = "parts_overlap_auto_struct", .message = "is an auto-layout struct", .source =
+    \\const parts = @import("aegis").parts;
+    \\const Shared = struct { pub const arrangement: parts.Arrangement = .overlap; bytes: []u8, pairs: []struct { a: u32, b: u16 } };
+    \\comptime {
+    \\    _ = parts.Block(struct { shared: Shared });
+    \\}
+    },
 };
 
 pub fn main(init: std.process.Init) !void {
