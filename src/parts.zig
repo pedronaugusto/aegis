@@ -78,8 +78,8 @@ pub fn Block(comptime Parts: type) type {
 
         /// Measures the parts for `counts`. A count past the address space saturates the size.
         pub fn plan(counts: Self.Counts) Plan {
-        // The walk unrolls every part inline: a deep nest takes more steps than the default.
-        @setEvalBranchQuota(100_000);
+            // The walk unrolls every part inline: a deep nest takes more steps than the default.
+            @setEvalBranchQuota(100_000);
             var at: usize = 0;
             walk(.measure, Parts, {}, &at, counts);
             return .{ .counts = counts, .end = at };
@@ -87,7 +87,7 @@ pub fn Block(comptime Parts: type) type {
 
         /// The parts, placed in the block: always, since the block is its plan's size.
         pub fn parts(b: Self) Parts {
-        @setEvalBranchQuota(100_000);
+            @setEvalBranchQuota(100_000);
             var at: usize = 0;
             return walk(.place, Parts, b.memory, &at, b.counts);
         }
