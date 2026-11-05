@@ -9,7 +9,8 @@ const a = @import("aegis");
 const Sequence = extern struct { lit: u32, len: u16, off: u16 };
 const Parts = struct { hash: []u32, seqs: []Sequence, lits: []u8, window: []align(64) u8 };
 const Block = a.parts.Block(Parts);
-const Counts = extern struct { hash: usize, seqs: usize, lits: usize, window: usize };
+/// The counts a caller passes, as the exports take them.
+pub const Counts = extern struct { hash: usize, seqs: usize, lits: usize, window: usize };
 
 fn alignUp(at: usize, comptime n: usize) usize {
     if (at > std.math.maxInt(usize) - (n - 1)) return std.math.maxInt(usize);

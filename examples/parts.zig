@@ -65,5 +65,6 @@ pub fn main(init: std.process.Init) !void {
     defer gpa.free(buffer);
     const in_place = try Compressor.initBuffer(buffer, options);
     aegis.assert.invariant(in_place.dictionary == null and @intFromPtr(in_place.window.ptr) % 64 == 0, "no dictionary; the window aligned");
-    if (Compressor.initBuffer(buffer[0 .. n - 1], options)) |_| aegis.assert.never("a short buffer is refused") else |_| {}
+    const refused = if (Compressor.initBuffer(buffer[0 .. n - 1], options)) |_| false else |err| err == error.BufferTooSmall;
+    aegis.assert.invariant(refused, "a short buffer is refused");
 }
