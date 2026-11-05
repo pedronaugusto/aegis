@@ -269,3 +269,21 @@ test "parts: a part absent at compile time takes no bytes and no count" {
     try t.expectEqual(@as(usize, 16), p.hash4.len);
     try t.expectEqual({}, p.hash2);
 }
+
+test "parts: a Given value comes back with the parts, so an optional nest carries what decided it" {
+    const Dictionary = struct { bytes: parts.Given([]const u8), table: *[16]u32 };
+    const B = parts.Block(struct { table: *[16]u32, dictionary: ?Dictionary });
+    const text = "dictionary bytes";
+    for ([_]?[]const u8{ text, null }) |given| {
+        const counts: B.Counts = .{ .dictionary = if (given) |bytes| .{ .bytes = bytes } else null };
+        const block = try B.plan(counts).alloc(t.allocator);
+        defer t.allocator.free(block.bytes());
+        // A Given takes no bytes: the block is one or two tables.
+        try t.expectEqual(@as(usize, if (given != null) 128 else 64), block.bytes().len);
+        const p = block.parts();
+        if (p.dictionary) |d| {
+            try t.expectEqualStrings(text, d.bytes.value);
+            try t.expect(disjoint(span(std.mem.asBytes(d.table)), span(std.mem.asBytes(p.table))));
+        } else try t.expect(given == null);
+    }
+}

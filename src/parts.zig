@@ -13,6 +13,9 @@
 //!   (alternatives of which one is in use at a time), and the nest is as long as its longest;
 //! - `Repeat(S)`: `len` copies of `S`, each counted by the same `each`;
 //! - `void`: a part absent at compile time (a field typed `if (c) []T else void`), no bytes.
+//! - `Given(T)`: no bytes, a value given with the counts and handed back with the parts, so an
+//!   optional nest carries what decided it (the dictionary its tables index) and placing it
+//!   needs nothing from beside the block.
 //!
 //! Every part starts at its type's alignment, a nested struct at the greatest of its parts', so
 //! a nested struct's size never depends on where it lies. The items are uninitialized; nothing in
@@ -94,6 +97,15 @@ pub fn Counts(comptime S: type) type {
     return CountOf(S);
 }
 
+/// A value given with the counts and handed back, as `value`, with the placed parts: no bytes.
+pub fn Given(comptime T: type) type {
+    return struct {
+        /// The given type.
+        pub const Value = T;
+        value: T,
+    };
+}
+
 /// `len` copies of the parts `S`, each sized by the same counts, one after another at a stride.
 pub fn Repeat(comptime S: type) type {
     if (comptime kindOf(S) != .nested) @compileError("parts.Repeat repeats a struct of parts, not " ++ @typeName(S));
@@ -125,7 +137,7 @@ pub fn Repeat(comptime S: type) type {
     };
 }
 
-const Kind = enum { slice, one, optional, nested, repeat, absent };
+const Kind = enum { slice, one, optional, nested, repeat, absent, given };
 
 fn kindOf(comptime F: type) Kind {
     return switch (@typeInfo(F)) {
@@ -142,10 +154,16 @@ fn kindOf(comptime F: type) Kind {
             .optional => @compileError("a part is optional once: " ++ @typeName(F)),
             .repeat => @compileError("an absent Repeat is one of no copies: " ++ @typeName(F)),
             .absent => @compileError("an optional part of no bytes holds nothing: " ++ @typeName(F)),
+            .given => @compileError("a Given is given or not as its value is: " ++ @typeName(F)),
             else => .optional,
         },
         .void => .absent,
-        .@"struct" => if (@hasDecl(F, "Element") and @TypeOf(F.Element) == type and F == Repeat(F.Element)) .repeat else .nested,
+        .@"struct" => if (@hasDecl(F, "Element") and @TypeOf(F.Element) == type and F == Repeat(F.Element))
+            .repeat
+        else if (@hasDecl(F, "Value") and @TypeOf(F.Value) == type and F == Given(F.Value))
+            .given
+        else
+            .nested,
         else => @compileError("a part is a slice, a pointer, an optional one, a struct of parts, a Repeat or void or a Repeat, not " ++ @typeName(F)),
     };
 }
@@ -160,6 +178,7 @@ fn CountOf(comptime F: type) type {
         .slice => usize,
         .one => void,
         .absent => void,
+        .given => F.Value,
         .optional => {
             const C = @typeInfo(F).optional.child;
             return if (CountOf(C) == void) bool else ?CountOf(C);
@@ -195,6 +214,7 @@ fn alignOfUncached(comptime F: type) usize {
     return switch (kindOf(F)) {
         .slice, .one => @typeInfo(F).pointer.attrs.@"align" orelse @alignOf(@typeInfo(F).pointer.child),
         .absent => 1,
+        .given => 1,
         .optional => alignOf(@typeInfo(F).optional.child),
         .repeat => alignOf(F.Element),
         .nested => {
@@ -234,6 +254,7 @@ fn advance(comptime mode: Mode, at: usize, n: usize, comptime size: usize) usize
 inline fn walk(comptime mode: Mode, comptime F: type, memory: Memory(mode), at: *usize, count: CountOf(F)) Out(mode, F) {
     switch (comptime kindOf(F)) {
         .absent => return,
+        .given => if (mode == .place) return .{ .value = count } else return,
         .slice => {
             const p = @typeInfo(F).pointer;
             return take(mode, p.child, comptime alignOf(F), memory, at, count);
