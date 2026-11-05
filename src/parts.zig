@@ -78,6 +78,8 @@ pub fn Block(comptime Parts: type) type {
 
         /// Measures the parts for `counts`. A count past the address space saturates the size.
         pub fn plan(counts: Self.Counts) Plan {
+        // The walk unrolls every part inline: a deep nest takes more steps than the default.
+        @setEvalBranchQuota(100_000);
             var at: usize = 0;
             walk(.measure, Parts, {}, &at, counts);
             return .{ .counts = counts, .end = at };
@@ -85,6 +87,7 @@ pub fn Block(comptime Parts: type) type {
 
         /// The parts, placed in the block: always, since the block is its plan's size.
         pub fn parts(b: Self) Parts {
+        @setEvalBranchQuota(100_000);
             var at: usize = 0;
             return walk(.place, Parts, b.memory, &at, b.counts);
         }
@@ -137,6 +140,7 @@ pub fn Repeat(comptime S: type) type {
         }
         /// Copy `i`'s parts; past the length stops in every build.
         pub fn at(r: Self, i: usize) S {
+            @setEvalBranchQuota(100_000);
             assert.invariant(i < r.count, "parts.Repeat read past its length");
             var offset: usize = 0;
             return walk(.place, S, r.memory[i * r.stride ..][0..r.stride], &offset, r.each);
