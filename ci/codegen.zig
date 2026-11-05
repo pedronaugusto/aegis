@@ -11,8 +11,9 @@ const a11_names = [_][]const u8{ "a11_spin_rw_read", "a11_spin_rw_write", "a11_t
 const region_names = [_][]const u8{ "region_create", "region_push", "region_append", "region_mark", "region_release", "region_scratch" };
 const pool_names = [_][]const u8{ "pool_alloc", "pool_free", "pool_get", "run_slice" };
 const flat_names = [_][]const u8{ "flat_get", "flat_nested" };
+const parts_names = [_][]const u8{ "parts_plan", "parts_place" };
 /// Every pair this check compares, by the name its exports are spelled from.
-pub const names = owner_names ++ numeric_names ++ bytes_names ++ a67_names ++ gaps_names ++ state_names ++ scope_names ++ a11_names ++ region_names ++ pool_names ++ flat_names;
+pub const names = owner_names ++ numeric_names ++ bytes_names ++ a67_names ++ gaps_names ++ state_names ++ scope_names ++ a11_names ++ region_names ++ pool_names ++ flat_names ++ parts_names;
 pub fn main(init: std.process.Init) !void {
     const a = init.arena.allocator();
     const args = try init.minimal.args.toSlice(a);
@@ -97,7 +98,7 @@ fn owner(name: []const u8) bool {
     return false;
 }
 fn reported(name: []const u8) bool {
-    inline for (.{ "a67_", "gaps_", "state_", "scope_", "a11_", "region_", "pool_", "run_", "flat_" }) |prefix| if (std.mem.startsWith(u8, name, prefix)) return true;
+    inline for (.{ "a67_", "gaps_", "state_", "scope_", "a11_", "region_", "pool_", "run_", "flat_", "parts_" }) |prefix| if (std.mem.startsWith(u8, name, prefix)) return true;
     return false;
 }
 pub fn alias(a: std.mem.Allocator, ir: []const u8, name: []const u8) ![]const u8 {

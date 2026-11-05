@@ -7,6 +7,7 @@ pub const layers: []const gantry.rules.Layer = &.{
     .{ .name = "bounded and ownership", .patterns = &.{ "src/bounded.zig", "src/own.zig" } },
     .{ .name = "regions", .patterns = &.{"src/Region.zig"} },
     .{ .name = "flat", .patterns = &.{"src/flat.zig"} },
+    .{ .name = "parts", .patterns = &.{"src/parts.zig"} },
     .{ .name = "handles", .patterns = &.{ "src/handle.zig", "src/handle/**" } },
     .{ .name = "state", .patterns = &.{ "src/state.zig", "src/state/**" } },
     .{ .name = "lifetimes", .patterns = &.{ "src/scope.zig", "src/scope/**" } },

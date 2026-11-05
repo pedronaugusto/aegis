@@ -67,6 +67,7 @@ pub const cases = [_]Case{
     .{ .module = "flat", .name = "flat-set-twice", .when = .always, .message = "Flat field set twice", .run = flatSetTwice },
     .{ .module = "flat", .name = "flat-put-past", .when = .always, .message = "Flat element put past what was appended", .run = flatPutPast },
     .{ .module = "flat", .name = "flat-inner-open", .when = .always, .message = "Flat builder used while a part inside it is open", .run = flatInnerOpen },
+    .{ .module = "parts", .name = "parts-repeat-past", .when = .always, .message = "parts.Repeat read past its length", .run = partsRepeatPast },
 };
 
 /// One line, the message, and a failing exit on every host: no stack trace to symbolize, so
@@ -486,4 +487,12 @@ fn flatPutPast(_: std.process.Init) !void {
     var s = try root.begin(.s);
     try s.append('x');
     s.put(1, 'y');
+}
+
+fn partsRepeatPast(init: std.process.Init) !void {
+    const Copy = struct { x: []u16 };
+    const B = a.parts.Block(struct { copies: a.parts.Repeat(Copy) });
+    const block = try B.plan(.{ .copies = .{ .len = 2, .each = .{ .x = 3 } } }).alloc(init.gpa);
+    defer init.gpa.free(block.bytes());
+    _ = block.parts().copies.at(2);
 }

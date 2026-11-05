@@ -255,6 +255,7 @@ const examples = [_][]const u8{
     "examples/scope.zig",
     "examples/region.zig",
     "examples/flat.zig",
+    "examples/parts.zig",
     "examples/handle.zig",
     "examples/input.zig",
     "examples/err.zig",

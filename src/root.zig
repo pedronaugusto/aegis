@@ -56,6 +56,9 @@ pub const Region = @import("Region.zig");
 /// One flat layout for a value: a block with no pointers, read in place, written at its exact
 /// size, and checked before untrusted bytes become one.
 pub const flat = @import("flat.zig");
+/// One block for parts whose counts are known first: a plan measures them and a block of its size
+/// places them, one walk of one declaration, so placing never fails.
+pub const parts = @import("parts.zig");
 /// Checked generational keys and typed positions; owners require external synchronization.
 pub const handle = @import("handle.zig");
 /// Boundary markers preserving each parser's exact error and refined result contract.

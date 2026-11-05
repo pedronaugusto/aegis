@@ -286,6 +286,15 @@ pub const modules = [_]Module{
         .example = "examples/flat.zig",
     },
     .{
+        .name = "parts",
+        .required = .{ .rule = "A013" },
+        .names = &.{"parts"},
+        .release = "a block is its bytes and its counts; a plan is the counts and a size, measured and placed as a hand-written carving is",
+        .always = "a plan saturates past the address space to a size no block holds; `alloc` takes exactly the plan's size and `fit` refuses a shorter buffer; placing a block's parts has no failure; a `Repeat` read past its length stops",
+        .kernels = &.{ "parts_plan", "parts_place" },
+        .example = "examples/parts.zig",
+    },
+    .{
         .name = "handle",
         .required = .{ .rule = "A014" },
         .names = &.{"handle"},

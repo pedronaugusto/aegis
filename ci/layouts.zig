@@ -43,6 +43,8 @@ const Ranks = a.Order(&.{.{ .name = "root" }});
 const Keys = a.handle.SlotPool(u64, Tag, .{ .generation = u64 });
 const Slots = a.handle.SlotPool(u64, Tag, .{});
 const FlatRecord = struct { id: u32, size: u64, name: []const u8 };
+const PartsPair = struct { hash: []u32, window: []align(64) u8 };
+const PartsCopy = struct { x: []u16 };
 const DirectRegion = struct { base: [*]u8, top: usize, committed_end: usize, reservation_end: usize };
 
 pub const rows = [_]Row{
@@ -101,6 +103,9 @@ pub const rows = [_]Row{
     .{ .module = "flat", .label = "flat.Flat(FlatRecord).View", .aegis = a.flat.Flat(FlatRecord).View, .direct = [*]const u8, .equal = .every },
     .{ .module = "flat", .label = "flat.Flat(FlatRecord).Builder", .aegis = a.flat.Flat(FlatRecord).Builder, .direct = struct { image: *anyopaque, at: usize, depth: usize, done: u64 }, .equal = .every },
     .{ .module = "flat", .label = "flat.Image", .aegis = a.flat.Image, .direct = struct { tail: *anyopaque, start: usize, open: usize, depth: usize }, .equal = .every },
+    .{ .module = "parts", .label = "parts.Block(PartsPair)", .aegis = a.parts.Block(PartsPair), .direct = struct { memory: []align(64) u8, counts: struct { hash: usize, window: usize } }, .equal = .every },
+    .{ .module = "parts", .label = "parts.Block(PartsPair).Plan", .aegis = a.parts.Block(PartsPair).Plan, .direct = struct { counts: struct { hash: usize, window: usize }, end: usize }, .equal = .every },
+    .{ .module = "parts", .label = "parts.Repeat(PartsCopy)", .aegis = a.parts.Repeat(PartsCopy), .direct = struct { memory: []u8, stride: usize, count: usize, each: struct { x: usize } }, .equal = .every },
     .{ .module = "handle", .label = "handle.SlotPool(u64, Tag, .{}).Slot", .aegis = Slots.Slot, .direct = struct { value: u64, next: u32 }, .equal = .unchecked },
     .{ .module = "handle", .label = "handle.SlotPool(u64, Tag, .{}).Handle", .aegis = Slots.Handle, .direct = u32, .equal = .every },
     .{ .module = "handle", .label = "handle.RunPool(u64, Tag).Run", .aegis = a.handle.RunPool(u64, Tag).Run, .direct = struct { start: u32, len: u32 }, .equal = .every },

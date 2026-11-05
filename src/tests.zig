@@ -3,6 +3,7 @@ test {
     _ = @import("handle_test.zig");
     _ = @import("Region_test.zig");
     _ = @import("flat_test.zig");
+    _ = @import("parts_test.zig");
     _ = @import("state_test.zig");
     _ = @import("scope_test.zig");
     _ = @import("input_test.zig");
