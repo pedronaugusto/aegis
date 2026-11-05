@@ -178,7 +178,20 @@ fn CountOf(comptime F: type) type {
     };
 }
 
+/// A part's alignment, worked out once per type: a type-returning function is cached, so a
+/// deep nest of parts costs its depth, not its paths.
 fn alignOf(comptime F: type) usize {
+    return Alignment(F).value;
+}
+
+fn Alignment(comptime F: type) type {
+    return struct {
+        const value = alignOfUncached(F);
+    };
+}
+
+fn alignOfUncached(comptime F: type) usize {
+    @setEvalBranchQuota(10_000);
     return switch (kindOf(F)) {
         .slice, .one => @typeInfo(F).pointer.attrs.@"align" orelse @alignOf(@typeInfo(F).pointer.child),
         .absent => 1,
