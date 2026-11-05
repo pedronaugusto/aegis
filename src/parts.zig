@@ -37,12 +37,12 @@ pub fn Block(comptime Parts: type) type {
         /// Private: the block's bytes, exactly its plan's size.
         memory: []align(alignment) u8,
         /// Private: the counts it was planned for.
-        counts: Counts,
+        counts: Self.Counts,
 
         /// The parts measured for their counts.
         pub const Plan = struct {
             /// Private.
-            counts: Counts,
+            counts: Self.Counts,
             /// Private: the bytes the parts take, or maxInt(usize) when they pass the address space.
             end: usize,
 
@@ -66,7 +66,7 @@ pub fn Block(comptime Parts: type) type {
         };
 
         /// Measures the parts for `counts`. A count past the address space saturates the size.
-        pub fn plan(counts: Counts) Plan {
+        pub fn plan(counts: Self.Counts) Plan {
             var at: usize = 0;
             walk(.measure, Parts, {}, &at, counts);
             return .{ .counts = counts, .end = at };
@@ -83,6 +83,14 @@ pub fn Block(comptime Parts: type) type {
             return b.memory;
         }
     };
+}
+
+/// What sizes the parts `S`, a struct nested in another's parts: one field per part, as
+/// `Block(S).Counts`. A type whose parts others nest declares them and these counts, and builds
+/// itself from its placed parts.
+pub fn Counts(comptime S: type) type {
+    if (comptime kindOf(S) != .nested) @compileError("parts.Counts counts a struct of parts, not " ++ @typeName(S));
+    return CountOf(S);
 }
 
 /// `len` copies of the parts `S`, each sized by the same counts, one after another at a stride.

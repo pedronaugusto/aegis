@@ -244,3 +244,10 @@ test "parts: generated counts always place every part inside its block, apart an
         }
     }
 }
+
+test "parts: a nested struct's counts are the counts its parent holds for it" {
+    try t.expect(parts.Counts(Engine) == @FieldType(parts.Block(Stream).Counts, "engine"));
+    try t.expect(parts.Counts(Stream) == parts.Block(Stream).Counts);
+    const engine: parts.Counts(Engine) = stream_counts.engine;
+    try t.expectEqual(@as(usize, 100), engine.seqs);
+}
