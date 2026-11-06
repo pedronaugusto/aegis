@@ -14,6 +14,7 @@ pub fn SecondaryMap(comptime Primary: type, comptime V: type) type {
         pub const KeyError = error{ InvalidKey, Missing, AliasedStorage };
         /// The index's allocator.
         gpa: std.mem.Allocator,
+        /// Private: each live key's entry.
         index: std.AutoHashMapUnmanaged(Key, usize) = .empty,
         /// Private: the region the entries grow on.
         region: Region,
