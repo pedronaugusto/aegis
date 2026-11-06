@@ -122,11 +122,12 @@ pub fn Order(comptime ranks: []const Rank) type {
     };
 }
 
-/// The ordered guard (`Capability`), private to this file: its role and its release for a linter
+/// The ordered guard (`Capability`), private to this file: its role, a guard whose acquisition checks
+/// the rank order, and its release for a linter
 /// (aegis's `lint_rules` includes this).
 pub const lint_rules = .{
     .version = 1,
-    .roles = .{.{ .type = Capability, .role = .guard, .internal = .{.base} }},
+    .roles = .{.{ .type = Capability, .role = .ranked_guard, .internal = .{.base} }},
     .pairs = .{.{ .type = Capability, .release = .{.deinit} }},
 };
 
