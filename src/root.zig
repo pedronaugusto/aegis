@@ -69,8 +69,93 @@ pub const err = @import("err.zig");
 /// The synchronization and logical-task contracts the root exports, one name each.
 const sync = @import("sync.zig");
 
+/// What each of aegis's types means, for a linter that reads it (glint, design §12): its role, the
+/// fields only aegis touches, and the obligations no body shows (a reservation's count, a guard's lock,
+/// a scope's record, a result that must be used). Every entry names its declaration, so a rename here
+/// breaks the build instead of leaving a linter reading a name that is gone.
+pub const lint_rules = .{
+    .version = 1,
+    .include = .{@import("Order.zig").lint_rules},
+    .roles = .{
+        .{ .type = Secret, .role = .secret, .internal = .{.material} },
+        .{ .type = SecretBytes, .role = .bytes, .internal = .{ .allocation, .used_len } },
+        .{ .type = SecretBytes.Writer, .role = .bytes_writer },
+        .{ .type = secret.Choice, .role = .choice, .internal = .{.bit} },
+        .{ .type = Guarded, .role = .guarded, .internal = .{ .lock, .data } },
+        .{ .type = .{ .generic = Guarded, .member = .Guard }, .role = .guard, .internal = .{.owner} },
+        .{ .type = .{ .generic = Guarded, .member = .Handoff }, .role = .handoff },
+        .{ .type = BlockingGuarded, .role = .guarded, .internal = .{ .mutex, .data } },
+        .{ .type = .{ .generic = BlockingGuarded, .member = .Guard }, .role = .guard, .internal = .{.owner} },
+        .{ .type = RwGuarded, .role = .guarded, .internal = .{ .lock, .admitted, .data } },
+        .{ .type = .{ .generic = RwGuarded, .member = .ReadGuard }, .role = .guard, .internal = .{.owner} },
+        .{ .type = .{ .generic = RwGuarded, .member = .WriteGuard }, .role = .guard, .internal = .{.owner} },
+        .{ .type = SpinRwGuarded, .role = .guarded, .internal = .{ .state, .data } },
+        .{ .type = .{ .generic = SpinRwGuarded, .member = .ReadGuard }, .role = .guard, .internal = .{.owner} },
+        .{ .type = .{ .generic = SpinRwGuarded, .member = .WriteGuard }, .role = .guard, .internal = .{.owner} },
+        .{ .type = Condition, .role = .condition },
+        .{ .type = Once, .role = .once, .internal = .{ .state, .mutex, .changed, .data } },
+        .{ .type = Lazy, .role = .once, .internal = .{ .state, .mutex, .data } },
+        .{ .type = Confined, .role = .confined, .internal = .{ .data, .owner } },
+        .{ .type = Shared, .role = .shared, .internal = .{ .block, .live } },
+        .{ .type = Atomic, .role = .atomic, .internal = .{.cell} },
+        .{ .type = InitContext, .role = .context, .internal = .{ .owners, .used } },
+        .{ .type = .{ .generic = Order, .member = .Context }, .role = .context, .internal = .{ .stack, .used, .suspended } },
+        .{ .type = .{ .generic = Order, .member = .Ordered }, .role = .guarded, .internal = .{.base} },
+        .{ .type = int.Checked, .role = .scalar },
+        .{ .type = int.Saturating, .role = .scalar },
+        .{ .type = int.Ranged, .role = .scalar },
+        .{ .type = id.Id, .role = .scalar },
+        .{ .type = id.NonZero, .role = .scalar },
+        .{ .type = id.Counter, .role = .issuer },
+        .{ .type = units.Count, .role = .scalar },
+        .{ .type = units.Bytes, .role = .scalar },
+        .{ .type = units.Bits, .role = .scalar },
+        .{ .type = units.Duration, .role = .scalar },
+        .{ .type = units.Instant, .role = .scalar },
+        .{ .type = bounded.Array, .role = .inline_store, .internal = .{ .storage, .used } },
+        .{ .type = bounded.Ring, .role = .inline_store, .internal = .{ .storage, .head, .used } },
+        .{ .type = bounded.Buffer, .role = .buffer, .internal = .{ .storage, .gpa, .maximum, .used } },
+        .{ .type = bounded.RingBuffer, .role = .buffer, .internal = .{ .storage, .gpa, .maximum, .head, .used } },
+        .{ .type = bounded.Limit, .role = .limit, .internal = .{.maximum} },
+        .{ .type = bounded.Budget, .role = .budget, .internal = .{ .ceiling, .taken, .unsettled } },
+        .{ .type = .{ .generic = bounded.Budget, .member = .Reservation }, .role = .reservation, .internal = .{ .budget, .amount, .live } },
+        .{ .type = own.Owned, .role = .owned, .internal = .{ .data, .state } },
+        .{ .type = own.OwnedIo, .role = .owned, .internal = .{ .data, .state } },
+        .{ .type = own.MustUse, .role = .must_use, .internal = .{ .data, .pending, .live } },
+        .{ .type = handle.SlotPool, .role = .slots, .internal = .{ .region, .slots, .count, .free_head, .used } },
+        .{ .type = handle.RunPool, .role = .slots, .internal = .{ .region, .items, .end, .free_spans, .runs } },
+        .{ .type = handle.DenseSlotMap, .role = .slots, .internal = .{ .primary, .values, .keys, .used } },
+        .{ .type = handle.SecondaryMap, .role = .slots, .internal = .{ .region, .free_head } },
+        .{ .type = handle.Domain, .role = .issuer },
+        .{ .type = handle.Index, .role = .scalar },
+        .{ .type = .{ .generic = state.Machine, .member = .At }, .role = .stage, .internal = .{ .live, .payload } },
+        .{ .type = .{ .generic = state.Machine, .member = .Runtime }, .role = .machine, .internal = .{.state} },
+        .{ .type = scope.Table, .role = .table, .internal = .{ .slots, .free_head, .used_up, .open_count } },
+        .{ .type = .{ .generic = scope.Table, .member = .Scope }, .role = .scope, .internal = .{ .table, .generation, .index } },
+        .{ .type = scope.Ref, .role = .ref, .internal = .{ .slot, .generation, .pointer } },
+        .{ .type = input.Untrusted, .role = .untrusted, .internal = .{.value} },
+        .{ .type = err.PublicSource, .role = .public_source },
+    },
+    .pairs = .{
+        .{ .type = .{ .generic = bounded.Budget, .member = .Reservation }, .release = .{ .release, .consume }, .transfer = .{.moveInto} },
+        .{ .type = .{ .generic = Guarded, .member = .Guard }, .release = .{.deinit}, .transfer = .{.handOff} },
+        .{ .type = .{ .generic = Guarded, .member = .Handoff }, .release = .{.release} },
+        .{ .type = .{ .generic = BlockingGuarded, .member = .Guard }, .release = .{.deinit} },
+        .{ .type = .{ .generic = RwGuarded, .member = .ReadGuard }, .release = .{.deinit} },
+        .{ .type = .{ .generic = RwGuarded, .member = .WriteGuard }, .release = .{.deinit} },
+        .{ .type = .{ .generic = SpinRwGuarded, .member = .ReadGuard }, .release = .{.deinit} },
+        .{ .type = .{ .generic = SpinRwGuarded, .member = .WriteGuard }, .release = .{.deinit} },
+        .{ .type = .{ .generic = scope.Table, .member = .Scope }, .release = .{.end} },
+        .{ .type = own.MustUse, .release = .{ .take, .acknowledge }, .teardown = .{.deinit} },
+    },
+};
+
 // The tests run in this module, so test support that links aegis (shakedown)
 // takes this copy and the test binary holds one aegis.
 test {
     _ = @import("tests.zig");
+}
+
+test "lint_rules names declarations that are there" {
+    _ = lint_rules;
 }
