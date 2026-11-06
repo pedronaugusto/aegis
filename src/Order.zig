@@ -127,7 +127,7 @@ pub fn Order(comptime ranks: []const Rank) type {
 /// (aegis's `lint_rules` includes this).
 pub const lint_rules = .{
     .version = 1,
-    .roles = .{.{ .type = Capability, .role = .ranked_guard, .internal = .{.base} }},
+    .roles = .{.{ .type = Capability, .role = .ranked_guard, .internal = .{ .base, .context } }},
     .pairs = .{.{ .type = Capability, .release = .{.deinit} }},
 };
 
