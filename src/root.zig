@@ -69,7 +69,7 @@ pub const err = @import("err.zig");
 /// The synchronization and logical-task contracts the root exports, one name each.
 const sync = @import("sync.zig");
 
-/// What each of aegis's types means, for a linter that reads it (glint, design §12): its role, the
+/// What each of aegis's types and assertions means, for a linter that reads it (glint, design §12): its role, the
 /// fields only aegis touches, and the obligations no body shows (a reservation's count, a guard's lock,
 /// a scope's record, a result that must be used). Every entry names its declaration, so a rename here
 /// breaks the build instead of leaving a linter reading a name that is gone.
@@ -135,6 +135,11 @@ pub const lint_rules = .{
         .{ .type = scope.Ref, .role = .ref, .internal = .{ .slot, .generation, .pointer } },
         .{ .type = input.Untrusted, .role = .untrusted, .internal = .{.value} },
         .{ .type = err.PublicSource, .role = .public_source },
+        // The always-on contracts and the optional diagnostics, which a linter counts as assertions.
+        .{ .type = assert.invariant, .role = .invariant },
+        .{ .type = assert.never, .role = .never },
+        .{ .type = assert.debug, .role = .debug },
+        .{ .type = assert.debugCheck, .role = .debug_check },
     },
     .pairs = .{
         .{ .type = .{ .generic = bounded.Budget, .member = .Reservation }, .release = .{ .release, .consume }, .transfer = .{.moveInto} },
