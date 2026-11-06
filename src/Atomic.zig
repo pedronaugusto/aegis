@@ -135,5 +135,54 @@ pub fn Atomic(comptime T: type) type {
             comptime if (!adds(T)) @compileError("fetchSubWrapping needs a domain whose add and sub take its own type");
             return @fromBackingInt(self.cell.fetchSub(@backingInt(delta), order));
         }
+        /// Waits while the cell holds `expected`, over `futex`'s futex: returns when woken, spuriously, or at
+        /// once when the cell no longer holds it, so the caller reads the cell again. `futex` is whatever gives
+        /// std.Io's futex methods (`std.Io` itself, an OS layer under one, the Io a test wraps), and the call
+        /// is cancelable as its `futexWait` is. Only a cell of a 32-bit backing has a futex word.
+        pub inline fn wait(self: *const Self, futex: anytype, expected: T) FutexResult(@TypeOf(futex), "futexWait") {
+            comptime word();
+            return futex.futexWait(Repr, &self.cell.raw, raw(expected));
+        }
+        /// As `wait`, giving up at `timeout`, as `futex`'s `futexWaitTimeout` does.
+        pub inline fn waitTimeout(self: *const Self, futex: anytype, expected: T, timeout: TimeoutOf(@TypeOf(futex))) FutexResult(@TypeOf(futex), "futexWaitTimeout") {
+            comptime word();
+            return futex.futexWaitTimeout(Repr, &self.cell.raw, raw(expected), timeout);
+        }
+        /// As `wait`, never canceled, as `futex`'s `futexWaitUncancelable` is.
+        pub inline fn waitUncancelable(self: *const Self, futex: anytype, expected: T) FutexResult(@TypeOf(futex), "futexWaitUncancelable") {
+            comptime word();
+            return futex.futexWaitUncancelable(Repr, &self.cell.raw, raw(expected));
+        }
+        /// Wakes at most `max_waiters` tasks waiting on the cell, through `futex`'s `futexWake`.
+        pub inline fn wake(self: *const Self, futex: anytype, max_waiters: u32) FutexResult(@TypeOf(futex), "futexWake") {
+            comptime word();
+            return futex.futexWake(Repr, &self.cell.raw, max_waiters);
+        }
+        fn word() void {
+            if (pointer(T) or @bitSizeOf(Repr) != 32) @compileError("a futex waits on a 32-bit word: this cell's backing is " ++ @typeName(Repr));
+        }
     };
+}
+
+/// What `F`'s futex method `name` returns: `F` (or what it points at) gives std.Io's futex methods, or
+/// the call is a compile error naming the one it lacks.
+fn FutexResult(comptime F: type, comptime name: []const u8) type {
+    const Provider = switch (@typeInfo(F)) {
+        .pointer => |p| p.child,
+        else => F,
+    };
+    if (!@hasDecl(Provider, name)) @compileError(@typeName(Provider) ++ " has no " ++ name ++ ": a futex provider gives std.Io's futexWait, futexWaitTimeout, futexWaitUncancelable and futexWake");
+    return @typeInfo(@TypeOf(@field(Provider, name))).@"fn".return_type.?;
+}
+
+/// The timeout `F`'s `futexWaitTimeout` takes (`std.Io.Timeout` for std.Io), so a literal of it
+/// coerces where it is written.
+fn TimeoutOf(comptime F: type) type {
+    const Provider = switch (@typeInfo(F)) {
+        .pointer => |p| p.child,
+        else => F,
+    };
+    _ = FutexResult(F, "futexWaitTimeout");
+    const params = @typeInfo(@TypeOf(Provider.futexWaitTimeout)).@"fn".param_types;
+    return params[params.len - 1].?;
 }

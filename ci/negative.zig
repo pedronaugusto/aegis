@@ -256,6 +256,22 @@ const cases = [_]Case{
     \\    _ = cell.fetchAddWrapping(&target, .monotonic);
     \\}
     },
+    .{ .name = "atomic_futex_width", .message = "a futex waits on a 32-bit word", .source =
+    \\const std = @import("std");
+    \\const a = @import("aegis");
+    \\export fn bad() void {
+    \\    var cell: a.Atomic(a.id.Id(struct {}, u64)) = .init(.fromRaw(1));
+    \\    cell.wake(std.Io.Threaded.global_single_threaded.io(), 1);
+    \\}
+    },
+    .{ .name = "atomic_futex_provider", .message = "has no futexWake", .source =
+    \\const a = @import("aegis");
+    \\export fn bad() void {
+    \\    var cell: a.Atomic(a.id.Id(struct {}, u32)) = .init(.fromRaw(1));
+    \\    var nothing: struct { x: u8 = 0 } = .{};
+    \\    cell.wake(&nothing, 1);
+    \\}
+    },
     .{ .name = "atomic_slice", .message = "single-item pointer", .source =
     \\const a = @import("aegis");
     \\export fn bad() usize {

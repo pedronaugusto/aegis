@@ -490,3 +490,59 @@ test "A6 canceled initializer wakes existing waiters to retry publication" {
         try t.expectEqual(shake.Sim.Outcome.finished, sim.run(canceledWinner, .{ &state, sim.io() }));
     }
 }
+
+const Phase = enum(u32) { idle, ready, _ };
+
+test "Atomic.wait returns at once where the cell no longer holds the value, and at its timeout where it does" {
+    var cell: a.Atomic(Phase) = .init(.ready);
+    try cell.wait(t.io, .idle);
+    cell.waitUncancelable(t.io, .idle);
+    var idle: a.Atomic(Phase) = .init(.idle);
+    try idle.waitTimeout(t.io, .idle, .{ .duration = .{ .raw = .fromNanoseconds(1), .clock = .awake } });
+}
+
+test "Atomic.wake releases a task waiting on the cell" {
+    var cell: a.Atomic(Phase) = .init(.idle);
+    var future = try t.io.concurrent(struct {
+        fn run(c: *a.Atomic(Phase)) void {
+            while (c.load(.acquire) == .idle) c.waitUncancelable(t.io, .idle);
+        }
+    }.run, .{&cell});
+    cell.store(.ready, .release);
+    cell.wake(t.io, 1);
+    future.await(t.io);
+    try t.expectEqual(Phase.ready, cell.load(.acquire));
+}
+
+test "Atomic's futex methods take any provider of std.Io's futex methods, the word lowered by the cell's domain" {
+    const Recorder = struct {
+        waited: u32 = 0,
+        expected: u32 = 0,
+        woken: u32 = 0,
+        pub fn futexWait(r: *@This(), comptime T: type, ptr: *align(@alignOf(u32)) const T, expected: T) error{Canceled}!void {
+            _ = ptr;
+            r.waited += 1;
+            r.expected = expected;
+        }
+        pub fn futexWaitTimeout(r: *@This(), comptime T: type, ptr: *align(@alignOf(u32)) const T, expected: T, timeout: u64) error{Canceled}!void {
+            _ = timeout;
+            return r.futexWait(T, ptr, expected);
+        }
+        pub fn futexWaitUncancelable(r: *@This(), comptime T: type, ptr: *align(@alignOf(u32)) const T, expected: T) void {
+            r.futexWait(T, ptr, expected) catch unreachable;
+        }
+        pub fn futexWake(r: *@This(), comptime T: type, ptr: *align(@alignOf(u32)) const T, max_waiters: u32) void {
+            _ = ptr;
+            r.woken += max_waiters;
+        }
+    };
+    var recorder: Recorder = .{};
+    var cell: a.Atomic(Phase) = .init(.idle);
+    try cell.wait(&recorder, .ready);
+    try cell.waitTimeout(&recorder, .idle, 5);
+    cell.waitUncancelable(&recorder, .ready);
+    cell.wake(&recorder, 2);
+    try t.expectEqual(@as(u32, 3), recorder.waited);
+    try t.expectEqual(@backingInt(Phase.ready), recorder.expected);
+    try t.expectEqual(@as(u32, 2), recorder.woken);
+}
