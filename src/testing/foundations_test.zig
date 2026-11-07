@@ -228,7 +228,8 @@ test "A3 a count's remainder by a plain divisor, as a round robin takes its slot
     // A turn of three servers.
     try t.expectEqual(@as(u32, 0), (try Turn.fromRaw(6).rem(3)).raw());
     try t.expectEqual(@as(u32, 1), (try Turn.fromRaw(7).rem(3)).raw());
-    try t.expectEqual(@as(u32, 2), (try Turn.fromRaw(std.math.maxInt(u32)).rem(3)).raw());
+    try t.expectEqual(@as(u32, 0), (try Turn.fromRaw(std.math.maxInt(u32)).rem(3)).raw()); // 2^32 - 1 is a multiple of 3
+    try t.expectEqual(@as(u32, 3), (try Turn.fromRaw(std.math.maxInt(u32)).rem(4)).raw());
     try t.expectError(error.DivisionByZero, Turn.fromRaw(7).rem(0));
     comptime std.debug.assert(Turn.RemError == error{DivisionByZero});
     // Signed: the count's sign, as @rem; the minimum by -1 is zero, never an overflow.
