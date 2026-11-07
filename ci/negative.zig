@@ -278,6 +278,18 @@ const cases = [_]Case{
     \\    return a.units.Duration(.millisecond, i64).fromRaw(1).toSeconds(u32);
     \\}
     },
+    .{ .name = "duration_timespec_shape", .message = "a timespec is a struct of integer sec and nsec", .source =
+    \\const a = @import("aegis");
+    \\export fn bad() void {
+    \\    _ = a.units.Duration(.millisecond, i64).fromRaw(1).toTimespec(struct { seconds: i64, nsec: i64 });
+    \\}
+    },
+    .{ .name = "duration_timespec_nsec", .message = "a timespec's nsec holds 999_999_999", .source =
+    \\const a = @import("aegis");
+    \\export fn bad() void {
+    \\    _ = a.units.Duration(.millisecond, i64).fromRaw(1).toTimespec(struct { sec: i64, nsec: i16 }) catch {};
+    \\}
+    },
     .{ .name = "atomic_slice", .message = "single-item pointer", .source =
     \\const a = @import("aegis");
     \\export fn bad() usize {

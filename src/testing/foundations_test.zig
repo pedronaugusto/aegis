@@ -189,6 +189,39 @@ test "A3 a duration reads as fractional seconds, the nearest float where its cou
     try t.expect(std.math.isNegativeInf(U.Duration(.day, i32).fromRaw(-1).toSeconds(f16)));
 }
 
+test "A3 a duration is a C timespec: whole seconds toward negative infinity and the nanoseconds past them, checked where seconds may not fit" {
+    const U = aegis.units;
+    const Ms = U.Duration(.millisecond, i64);
+    const Ts = std.posix.timespec;
+    // nanosleep's argument: 1.5s.
+    const a = try Ms.fromRaw(1500).toTimespec(Ts);
+    try t.expectEqual(@as(@FieldType(Ts, "sec"), 1), a.sec);
+    try t.expectEqual(@as(@FieldType(Ts, "nsec"), 500_000_000), a.nsec);
+    // A negative span keeps nsec in 0..999_999_999, as POSIX does.
+    const b = try Ms.fromRaw(-1).toTimespec(Ts);
+    try t.expectEqual(@as(@FieldType(Ts, "sec"), -1), b.sec);
+    try t.expectEqual(@as(@FieldType(Ts, "nsec"), 999_000_000), b.nsec);
+    const Wide = struct { sec: i64, nsec: i64 };
+    // A whole unit has no nanoseconds; a nanosecond count is all nanoseconds under a second.
+    try t.expectEqual(Wide{ .sec = 120, .nsec = 0 }, U.Duration(.minute, u8).fromRaw(2).toTimespec(Wide));
+    try t.expectEqual(Wide{ .sec = 0, .nsec = 255 }, U.Duration(.nanosecond, u8).fromRaw(255).toTimespec(Wide));
+    try t.expectEqual(Wide{ .sec = 9_223_372_036, .nsec = 854_775_807 }, U.Duration(.nanosecond, i64).fromRaw(std.math.maxInt(i64)).toTimespec(Wide));
+    try t.expectEqual(Wide{ .sec = -9_223_372_037, .nsec = 145_224_192 }, U.Duration(.nanosecond, i64).fromRaw(std.math.minInt(i64)).toTimespec(Wide));
+    // No error where every span fits: a 32-bit millisecond count into a 64-bit sec.
+    comptime std.debug.assert(@TypeOf(U.Duration(.millisecond, i32).fromRaw(1).toTimespec(Wide)) == Wide);
+    // An isize or c_long sec counts as 32 bits, so a millisecond i64 may overflow on some target; a narrow
+    // sec does here.
+    comptime std.debug.assert(Ms.ToTimespecError(Ts) == error{Overflow});
+    comptime std.debug.assert(Ms.ToTimespecError(struct { sec: c_long, nsec: c_long }) == error{Overflow});
+    const Narrow = struct { sec: i8, nsec: i32 };
+    try t.expectEqual(Narrow{ .sec = 127, .nsec = 999_000_000 }, try Ms.fromRaw(127_999).toTimespec(Narrow));
+    try t.expectError(error.Overflow, Ms.fromRaw(128_000).toTimespec(Narrow));
+    try t.expectEqual(Narrow{ .sec = -128, .nsec = 0 }, try Ms.fromRaw(-128_000).toTimespec(Narrow));
+    try t.expectError(error.Overflow, Ms.fromRaw(-128_001).toTimespec(Narrow));
+    // An unsigned sec refuses a negative span.
+    try t.expectError(error.Overflow, Ms.fromRaw(-1).toTimespec(struct { sec: u32, nsec: u32 }));
+}
+
 test "A3 an instant floors to the start of its tick, toward negative infinity, saturating at the minimum" {
     const U = aegis.units;
     const Real = U.Instant(.real, .second, i8);

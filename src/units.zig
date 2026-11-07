@@ -689,6 +689,28 @@ pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
             const seconds = if (comptime step < second) count / @as(Working, comptime @floatFromInt(second / step)) else count * @as(Working, comptime @floatFromInt(step / second));
             return @floatCast(seconds);
         }
+        /// What `toTimespec(Timespec)` fails with: `Overflow` where the whole seconds of some span may not fit its
+        /// `sec`, empty where they always do. Decided as `convert` decides, on every supported target: an `isize`
+        /// or `c_long` field counts as 32 bits.
+        pub fn ToTimespecError(comptime Timespec: type) type {
+            return ErrorOf(Converted(Repr, Portable(TimespecField(Timespec, "sec")), unit.nanoseconds(), Unit.second.nanoseconds(), .down));
+        }
+        /// The span as a C `timespec` (`std.posix.timespec`, `std.c.timespec`, or any struct of integer `sec`
+        /// and `nsec`), for a call that takes one (`nanosleep`, a `ppoll` or futex timeout): the whole seconds
+        /// toward negative infinity and the nanoseconds past them, `nsec` in 0 to 999_999_999 as POSIX keeps
+        /// it, so -1ms is -1s and 999_000_000ns. No error where every span fits `sec` (`ToTimespecError`).
+        pub inline fn toTimespec(self: Self, comptime Timespec: type) Wrapped(ToTimespecError(Timespec), Timespec) {
+            const Sec = TimespecField(Timespec, "sec");
+            const Nsec = TimespecField(Timespec, "nsec");
+            if (comptime std.math.maxInt(Nsec) < 999_999_999) @compileError("a timespec's nsec holds 999_999_999: " ++ @typeName(Nsec) ++ " does not");
+            const seconds = scaledFor(Sec, unit.nanoseconds(), Unit.second.nanoseconds(), .down, @backingInt(self));
+            const sec: Sec = if (comptime ErrorOf(@TypeOf(seconds)) == error{}) seconds else try seconds;
+            const step = comptime unit.nanoseconds();
+            if (comptime step >= Unit.second.nanoseconds()) return .{ .sec = sec, .nsec = 0 };
+            const Signed = @Int(.signed, @max(@bitSizeOf(Repr) + 1, 64));
+            const past = @mod(@as(Signed, @backingInt(self)), comptime Unit.second.nanoseconds() / step) * step;
+            return .{ .sec = sec, .nsec = @intCast(past) }; // safe: past is under 10^9, which nsec holds
+        }
         /// A failure-free value when `FromIoDurationError` is empty: no error, no range check.
         pub inline fn fromIoDuration(value: std.Io.Duration, comptime rounding: Rounding) Wrapped(ErrorOf(Converted(i96, Repr, 1, unit.nanoseconds(), rounding)), Self) {
             const converted = scaledFor(Repr, 1, unit.nanoseconds(), rounding, value.nanoseconds);
@@ -820,4 +842,20 @@ pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: t
             return fromRaw(scalar.decode(Repr, data, endian));
         }
     };
+}
+
+/// The integer type of a timespec's `name` field, refusing a type that is no timespec at compile time.
+fn TimespecField(comptime Timespec: type, comptime name: []const u8) type {
+    if (@typeInfo(Timespec) != .@"struct" or !@hasField(Timespec, name)) @compileError("a timespec is a struct of integer sec and nsec: " ++ @typeName(Timespec) ++ " has no " ++ name);
+    const Field = @FieldType(Timespec, name);
+    if (@typeInfo(Field) != .int) @compileError("a timespec's " ++ name ++ " is an integer: " ++ @typeName(Timespec) ++ "'s is " ++ @typeName(Field));
+    return Field;
+}
+
+/// A C integer as its narrowest on any supported target, as `isize` already counts: `c_long` is 32 bits on
+/// Windows and 32-bit targets.
+fn Portable(comptime Int: type) type {
+    if (Int == c_long) return i32;
+    if (Int == c_ulong) return u32;
+    return Int;
 }
