@@ -164,6 +164,31 @@ test "A3 a duration divides by a count, toward zero or negative infinity, refusi
     }
 }
 
+test "A3 a duration reads as fractional seconds, the nearest float where its count is exact" {
+    const U = aegis.units;
+    const Ms = U.Duration(.millisecond, i64);
+    // An interface that takes a CFTimeInterval: the decimal's own f64.
+    try t.expectEqual(@as(f64, 0.25), Ms.fromRaw(250).toSeconds(f64));
+    try t.expectEqual(@as(f64, 1.5), Ms.fromRaw(1500).toSeconds(f64));
+    try t.expectEqual(@as(f64, 0.001), Ms.fromRaw(1).toSeconds(f64));
+    try t.expectEqual(@as(f64, -0.25), Ms.fromRaw(-250).toSeconds(f64));
+    try t.expectEqual(@as(f32, 0.25), Ms.fromRaw(250).toSeconds(f32));
+    try t.expectEqual(@as(f64, 120.0), U.Duration(.minute, u8).fromRaw(2).toSeconds(f64));
+    try t.expectEqual(@as(f64, 172_800.0), U.Duration(.day, i32).fromRaw(2).toSeconds(f64));
+    try t.expectEqual(@as(f64, 0.0), U.Duration(.second, u8).fromRaw(0).toSeconds(f64));
+    try t.expectEqual(@as(f128, 0.000_000_001), U.Duration(.nanosecond, i64).fromRaw(1).toSeconds(f128));
+    // The longest nanosecond span an i64 holds is finite in every float from f32 up.
+    const longest = U.Duration(.nanosecond, i64).fromRaw(std.math.maxInt(i64));
+    try t.expectEqual(@as(f64, 9_223_372_036.854_775_807), longest.toSeconds(f64));
+    try t.expect(std.math.isFinite(longest.toSeconds(f32)));
+    try t.expect(std.math.isFinite(U.Duration(.day, i128).fromRaw(std.math.maxInt(i128)).toSeconds(f64)));
+    // An f16 is reached through f32, so a millisecond step is no step of its own; past its range is an infinity.
+    try t.expectEqual(@as(f16, 0.25), Ms.fromRaw(250).toSeconds(f16));
+    try t.expectEqual(@as(f16, 0.001), Ms.fromRaw(1).toSeconds(f16));
+    try t.expect(std.math.isPositiveInf(U.Duration(.day, i32).fromRaw(1).toSeconds(f16)));
+    try t.expect(std.math.isNegativeInf(U.Duration(.day, i32).fromRaw(-1).toSeconds(f16)));
+}
+
 test "A3 an instant floors to the start of its tick, toward negative infinity, saturating at the minimum" {
     const U = aegis.units;
     const Real = U.Instant(.real, .second, i8);

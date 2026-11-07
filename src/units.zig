@@ -674,6 +674,21 @@ pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
             if (comptime ToIoDurationError == error{}) return .fromNanoseconds(nanoseconds);
             return .fromNanoseconds(try nanoseconds);
         }
+        /// The span in seconds as a `Float`, for an interface that takes fractional seconds (macOS's
+        /// `CFTimeInterval`, a `double` timeout). Lossy by nature, so no error: the count is rounded into
+        /// `Float` and then scaled by the unit, each to nearest, so a count `Float` holds exactly (below
+        /// 2^53 for an `f64`) gives the nearest `Float` to the span: 250 milliseconds is the `f64` 0.25. A
+        /// float narrower than `f32` is computed in `f32` and rounded once more. A span past `Float`'s
+        /// range is an infinity.
+        pub inline fn toSeconds(self: Self, comptime Float: type) Float {
+            if (comptime @typeInfo(Float) != .float) @compileError("toSeconds takes a float type, not " ++ @typeName(Float));
+            const Working = if (@typeInfo(Float).float.bits < 32) f32 else Float;
+            const count: Working = @floatFromInt(@backingInt(self));
+            const step = comptime unit.nanoseconds();
+            const second = comptime Unit.second.nanoseconds();
+            const seconds = if (comptime step < second) count / @as(Working, comptime @floatFromInt(second / step)) else count * @as(Working, comptime @floatFromInt(step / second));
+            return @floatCast(seconds);
+        }
         /// A failure-free value when `FromIoDurationError` is empty: no error, no range check.
         pub inline fn fromIoDuration(value: std.Io.Duration, comptime rounding: Rounding) Wrapped(ErrorOf(Converted(i96, Repr, 1, unit.nanoseconds(), rounding)), Self) {
             const converted = scaledFor(Repr, 1, unit.nanoseconds(), rounding, value.nanoseconds);

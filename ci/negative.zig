@@ -272,6 +272,12 @@ const cases = [_]Case{
     \\    cell.wake(&nothing, 1);
     \\}
     },
+    .{ .name = "duration_seconds_float", .message = "toSeconds takes a float type, not u32", .source =
+    \\const a = @import("aegis");
+    \\export fn bad() u32 {
+    \\    return a.units.Duration(.millisecond, i64).fromRaw(1).toSeconds(u32);
+    \\}
+    },
     .{ .name = "atomic_slice", .message = "single-item pointer", .source =
     \\const a = @import("aegis");
     \\export fn bad() usize {
