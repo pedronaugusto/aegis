@@ -107,6 +107,11 @@ pub const lint_rules = .{
         .{ .type = .{ .generic = Order, .member = .Context }, .role = .context, .internal = .{ .stack, .used, .suspended } },
         .{ .type = .{ .generic = Order, .member = .Ordered }, .role = .guarded, .internal = .{.base} },
         .{ .type = int.Checked, .role = .scalar },
+        // A checked step that only grows its value: its operand is at most its result, as overflow is an error.
+        .{ .type = .{ .generic = int.Checked, .member = .add }, .role = .checked_growth },
+        .{ .type = .{ .generic = int.Checked, .member = .mul }, .role = .checked_growth },
+        // The integer a checked value holds, read out.
+        .{ .type = .{ .generic = int.Checked, .member = .raw }, .role = .raw },
         .{ .type = int.Saturating, .role = .scalar },
         .{ .type = int.Ranged, .role = .scalar },
         .{ .type = id.Id, .role = .scalar },
@@ -124,6 +129,8 @@ pub const lint_rules = .{
         .{ .type = bounded.Limit, .role = .limit, .internal = .{.maximum} },
         .{ .type = bounded.Budget, .role = .budget, .internal = .{ .ceiling, .taken, .unsettled } },
         .{ .type = .{ .generic = bounded.Budget, .member = .Reservation }, .role = .reservation, .internal = .{ .budget, .amount, .live } },
+        // A reservation of an amount against the budget: the amount is at most what the budget has left.
+        .{ .type = .{ .generic = bounded.Budget, .member = .reserve }, .role = .charge },
         .{ .type = own.Owned, .role = .owned, .internal = .{ .data, .state } },
         .{ .type = own.OwnedIo, .role = .owned, .internal = .{ .data, .state } },
         .{ .type = own.MustUse, .role = .must_use, .internal = .{ .data, .pending, .live } },
@@ -139,6 +146,9 @@ pub const lint_rules = .{
         .{ .type = .{ .generic = scope.Table, .member = .Scope }, .role = .scope, .internal = .{ .table, .generation, .index } },
         .{ .type = scope.Ref, .role = .ref, .internal = .{ .slot, .generation, .pointer } },
         .{ .type = input.Untrusted, .role = .untrusted, .internal = .{.value} },
+        // What hands the peer's value to the program's parser, and the peer's value itself as a parser reads it.
+        .{ .type = .{ .generic = input.Untrusted, .member = .parse }, .role = .parse },
+        .{ .type = .{ .generic = input.Untrusted, .member = .readForParse }, .role = .peer_value },
         .{ .type = err.PublicSource, .role = .public_source },
         // The always-on contracts and the optional diagnostics, which a linter counts as assertions.
         .{ .type = assert.invariant, .role = .invariant },
