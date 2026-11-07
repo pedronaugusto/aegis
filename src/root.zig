@@ -66,16 +66,21 @@ pub const input = @import("input.zig");
 /// Allocation-free closed public diagnostic frames.
 pub const err = @import("err.zig");
 
+const std = @import("std");
 /// The synchronization and logical-task contracts the root exports, one name each.
 const sync = @import("sync.zig");
 
 /// What each of aegis's types and assertions means, for a linter that reads it (glint, design §12): its role, the
 /// fields only aegis touches, and the obligations no body shows (a reservation's count, a guard's lock,
-/// a scope's record, a result that must be used). Every entry names its declaration, so a rename here
+/// a scope's record, a result that must be used), and the std declarations its own replace. Every entry names its declaration, so a rename here
 /// breaks the build instead of leaving a linter reading a name that is gone.
 pub const lint_rules = .{
     .version = 1,
     .include = .{@import("Order.zig").lint_rules},
+    .replaces = .{
+        .{ .std = std.Io.Dir.readFileAlloc, .with = own.readFile, .why = "std's takes a failed length as a guess and reads on, so a cancel that lands there is lost; own.readFile returns it, under a limit the caller gives" },
+        .{ .std = std.Io.Dir.readFileAllocOptions, .with = own.readFile, .why = "std's takes a failed length as a guess and reads on, so a cancel that lands there is lost; own.readFile (own.readFileSentinel for a sentinel) returns it, under a limit the caller gives" },
+    },
     .roles = .{
         .{ .type = Secret, .role = .secret, .internal = .{.material} },
         .{ .type = SecretBytes, .role = .bytes, .internal = .{ .allocation, .used_len } },
