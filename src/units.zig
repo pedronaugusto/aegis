@@ -400,6 +400,13 @@ pub fn Count(comptime Tag: type, comptime Repr: type) type {
         pub inline fn mul(self: Self, rhs: Repr) MulError!Self {
             return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).mul(rhs)).raw());
         }
+        /// A division by zero, the one remainder that fails.
+        pub const RemError = ints.Checked(Repr).RemError;
+        /// The remainder by a plain divisor, with the count's sign (`@rem`): which of `rhs` slots a round
+        /// robin's turn falls on (`turn.rem(servers).raw()`).
+        pub inline fn rem(self: Self, rhs: Repr) RemError!Self {
+            return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).rem(rhs)).raw());
+        }
         /// No error where every value of this representation fits `Target` on every supported target.
         pub inline fn convert(self: Self, comptime Target: type) ints.Lifted(Repr, Target, Count(Tag, Target)) {
             const converted = ints.cast(Target, @backingInt(self));

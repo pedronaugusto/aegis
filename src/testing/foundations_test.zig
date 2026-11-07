@@ -222,6 +222,28 @@ test "A3 a duration is a C timespec: whole seconds toward negative infinity and 
     try t.expectError(error.Overflow, Ms.fromRaw(-1).toTimespec(struct { sec: u32, nsec: u32 }));
 }
 
+test "A3 a count's remainder by a plain divisor, as a round robin takes its slot, refusing zero" {
+    const U = aegis.units;
+    const Turn = U.Count(struct {}, u32);
+    // A turn of three servers.
+    try t.expectEqual(@as(u32, 0), (try Turn.fromRaw(6).rem(3)).raw());
+    try t.expectEqual(@as(u32, 1), (try Turn.fromRaw(7).rem(3)).raw());
+    try t.expectEqual(@as(u32, 2), (try Turn.fromRaw(std.math.maxInt(u32)).rem(3)).raw());
+    try t.expectError(error.DivisionByZero, Turn.fromRaw(7).rem(0));
+    comptime std.debug.assert(Turn.RemError == error{DivisionByZero});
+    // Signed: the count's sign, as @rem; the minimum by -1 is zero, never an overflow.
+    const S = U.Count(struct {}, i8);
+    try t.expectEqual(@as(i8, -1), (try S.fromRaw(-7).rem(3)).raw());
+    try t.expectEqual(@as(i8, 1), (try S.fromRaw(7).rem(-3)).raw());
+    try t.expectEqual(@as(i8, 0), (try S.fromRaw(-128).rem(-1)).raw());
+    var x: i16 = -128;
+    while (x <= 127) : (x += 1) {
+        for ([_]i8{ -128, -3, -1, 1, 2, 7, 127 }) |d| {
+            try t.expectEqual(@as(i8, @intCast(@rem(x, d))), (try S.fromRaw(@intCast(x)).rem(d)).raw());
+        }
+    }
+}
+
 test "A3 an instant floors to the start of its tick, toward negative infinity, saturating at the minimum" {
     const U = aegis.units;
     const Real = U.Instant(.real, .second, i8);
