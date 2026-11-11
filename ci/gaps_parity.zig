@@ -279,6 +279,12 @@ export fn baselineGapsAtomicAdd(cell: *std.atomic.Value(u32), value: u32) u32 {
 export fn wrapperGapsAtomicAdd(cell: *a.Atomic(c.Hits), value: u32) u32 {
     return c.atomicAdd(true, cell, value) catch std.math.maxInt(u32);
 }
+export fn baselineGapsReadEndSettle(file: *std.Io.File.Reader) u8 {
+    return @intFromBool(c.readEndSettle(false, file) == error.Canceled);
+}
+export fn wrapperGapsReadEndSettle(file: *std.Io.File.Reader) u8 {
+    return @intFromBool(c.readEndSettle(true, file) == error.Canceled);
+}
 export fn baselineGapsSignalGet(owner: *const c.DirectSignal) ?*const u64 {
     return c.signalGet(false, owner);
 }

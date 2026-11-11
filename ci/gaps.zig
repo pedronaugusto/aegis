@@ -390,3 +390,9 @@ pub fn signalSet(comptime wrapped: bool, io: Io, owner: if (wrapped) *a.Signal(u
     io.futexWake(SignalState, &owner.state.raw, std.math.maxInt(u32));
     return true;
 }
+
+pub fn readEndSettle(comptime wrapped: bool, file: *Io.File.Reader) error{ ReadFailed, Canceled } {
+    if (wrapped) return a.io.ReadEnd.fromFile(file).settle(error.ReadFailed);
+    if (file.err) |cause| if (cause == error.Canceled) return error.Canceled;
+    return error.ReadFailed;
+}

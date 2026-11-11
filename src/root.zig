@@ -64,6 +64,8 @@ pub const parts = @import("parts.zig");
 /// Checked generational keys and typed positions; owners require external synchronization.
 pub const handle = @import("handle.zig");
 /// Boundary markers preserving each parser's exact error and refined result contract.
+/// Stream ends that state why they failed: a reader or writer with the way to its cause.
+pub const io = @import("io.zig");
 pub const input = @import("input.zig");
 /// Allocation-free closed public diagnostic frames.
 pub const err = @import("err.zig");

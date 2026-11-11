@@ -17,6 +17,7 @@ test {
     _ = @import("secret.zig");
     _ = @import("sync.zig");
     _ = @import("Signal.zig");
+    _ = @import("io.zig");
     _ = @import("handle.zig");
     _ = @import("input.zig");
     _ = @import("err.zig");

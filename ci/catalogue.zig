@@ -42,6 +42,9 @@ pub const Required = union(enum) {
     rule: []const u8,
     /// The module built on it, itself required by a rule.
     block: []const u8,
+    /// The family packages that need it where no rule can name the raw pattern it answers: what
+    /// glint does not enforce, said so (aegis's coverage table, docs/design.md).
+    packages: []const u8,
 };
 
 pub const modules = [_]Module{
@@ -157,6 +160,15 @@ pub const modules = [_]Module{
         .always = "set once and published by a release store; a second set is `AlreadySet`, the first value kept",
         .kernels = &.{ "gaps_signal_get", "gaps_signal_set" },
         .example = "examples/signal.zig",
+    },
+    .{
+        .name = "io",
+        .required = .{ .packages = "cloak, parley (no rule names the pattern)" },
+        .names = &.{"io"},
+        .release = "an end is three pointers: the std interface, its context and the cause's accessor",
+        .always = "every end is made stating where its cause is; `settle` gives `Canceled` for a cancel, never `ReadFailed` or `WriteFailed`",
+        .kernels = &.{"gaps_read_end_settle"},
+        .example = "examples/io.zig",
     },
     .{
         .name = "Atomic",
@@ -447,6 +459,10 @@ fn earned(err: *std.Io.Writer, module: Module) !bool {
             };
             try err.print("catalogue: {s} is built on by {s}, which is no module\n", .{ module.name, name });
         },
+        .packages => |names| {
+            if (names.len != 0) return true;
+            try err.print("catalogue: {s} names no package that needs it\n", .{module.name});
+        },
     }
     return false;
 }
@@ -459,6 +475,7 @@ fn table(out: *std.Io.Writer) !void {
         const why = switch (module.required) {
             .rule => |id| id,
             .block => |name| try std.mem.print(&buffer, "`{s}` builds on it", .{name}),
+            .packages => |names| names,
         };
         try out.print("| `{s}` | {s} | {s} | {s} | {s} | {s} | [{s}]({s}) |\n", .{ module.name, why, module.release, module.always, orDash(module.checked), orDash(module.debug), std.Io.Dir.path.basename(module.example), module.example });
     }
