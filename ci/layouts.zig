@@ -69,6 +69,8 @@ pub const rows = [_]Row{
     .{ .module = "Signal", .label = "Signal(u64)", .aegis = a.Signal(u64), .direct = struct { state: std.atomic.Value(enum(u32) { unset, setting, set }), value: u64 }, .equal = .every },
     .{ .module = "io", .label = "io.ReadEnd", .aegis = a.io.ReadEnd, .direct = struct { interface: *anyopaque, context: *const anyopaque, failure: *const fn (*const anyopaque) ?anyerror }, .equal = .every },
     .{ .module = "io", .label = "io.WriteEnd", .aegis = a.io.WriteEnd, .direct = struct { interface: *anyopaque, context: *const anyopaque, failure: *const fn (*const anyopaque) ?anyerror }, .equal = .every },
+    .{ .module = "points", .label = "points.Point", .aegis = a.points.Point, .direct = struct { set: []const u8, name: []const u8 }, .equal = .every },
+    .{ .module = "points", .label = "points.Driver", .aegis = a.points.Driver, .direct = struct { context: *anyopaque, vtable: *const anyopaque }, .equal = .every },
     .{ .module = "Atomic", .label = "Atomic(units.Bytes(u64))", .aegis = a.Atomic(a.units.Bytes(u64)), .direct = std.atomic.Value(u64), .equal = .every },
     .{ .module = "Atomic", .label = "Atomic(?*u64)", .aegis = a.Atomic(?*u64), .direct = std.atomic.Value(?*u64), .equal = .every },
     .{ .module = "Shared", .label = "Shared(u64, cleanup)", .aegis = a.Shared(u64, cleanup), .direct = *anyopaque, .equal = .release },

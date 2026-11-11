@@ -69,6 +69,9 @@ pub const io = @import("io.zig");
 pub const input = @import("input.zig");
 /// Allocation-free closed public diagnostic frames.
 pub const err = @import("err.zig");
+/// Fault points a package marks in its own code for a test's driver to decide; compiled out of
+/// every build but a test build.
+pub const points = @import("points.zig");
 
 const std = @import("std");
 /// The synchronization and logical-task contracts the root exports, one name each.

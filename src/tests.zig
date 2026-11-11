@@ -9,6 +9,7 @@ test {
     _ = @import("scope_test.zig");
     _ = @import("input_test.zig");
     _ = @import("err_test.zig");
+    _ = @import("points_test.zig");
     _ = @import("secret/inline_test.zig");
     _ = @import("secret/bytes_test.zig");
     _ = @import("Guarded_test.zig");

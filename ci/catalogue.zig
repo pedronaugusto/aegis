@@ -171,6 +171,15 @@ pub const modules = [_]Module{
         .example = "examples/io.zig",
     },
     .{
+        .name = "points",
+        .required = .{ .packages = "shakedown and the packages it tests (no rule names the pattern)" },
+        .names = &.{"points"},
+        .release = "nothing: outside a test build every verb is its inert answer as it compiles, with no branch, load or symbol",
+        .always = "in a test build, one atomic load of the driver slot and one compare while no driver is installed; a second driver is refused while one is installed; `shorten` stays within `[1, n]`",
+        .kernels = &.{ "points_fault", "points_shorten", "points_yield", "points_reached" },
+        .example = "examples/points.zig",
+    },
+    .{
         .name = "Atomic",
         .required = .{ .rule = "A007" },
         .names = &.{"Atomic"},

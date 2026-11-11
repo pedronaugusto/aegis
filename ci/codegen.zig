@@ -12,8 +12,9 @@ const region_names = [_][]const u8{ "region_create", "region_push", "region_appe
 const pool_names = [_][]const u8{ "pool_alloc", "pool_free", "pool_get", "run_slice" };
 const flat_names = [_][]const u8{ "flat_get", "flat_nested" };
 const parts_names = [_][]const u8{ "parts_plan", "parts_place" };
+const points_names = [_][]const u8{ "points_fault", "points_shorten", "points_yield", "points_reached" };
 /// Every pair this check compares, by the name its exports are spelled from.
-pub const names = owner_names ++ numeric_names ++ bytes_names ++ a67_names ++ gaps_names ++ state_names ++ scope_names ++ a11_names ++ region_names ++ pool_names ++ flat_names ++ parts_names;
+pub const names = owner_names ++ numeric_names ++ bytes_names ++ a67_names ++ gaps_names ++ state_names ++ scope_names ++ a11_names ++ region_names ++ pool_names ++ flat_names ++ parts_names ++ points_names;
 pub fn main(init: std.process.Init) !void {
     const a = init.arena.allocator();
     const args = try init.minimal.args.toSlice(a);
@@ -37,6 +38,12 @@ pub fn main(init: std.process.Init) !void {
             const assembly = try dir.readFileAlloc(init.io, try a.print("{s}.s", .{stem}), a, .limited(32 * 1024 * 1024));
             const ir = try dir.readFileAlloc(init.io, try a.print("{s}.ll", .{stem}), a, .limited(32 * 1024 * 1024));
             const object = try dir.readFileAlloc(init.io, try a.print("{s}.o", .{stem}), a, .limited(32 * 1024 * 1024));
+            // Outside a test every fault point is its inert answer: the driver slot is never referenced, so no build holds it.
+            if (std.mem.find(u8, ir, "points_driver_slot") != null) {
+                var failure = std.Io.File.stderr().writer(init.io, &.{});
+                try failure.interface.print("{s} {s}: the fault point driver slot is in a build outside a test\n", .{ target, mode });
+                return error.FaultPointLeft;
+            }
             var evidence: std.Io.Writer.Allocating = .init(a);
             try evidence.writer.print("# {s} {s} parity\n\nZig 0.17.0, LLVM, baseline CPU, stripped object. Every pair has identical emitted instructions (shared aliases or normalized assembly) and equal code size; a `_switch` row may be smaller than the idiomatic switch it is held against, never larger. The storage and alignment assertions beside the fixtures compile.\n\n", .{ target, mode });
             for (names) |name| {
