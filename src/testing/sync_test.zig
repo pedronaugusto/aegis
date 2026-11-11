@@ -546,3 +546,88 @@ test "Atomic's futex methods take any provider of std.Io's futex methods, the wo
     try t.expectEqual(@backingInt(Phase.ready), recorder.expected);
     try t.expectEqual(@as(u32, 2), recorder.woken);
 }
+
+const SignalWords = struct { a: u64, b: u64, c: u64, d: u64 };
+const SignalRace = struct {
+    signal: a.Signal(SignalWords) = .init(),
+    fn setter(self: *SignalRace, io: Io, word: u64) a.Signal(SignalWords).SetError!void {
+        return self.signal.set(io, .{ .a = word, .b = word, .c = word, .d = word });
+    }
+    fn waiter(self: *SignalRace, io: Io) Io.Cancelable!SignalWords {
+        return (try self.signal.wait(io)).*;
+    }
+    fn main(self: *SignalRace, io: Io) !void {
+        var first_waiter = try io.concurrent(waiter, .{ self, io });
+        var second_waiter = try io.concurrent(waiter, .{ self, io });
+        var one = try io.concurrent(setter, .{ self, io, 1 });
+        var two = try io.concurrent(setter, .{ self, io, 2 });
+        const results = [_]a.Signal(SignalWords).SetError!void{ one.await(io), two.await(io) };
+        // Exactly one side wins; the other learns it lost.
+        var won: usize = 0;
+        for (results) |result| {
+            if (result) |_| {
+                won += 1;
+            } else |err| try t.expectEqual(error.AlreadySet, err);
+        }
+        try t.expectEqual(@as(usize, 1), won);
+        const winner = self.signal.get().?.a;
+        try t.expect(winner == 1 or winner == 2);
+        // Every waiter sees the winner's value, whole.
+        for ([_]SignalWords{ try first_waiter.await(io), try second_waiter.await(io) }) |seen| {
+            try t.expectEqual(SignalWords{ .a = winner, .b = winner, .c = winner, .d = winner }, seen);
+        }
+    }
+};
+test "signal: two sides setting at once, exactly one wins, the other gets AlreadySet, every waiter sees the winner's value" {
+    for (0..16) |seed| {
+        const sim = try shake.Sim.init(t.allocator, .{ .executor = .threads, .seed = seed, .yield_per_million = 250000, .spurious_wake_per_million = 300000 });
+        defer sim.deinit();
+        var state: SignalRace = .{};
+        try t.expectEqual(shake.Sim.Outcome.finished, sim.run(SignalRace.main, .{ &state, sim.io() }));
+    }
+}
+
+const SignalCancel = struct {
+    signal: a.Signal(u32) = .init(),
+    fn waiter(self: *SignalCancel, io: Io) Io.Cancelable!u32 {
+        return (try self.signal.wait(io)).*;
+    }
+    fn main(self: *SignalCancel, io: Io) !void {
+        var waiting = try io.concurrent(waiter, .{ self, io });
+        try io.sleep(.fromNanoseconds(1), .awake);
+        try t.expectError(error.Canceled, waiting.cancel(io));
+        // The canceled wait leaves the signal as it was: unset, and set later as usual.
+        try t.expect(self.signal.get() == null);
+        try self.signal.set(io, 5);
+        try t.expectEqual(@as(u32, 5), (try self.signal.wait(io)).*);
+    }
+};
+test "signal: a waiter canceled while unset returns Canceled and leaves the signal unset" {
+    for (0..8) |seed| {
+        const sim = try shake.Sim.init(t.allocator, .{ .executor = .threads, .seed = seed });
+        defer sim.deinit();
+        var state: SignalCancel = .{};
+        try t.expectEqual(shake.Sim.Outcome.finished, sim.run(SignalCancel.main, .{ &state, sim.io() }));
+    }
+}
+
+const SignalWake = struct {
+    signal: a.Signal(u32) = .init(),
+    fn setLater(self: *SignalWake, io: Io) (a.Signal(u32).SetError || Io.Cancelable)!void {
+        try io.sleep(.fromNanoseconds(1), .awake);
+        try self.signal.set(io, 9);
+    }
+    fn main(self: *SignalWake, io: Io) !void {
+        var setting = try io.concurrent(setLater, .{ self, io });
+        try t.expectEqual(@as(u32, 9), (try self.signal.wait(io)).*);
+        try setting.await(io);
+    }
+};
+test "signal: a waiter is woken by a set from another task" {
+    for (0..8) |seed| {
+        const sim = try shake.Sim.init(t.allocator, .{ .executor = .threads, .seed = seed, .spurious_wake_per_million = 300000 });
+        defer sim.deinit();
+        var state: SignalWake = .{};
+        try t.expectEqual(shake.Sim.Outcome.finished, sim.run(SignalWake.main, .{ &state, sim.io() }));
+    }
+}

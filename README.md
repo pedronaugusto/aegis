@@ -144,6 +144,7 @@ What each module is in ReleaseFast and ReleaseSmall, what it keeps checking in e
 | `Condition` | A007 | the hand-written waiter registry | the waiter limit; the guard held again on every return; a wait with another owner's guard stops | — | — | [condition.zig](examples/condition.zig) |
 | `Once` | A007 | state, mutex, a condition and `T`; `InitContext` is empty | initialized once and published by a release store; the waiter limit | — | a recursive initializer stops | [once.zig](examples/once.zig) |
 | `Lazy` | A007 | state, mutex and `T` | initialized once and published by a release store; only the initializer's errors | — | — | [lazy.zig](examples/lazy.zig) |
+| `Signal` | A007 | a state word and `T` | set once and published by a release store; a second set is `AlreadySet`, the first value kept | — | — | [signal.zig](examples/signal.zig) |
 | `Atomic` | A007 | the backing integer's atomic cell | checked `fetchAdd` and `fetchSub` report overflow with the cell unchanged | — | — | [atomic.zig](examples/atomic.zig) |
 | `Shared` | A007 | one pointer | the static cleanup runs once, at the last release; a count past its limit stops | — | a handle released twice stops | [shared.zig](examples/shared.zig) |
 | `Order` | A021 | `Context` is empty; an ordered lock is its lock | the lock's own operations | — | an acquire out of rank or of an owner already held stops | [order.zig](examples/order.zig) |

@@ -9,6 +9,7 @@ pub const Once = once.Once;
 pub const InitContext = once.InitContext;
 pub const Atomic = @import("Atomic.zig").Atomic;
 pub const Lazy = @import("Lazy.zig").Lazy;
+pub const Signal = @import("Signal.zig").Signal;
 pub const Shared = @import("Shared.zig").Shared;
 pub const Order = @import("Order.zig").Order;
 const confined = @import("Confined.zig");

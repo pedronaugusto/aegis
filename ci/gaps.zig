@@ -9,6 +9,8 @@ pub const DirectSpin = struct { lock: std.atomic.Value(bool) = .init(false), dat
 pub fn Owner(comptime wrapped: bool) type {
     return if (wrapped) a.Guarded(usize) else DirectSpin;
 }
+pub const SignalState = enum(u32) { unset, setting, set };
+pub const DirectSignal = struct { state: std.atomic.Value(SignalState) = .init(.unset), value: u64 = undefined };
 pub const DirectLazy = struct { state: std.atomic.Value(enum(u8) { empty, ready }) = .init(.empty), mutex: Io.Mutex = .init, data: u64 = undefined };
 pub const DirectBlock = struct { count: std.atomic.Value(usize) = .init(1), gpa: std.mem.Allocator, data: u64 };
 pub const handle_limit = std.math.maxInt(usize) / 2;
@@ -371,4 +373,20 @@ pub fn atomicAdd(comptime wrapped: bool, cell: *AtomicCell(wrapped), value: u32)
         if (sum[1] != 0) return error.Overflow;
         seen = cell.cmpxchgWeak(seen, sum[0], .acq_rel, .monotonic) orelse return seen;
     }
+}
+
+pub fn signalGet(comptime wrapped: bool, owner: if (wrapped) *const a.Signal(u64) else *const DirectSignal) ?*const u64 {
+    if (wrapped) return owner.get();
+    return if (owner.state.load(.acquire) == .set) &owner.value else null;
+}
+pub fn signalSet(comptime wrapped: bool, io: Io, owner: if (wrapped) *a.Signal(u64) else *DirectSignal, value: u64) bool {
+    if (wrapped) {
+        owner.set(io, value) catch return false;
+        return true;
+    }
+    if (owner.state.cmpxchgStrong(.unset, .setting, .monotonic, .monotonic) != null) return false;
+    owner.value = value;
+    owner.state.store(.set, .release);
+    io.futexWake(SignalState, &owner.state.raw, std.math.maxInt(u32));
+    return true;
 }

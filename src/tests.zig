@@ -16,6 +16,7 @@ test {
     _ = @import("SpinRwGuarded.zig");
     _ = @import("secret.zig");
     _ = @import("sync.zig");
+    _ = @import("Signal.zig");
     _ = @import("handle.zig");
     _ = @import("input.zig");
     _ = @import("err.zig");

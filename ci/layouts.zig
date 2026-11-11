@@ -66,6 +66,7 @@ pub const rows = [_]Row{
     .{ .module = "Once", .label = "Once(u64)", .aegis = a.Once(u64), .direct = struct { state: std.atomic.Value(enum(u8) { empty, running, ready }), mutex: std.Io.Mutex, changed: DirectCondition, data: u64 }, .equal = .every },
     .{ .module = "Once", .label = "InitContext", .aegis = a.InitContext, .direct = void, .equal = .release },
     .{ .module = "Lazy", .label = "Lazy(u64)", .aegis = a.Lazy(u64), .direct = struct { state: std.atomic.Value(enum(u8) { empty, ready }), mutex: std.Io.Mutex, data: u64 }, .equal = .every },
+    .{ .module = "Signal", .label = "Signal(u64)", .aegis = a.Signal(u64), .direct = struct { state: std.atomic.Value(enum(u32) { unset, setting, set }), value: u64 }, .equal = .every },
     .{ .module = "Atomic", .label = "Atomic(units.Bytes(u64))", .aegis = a.Atomic(a.units.Bytes(u64)), .direct = std.atomic.Value(u64), .equal = .every },
     .{ .module = "Atomic", .label = "Atomic(?*u64)", .aegis = a.Atomic(?*u64), .direct = std.atomic.Value(?*u64), .equal = .every },
     .{ .module = "Shared", .label = "Shared(u64, cleanup)", .aegis = a.Shared(u64, cleanup), .direct = *anyopaque, .equal = .release },

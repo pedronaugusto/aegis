@@ -279,7 +279,21 @@ export fn baselineGapsAtomicAdd(cell: *std.atomic.Value(u32), value: u32) u32 {
 export fn wrapperGapsAtomicAdd(cell: *a.Atomic(c.Hits), value: u32) u32 {
     return c.atomicAdd(true, cell, value) catch std.math.maxInt(u32);
 }
+export fn baselineGapsSignalGet(owner: *const c.DirectSignal) ?*const u64 {
+    return c.signalGet(false, owner);
+}
+export fn wrapperGapsSignalGet(owner: *const a.Signal(u64)) ?*const u64 {
+    return c.signalGet(true, owner);
+}
+export fn baselineGapsSignalSet(io: *const std.Io, owner: *c.DirectSignal, value: u64) bool {
+    return c.signalSet(false, io.*, owner, value);
+}
+export fn wrapperGapsSignalSet(io: *const std.Io, owner: *a.Signal(u64), value: u64) bool {
+    return c.signalSet(true, io.*, owner, value);
+}
 comptime {
+    std.debug.assert(@sizeOf(c.DirectSignal) == @sizeOf(a.Signal(u64)));
+    std.debug.assert(@alignOf(c.DirectSignal) == @alignOf(a.Signal(u64)));
     std.debug.assert(@sizeOf(c.DirectSpin) == @sizeOf(c.Owner(true)));
     std.debug.assert(@sizeOf(c.DirectLazy) == @sizeOf(a.Lazy(u64)));
     std.debug.assert(@alignOf(c.DirectLazy) == @alignOf(a.Lazy(u64)));
