@@ -59,12 +59,15 @@ export fn baselinePartsPlace(memory: [*]align(64) u8, c: *const Counts) usize {
     // The counts read once, as a caller keeps them.
     const k = c.*;
     const size = directSize(&k);
+    // A careful carving refuses a plan past the address space, as the block's `size` does.
+    if (size == std.math.maxInt(usize)) return 0;
     const p = directParts(memory[0..size], &k);
     return @intFromPtr(p.window.ptr) +% p.lits.len;
 }
 export fn wrapperPartsPlace(memory: [*]align(64) u8, c: *const Counts) usize {
     const plan = Block.plan(counts(c));
-    // The memory is the plan's size, so the refusal folds away.
+    // The memory is the plan's size, so `fit`'s refusal folds away; a plan past the address
+    // space is refused, as the careful carving refuses it.
     const n = plan.size() catch return 0;
     const block = plan.fit(memory[0..n.raw()]) catch return 0;
     const p = block.parts();

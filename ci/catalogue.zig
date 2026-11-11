@@ -335,6 +335,13 @@ pub const modules = [_]Module{
 
 /// The namespaces whose members are claimed one by one; every other public name is a module.
 const namespaces = [_][]const u8{"secret"};
+/// The public names that are no module's API: `lint_rules` is what a linter reads by declaration
+/// (glint's vocabulary), data about the modules rather than one of them.
+const declared_for_linters = [_][]const u8{"lint_rules"};
+fn forLinters(comptime name: []const u8) bool {
+    for (declared_for_linters) |each| if (std.mem.eql(u8, name, each)) return true;
+    return false;
+}
 
 /// The Choice harness's callers, as the catalogue names them.
 const choice_kernels = blk: {
@@ -351,6 +358,7 @@ pub fn main(init: std.process.Init) !void {
     var failed = false;
     // Every public name of aegis, its namespaces' members one by one.
     inline for (@typeInfo(aegis).@"struct".decl_names) |decl| {
+        if (comptime forLinters(decl)) continue;
         if (comptime isNamespace(decl)) {
             inline for (@typeInfo(@field(aegis, decl)).@"struct".decl_names) |member| failed = !try claimed(&err.interface, decl ++ "." ++ member) or failed;
         } else failed = !try claimed(&err.interface, decl) or failed;
