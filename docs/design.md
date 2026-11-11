@@ -297,6 +297,48 @@ The checks follow the mode matrix: Zig's runtime safety. Debug and ReleaseSafe c
 
 A check that stops the program is the right answer for a bug, and the wrong one for an event: a completion that arrives after its request ended is expected, and a handle, whose check is required in every build mode, is what to hold there. Scopes catch the use that should never happen; they do not catch a raw pointer taken out of `get` and kept, a reference that is never used, or memory the creator frees without ending the scope.
 
+## What glint enforces
+
+aegis declares in `lint_rules` (vocabulary version 2) the raw constructs its types answer, and glint reports each use outside a seam the project declares. The table holds every public type and function family: either the entries that send raw code to it, or no entry with the reason, so nobody reads more enforcement into glint than there is. A rule marked opt-in runs only where a project selects it.
+
+| aegis | Entries (rule: what is reported) | Or no entry, because |
+|---|---|---|
+| `Guarded`, `BlockingGuarded` | A007: `std.Io.Mutex` | |
+| `RwGuarded` | A007: `std.Io.RwLock` | |
+| `SpinRwGuarded` | A007: `std.atomic.Mutex` | |
+| `Condition` | A007: `std.Io.Condition`, `std.Io.futexWait`, `futexWaitTimeout`, `futexWaitUncancelable`, `futexWake` | |
+| `Signal`, `Once`, `Lazy` | A007: `std.Io.Event` | |
+| `Atomic` | A007: `std.atomic.Value`, `@atomicLoad`, `@atomicStore`, `@atomicRmw`, `@cmpxchgWeak`, `@cmpxchgStrong` | |
+| `Shared` | A007: `std.atomic.Value` (a hand-rolled reference count is an atomic) | |
+| `Order` | A021 (opt-in): the unranked acquisitions of the four guarded types | |
+| `Confined`, `TaskIdentity`, `InitContext` | | no raw construct names "this value belongs to one task"; that is flow |
+| `Secret` | A008: Ed25519 `SecretKey`/`KeyPair`, X25519 `KeyPair`, and `SecretKey`/`KeyPair` of ECDSA P-256, hybrid ML-KEM-768+X25519, ML-KEM-768 and ML-DSA-65 | |
+| `SecretBytes` | A008: `std.crypto.secureZero` | |
+| `secret` (`Choice`, `equal`, `compareUnsigned`) | A008: `std.crypto.timing_safe.eql`, `timing_safe.compare` | |
+| `secret.Timing`, `scrubStack` | | no std declaration does either; nothing raw to send here |
+| `units.Duration`, `units.Instant` | A011: `std.Io.Duration`'s functions and `nanoseconds` field, `std.Io.Timestamp.fromNanoseconds` and its `to*` functions and `nanoseconds` field, the 24 `std.time` per-unit constants | |
+| `units.Count`, `Bytes`, `Bits` | | a raw integer has no declaration to name; ReleaseSafe checks its overflow |
+| `own.Owned`, `own.OwnedIo` | A015: `std.Io.File`, `std.Io.Dir`, `std.Io.net.Stream`, `std.Io.net.Server`, `std.process.Child` held by value in a field | |
+| `own.readFile`, `readFileSentinel`, `readOpened`, `readOpenedSentinel` | A009: `std.Io.Dir.readFileAlloc`, `readFileAllocOptions` (and these four are input sources themselves, read in the input seam) | |
+| `own.MustUse` | | Zig refuses an unused result itself; a discarded error is Z026's |
+| `input.Untrusted` | A009: every function of `std.Io.Reader` but those that make, wrap or skip, its `buffer` field, `File.readStreaming`, `readPositional`, `readPositionalAll`, `Dir.readFile`, `readLink`, `std.process.run`, `std.posix.read` | |
+| `io.ReadEnd`, `io.WriteEnd` | | the lost cause is what a handler does with `ReadFailed`, flow, not a declaration a reference names |
+| `assert.invariant`, `debug`, `debugCheck` | A013: `std.debug.assert` | |
+| `assert.maybe`, `Coverage` | | no raw construct they answer |
+| `bounded.Array`, `bounded.Buffer` | A012 (opt-in): `std.ArrayList`, `std.array_list.Aligned`, `Managed`, `AlignedManaged` | |
+| `bounded.Ring`, `bounded.RingBuffer` | A012 (opt-in): `std.Deque` | |
+| `bounded.Limit`, `bounded.Budget` | | work sized by input is flow; std's maps, `MultiArrayList` and priority queues have no bounded answer here, so they are not named |
+| `int.Checked`, `Saturating`, `Ranged`, `int.cast` | | ReleaseSafe checks arithmetic and `@intCast` at run time; an exact entry such as "`@intCast` of a value read from input" needs to know where the value came from, which is flow |
+| `id.Id`, `NonZero`, `Counter` | | a raw integer id has no declaration to name; P008 reports two same-typed ids in one signature |
+| `handle` (`SlotPool`, `RunPool`, `DenseSlotMap`, `SecondaryMap`, `Index`, `Offset`, `Domain`) | | a raw pointer or index into one's own storage names no std declaration; whether it outlives its target is flow |
+| `scope` (`Table`, `Ref`, `Slot`) | | a lifetime is flow; P009 reports only the certain `return &local` |
+| `state` (`Machine`, `Edge`, `Spec`) | | a state field moved by hand is an ordinary enum write; no construct names it |
+| `Region` | | no std allocator is the same thing (its live memory never moves and it has a limit); nothing to name exactly |
+| `flat`, `parts` | | a hand carving is pointer casts, which P007 bans on its own; no declaration names a layout |
+| `err` (`PublicText`, `PublicSource`, `Context`, `Failure`) | | no raw construct names "text a peer may read" |
+
+Every type that holds state is also `governed` (A001): its fields are aegis's, and a cast or reflection over it outside aegis is a finding. Where the table says no entry, glint does not enforce the type; a package's own review does.
+
 ## One module, a checked layer graph
 
 aegis is one build module, `aegis`, rooted at `src/root.zig`; `secret`, `sync`, `id`, `units`, `int`, `handle` and the rest are namespaces of it. Separate modules per namespace bought nothing a user could feel, because Zig compiles only the declarations a program reaches, and they cost build wiring, a heavier hosted job (every profile compiled once per module) and a copy of any helper two namespaces shared: a separate module cannot import another module's file, so the move rule below existed five times.

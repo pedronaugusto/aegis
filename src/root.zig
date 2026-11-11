@@ -63,9 +63,9 @@ pub const flat = @import("flat.zig");
 pub const parts = @import("parts.zig");
 /// Checked generational keys and typed positions; owners require external synchronization.
 pub const handle = @import("handle.zig");
-/// Boundary markers preserving each parser's exact error and refined result contract.
 /// Stream ends that state why they failed: a reader or writer with the way to its cause.
 pub const io = @import("io.zig");
+/// Boundary markers preserving each parser's exact error and refined result contract.
 pub const input = @import("input.zig");
 /// Allocation-free closed public diagnostic frames.
 pub const err = @import("err.zig");
@@ -89,6 +89,7 @@ pub const lint_rules = .{
         .{ .id = .A007, .name = "shared state", .kind = .ban, .reads = .replaces, .default = true, .purpose = "std's locks, atomics and futexes outside a seam: aegis's guarded types are the answer" },
         .{ .id = .A008, .name = "secrets", .kind = .ban, .reads = .replaces, .default = true, .purpose = "std's secret keys, zeroing and constant-time comparisons outside a seam: Secret, SecretBytes and secret's comparisons are the answer" },
         .{ .id = .A009, .name = "input seam", .kind = .ban, .reads = .replaces, .default = true, .purpose = "std's input sources are called only in a declared input seam, whose results leave as input.Untrusted" },
+        .{ .id = .A012, .name = "bounded containers", .kind = .ban, .reads = .replaces, .default = false, .purpose = "where a project selects it, a std container that grows without a stated limit: bounded's Array, Buffer, Ring and RingBuffer hold a capacity the program states" },
         .{ .id = .A011, .name = "units", .kind = .ban, .reads = .replaces, .default = true, .purpose = "std's raw time conversions and per-unit constants outside a seam: units.Duration and units.Instant are the answer" },
         .{ .id = .A013, .name = "contracts", .kind = .ban, .reads = .replaces, .default = true, .purpose = "std.debug.assert is gone in ReleaseFast: aegis's assert keeps the contract in every build" },
         .{ .id = .A015, .name = "owned handles", .kind = .ban, .reads = .replaces, .default = true, .purpose = "a std handle held by value in a field is an owner nothing checks: own.OwnedIo releases it" },
@@ -161,7 +162,7 @@ pub const lint_rules = .{
         .{ .rule = .A007, .decl = std.Io.RwLock, .with = RwGuarded, .why = "a reader-writer lock apart from its data: RwGuarded holds the data and hands it out under a read or write guard" },
         .{ .rule = .A007, .decl = std.Io.Condition, .with = Condition, .why = "a condition apart from the lock its predicate needs: aegis's Condition waits on a guard" },
         .{ .rule = .A007, .decl = std.Io.Event, .with = .{ Signal, Once, Lazy }, .why = "a flag set and waited on by hand, re-armed by a reset that races its waiters: Signal is set once by the side that has the value and hands it to every waiter; Once and Lazy initialize on demand in whoever comes first" },
-        .{ .rule = .A007, .decl = std.atomic.Value, .with = Atomic, .why = "a raw atomic: Atomic is one cell of a named domain shared by pointer, with the orderings named. A bool flag is Atomic of a two-state enum, a counter Atomic(units.Count), an id Atomic(id.Id), a published address Atomic(*T)" },
+        .{ .rule = .A007, .decl = std.atomic.Value, .with = .{ Atomic, Shared }, .why = "a raw atomic: Atomic is one cell of a named domain shared by pointer, with the orderings named. A bool flag is Atomic of a two-state enum, a counter Atomic(units.Count), an id Atomic(id.Id), a published address Atomic(*T); a reference count is Shared" },
         .{ .rule = .A007, .decl = std.atomic.Mutex, .with = SpinRwGuarded, .why = "a spin lock apart from its data: SpinRwGuarded holds the data" },
         .{ .rule = .A007, .decl = std.Io.futexWait, .with = Condition, .why = "a wait on a word signalled by hand: Condition waits on a guard" },
         .{ .rule = .A007, .decl = std.Io.futexWaitTimeout, .with = Condition, .why = "a wait on a word signalled by hand: Condition waits on a guard" },
@@ -200,6 +201,8 @@ pub const lint_rules = .{
         .{ .rule = .A009, .decl = std.Io.Dir.readFileAllocOptions, .with = own.readFile, .why = "a file's contents are input, read in the input seam; std's loses a cancel that lands on the length: own.readFile (own.readFileSentinel for a sentinel) returns it" },
         .{ .rule = .A009, .decl = own.readFile, .with = input.Untrusted, .why = "a file's contents are input: read them in the input seam" },
         .{ .rule = .A009, .decl = own.readFileSentinel, .with = input.Untrusted, .why = "a file's contents are input: read them in the input seam" },
+        .{ .rule = .A009, .decl = own.readOpened, .with = input.Untrusted, .why = "an opened file's contents are input: read them in the input seam" },
+        .{ .rule = .A009, .decl = own.readOpenedSentinel, .with = input.Untrusted, .why = "an opened file's contents are input: read them in the input seam" },
         .{ .rule = .A009, .decl = std.process.run, .with = input.Untrusted, .why = "a child's output is input: run it in the input seam" },
         .{ .rule = .A009, .decl = std.posix.read, .with = input.Untrusted, .why = "what a descriptor gives is input: read it in the input seam" },
         // A011: time by hand.
@@ -241,6 +244,13 @@ pub const lint_rules = .{
         .{ .rule = .A015, .decl = std.Io.net.Stream, .held = .field, .with = own.OwnedIo, .why = "a stream held by value in a field is an owner nothing checks: own.OwnedIo releases it once" },
         .{ .rule = .A015, .decl = std.Io.net.Server, .held = .field, .with = own.OwnedIo, .why = "a server held by value in a field is an owner nothing checks: own.OwnedIo releases it once" },
         .{ .rule = .A015, .decl = std.process.Child, .held = .field, .with = own.OwnedIo, .why = "a child held by value in a field is an owner nothing checks: own.OwnedIo waits for it once" },
+        // A012: growth with a stated limit, where a project selects it. std's maps, MultiArrayList and
+        // priority queues have no bounded answer in aegis, so they are not named.
+        .{ .rule = .A012, .decl = std.ArrayList, .with = .{ bounded.Array, bounded.Buffer }, .why = "a list that grows without a limit: bounded.Array holds its capacity inline, bounded.Buffer over memory the caller states" },
+        .{ .rule = .A012, .decl = std.array_list.Aligned, .with = .{ bounded.Array, bounded.Buffer }, .why = "a list that grows without a limit: bounded.Array holds its capacity inline, bounded.Buffer over memory the caller states" },
+        .{ .rule = .A012, .decl = std.array_list.Managed, .with = .{ bounded.Array, bounded.Buffer }, .why = "a list that grows without a limit: bounded.Array holds its capacity inline, bounded.Buffer over memory the caller states" },
+        .{ .rule = .A012, .decl = std.array_list.AlignedManaged, .with = .{ bounded.Array, bounded.Buffer }, .why = "a list that grows without a limit: bounded.Array holds its capacity inline, bounded.Buffer over memory the caller states" },
+        .{ .rule = .A012, .decl = std.Deque, .with = .{ bounded.Ring, bounded.RingBuffer }, .why = "a queue that grows without a limit: bounded.Ring holds its capacity inline, bounded.RingBuffer over memory the caller states" },
         // A021: every acquisition ranked, where a project selects it.
         .{ .rule = .A021, .decl = .{ .generic = Guarded, .member = .acquire }, .with = .{ .generic = Order, .member = .Ordered }, .why = "an unranked acquisition: Order's ordered lock checks the rank" },
         .{ .rule = .A021, .decl = .{ .generic = Guarded, .member = .acquireScheduling }, .with = .{ .generic = Order, .member = .Ordered }, .why = "an unranked acquisition: Order's ordered lock checks the rank" },
