@@ -271,3 +271,19 @@ test "lint_rules names declarations that are there" {
         if (@hasField(@TypeOf(entry), "field")) try std.testing.expect(@hasField(entry.field.type, @tagName(entry.field.name)));
     }
 }
+
+test "lint_rules names every read std.posix declares as an input source" {
+    // std.posix is no banned namespace: its functions are mostly a descriptor's control. Each of its reads is an
+    // A009 entry; one a new Zig adds fails here until it is named.
+    @setEvalBranchQuota(100_000);
+    inline for (@typeInfo(std.posix).@"struct".decl_names) |name| {
+        const read = comptime std.ascii.isLower(name[0]) and (std.mem.startsWith(u8, name, "read") or std.mem.startsWith(u8, name, "pread") or std.mem.startsWith(u8, name, "recv"));
+        if (read) {
+            const function = @field(std.posix, name);
+            const named = comptime for (lint_rules.replaces) |entry| {
+                if (@hasField(@TypeOf(entry), "decl") and @TypeOf(entry.decl) == @TypeOf(function) and entry.decl == function) break true;
+            } else false;
+            try std.testing.expect(named);
+        }
+    }
+}
