@@ -57,6 +57,11 @@ fn SubResult(comptime T: type, comptime name: []const u8) type {
 /// wraparound is meant. `fetchMax` and `fetchMin` order by the backing integer, which is `compare` for every aegis
 /// scalar.
 ///
+/// A bare `bool` or integer is refused: the cell names what its bits mean, so a reader of `store(.closed)` or
+/// `fetchAdd(.one)` knows the domain without the declaration. A flag is a two-state enum (`enum(u8) { open,
+/// closed }`), a counter `units.Count(Tag, u32)`, a size `units.Bytes`, an id `id.Id(Tag, u64)`; each has the
+/// backing integer's size and instructions.
+///
 /// A pointer cell (`Atomic(*Node)`, `Atomic(?*Batch)`) holds the address itself: `load`, `store`, `swap` and the
 /// compare-and-swaps publish and take it whole, for a lock-free list head or a latest-value slot. It has no
 /// ordering or arithmetic: `fetchMax`, `fetchMin` and the adds refuse it. Who owns what it points at is the
