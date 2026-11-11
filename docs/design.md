@@ -321,7 +321,7 @@ aegis declares in `lint_rules` (vocabulary version 2) the raw constructs its typ
 | `own.Owned`, `own.OwnedIo` | A015: `std.Io.File`, `std.Io.Dir`, `std.Io.net.Stream`, `std.Io.net.Server`, `std.process.Child` held by value in a field | |
 | `own.readFile`, `readFileSentinel`, `readOpened`, `readOpenedSentinel` | A009: `std.Io.Dir.readFileAlloc`, `readFileAllocOptions` (and these four are input sources themselves, read in the input seam) | |
 | `own.MustUse` | | Zig refuses an unused result itself; a discarded error is Z026's |
-| `input.Untrusted` | A009: every function of `std.Io.Reader` but those that make, wrap or skip, its `buffer` field, `File.readStreaming`, `readPositional`, `readPositionalAll`, `Dir.readFile`, `readLink`, `std.process.run`, `std.posix.read` | |
+| `input.Untrusted` | A009: where bytes enter: `File.reader`, `readerStreaming`, `File.Reader.init`, `initStreaming`, `net.Stream.reader`, `readerWithControl`, `net.Stream.Reader.init`, `initWithControl`; `File.readStreaming`, `readPositional`, `readPositionalAll`, `Dir.readFile`, `readLink`, `std.process.run`, `std.posix.read`. It makes the entry points few, named and counted; it does not check that what enters leaves as `input.Untrusted`, which is design review's. A decoder handed a `*Io.Reader` is the parse, not a source | |
 | `io.ReadEnd`, `io.WriteEnd` | | the lost cause is what a handler does with `ReadFailed`, flow, not a declaration a reference names |
 | `assert.invariant`, `debug`, `debugCheck` | A013: `std.debug.assert` | |
 | `assert.maybe`, `Coverage` | | no raw construct they answer |
