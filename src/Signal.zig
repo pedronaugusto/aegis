@@ -18,7 +18,8 @@ const Atomic = @import("Atomic.zig").Atomic;
 pub fn Signal(comptime T: type) type {
     return struct {
         const Self = @This();
-        const State = enum(u32) { unset, setting, set };
+        // Open, so reading the word back is no tag check: only these three are ever stored.
+        const State = enum(u32) { unset, setting, set, _ };
 
         /// Private: unset; claimed by the one setter while it writes the value; or set, published with release.
         state: Atomic(State) = .init(.unset),
