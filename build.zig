@@ -242,6 +242,7 @@ const examples = [_][]const u8{
     "examples/once.zig",
     "examples/lazy.zig",
     "examples/signal.zig",
+    "examples/pulse.zig",
     "examples/io.zig",
     "examples/points.zig",
     "examples/atomic.zig",

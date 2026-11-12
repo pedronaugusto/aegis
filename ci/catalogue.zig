@@ -162,6 +162,15 @@ pub const modules = [_]Module{
         .example = "examples/signal.zig",
     },
     .{
+        .name = "Pulse",
+        .required = .{ .rule = "A007" },
+        .names = &.{"Pulse"},
+        .release = "one 32-bit generation word",
+        .always = "every bump advances the generation and wakes every waiter; a wait past a generation never misses a bump made after it was read",
+        .kernels = &.{ "gaps_pulse_current", "gaps_pulse_bump" },
+        .example = "examples/pulse.zig",
+    },
+    .{
         .name = "io",
         .required = .{ .packages = "cloak, parley (no rule names the pattern)" },
         .names = &.{"io"},
@@ -272,7 +281,7 @@ pub const modules = [_]Module{
         .release = "exactly `T`",
         .always = "the static cleanup once, at `deinit`",
         .debug = "a second cleanup and an undischarged `MustUse` stop",
-        .kernels = &.{ "a67_owned", "a67_must_use", "gaps_owned_from", "gaps_owned_io" },
+        .kernels = &.{ "a67_owned", "a67_must_use", "gaps_owned_from", "gaps_owned_io", "gaps_unowned_get" },
         .example = "examples/own.zig",
     },
     .{

@@ -18,6 +18,8 @@ test {
     _ = @import("secret.zig");
     _ = @import("sync.zig");
     _ = @import("Signal.zig");
+    _ = @import("Pulse.zig");
+    _ = @import("testing/pulse_test.zig");
     _ = @import("io.zig");
     _ = @import("handle.zig");
     _ = @import("input.zig");

@@ -36,6 +36,7 @@ pub const Once = sync.Once;
 pub const Lazy = sync.Lazy;
 /// A one-shot signal across tasks: set once by any side, waited on by any task, with the value it was set with.
 pub const Signal = sync.Signal;
+pub const Pulse = sync.Pulse;
 /// A lock-free cell for one id, count, unit or plain enum, read and written whole.
 pub const Atomic = sync.Atomic;
 /// Counted shared ownership of one allocated value, cleaned by the last release.
@@ -118,6 +119,7 @@ pub const lint_rules = .{
         .{ .type = Once, .internal = .{ .aegis_state, .aegis_mutex, .aegis_changed, .aegis_data } },
         .{ .type = Lazy, .internal = .{ .aegis_state, .aegis_mutex, .aegis_data } },
         .{ .type = Signal, .internal = .{ .aegis_state, .aegis_value } },
+        .{ .type = Pulse, .internal = .{.aegis_generation} },
         .{ .type = Confined, .internal = .{ .aegis_data, .aegis_owner } },
         .{ .type = Shared, .internal = .{ .aegis_block, .aegis_live } },
         .{ .type = Atomic, .internal = .{.aegis_cell} },
@@ -144,6 +146,7 @@ pub const lint_rules = .{
         .{ .type = .{ .generic = bounded.Budget, .member = .Reservation }, .internal = .{ .aegis_budget, .aegis_amount, .aegis_live } },
         .{ .type = own.Owned, .internal = .{ .aegis_data, .aegis_state } },
         .{ .type = own.OwnedIo, .internal = .{ .aegis_data, .aegis_state } },
+        .{ .type = own.Unowned, .internal = .{.aegis_handle} },
         .{ .type = own.MustUse, .internal = .{ .aegis_data, .aegis_pending, .aegis_live } },
         .{ .type = handle.SlotPool, .internal = .{ .aegis_region, .aegis_slots, .aegis_count, .aegis_free_head, .aegis_used } },
         .{ .type = handle.RunPool, .internal = .{ .aegis_region, .aegis_items, .aegis_end, .aegis_free_spans, .aegis_runs } },
@@ -164,7 +167,7 @@ pub const lint_rules = .{
         .{ .rule = .A007, .decl = std.Io.Mutex, .with = .{ Guarded, BlockingGuarded }, .why = "a lock apart from the data it guards: Guarded holds the data and hands it out only under the lock" },
         .{ .rule = .A007, .decl = std.Io.RwLock, .with = RwGuarded, .why = "a reader-writer lock apart from its data: RwGuarded holds the data and hands it out under a read or write guard" },
         .{ .rule = .A007, .decl = std.Io.Condition, .with = Condition, .why = "a condition apart from the lock its predicate needs: aegis's Condition waits on a guard" },
-        .{ .rule = .A007, .decl = std.Io.Event, .with = .{ Signal, Once, Lazy }, .why = "a flag set and waited on by hand, re-armed by a reset that races its waiters: Signal is set once by the side that has the value and hands it to every waiter; Once and Lazy initialize on demand in whoever comes first" },
+        .{ .rule = .A007, .decl = std.Io.Event, .with = .{ Signal, Pulse, Once, Lazy }, .why = "a flag set and waited on by hand, re-armed by a reset that races its waiters: a wake given once is a Signal, set by the side that has the value and handed to every waiter; a wake given again and again is a Pulse, waited past by the generation a waiter last saw, with no reset to race; Once and Lazy initialize on demand in whoever comes first" },
         .{ .rule = .A007, .decl = std.atomic.Value, .with = .{ Atomic, Shared }, .why = "a raw atomic: Atomic is one cell of a named domain shared by pointer, with the orderings named. A bool flag is Atomic of a two-state enum, a counter Atomic(units.Count), an id Atomic(id.Id), a published address Atomic(*T); a reference count is Shared" },
         .{ .rule = .A007, .decl = std.atomic.Mutex, .with = SpinRwGuarded, .why = "a spin lock apart from its data: SpinRwGuarded holds the data" },
         .{ .rule = .A007, .decl = std.Io.futexWait, .with = Condition, .why = "a wait on a word signalled by hand: Condition waits on a guard" },
@@ -248,11 +251,11 @@ pub const lint_rules = .{
         // A013: the contract kept in every build. The answers are the assertions a linter counts.
         .{ .rule = .A013, .decl = std.debug.assert, .with = .{ assert.invariant, assert.debug, assert.debugCheck }, .why = "std's assert is unreachable in ReleaseFast, so a broken contract is undefined behaviour there: assert.invariant keeps it in every build, assert.debug says it is a diagnostic" },
         // A015: std handles held by value in a field.
-        .{ .rule = .A015, .decl = std.Io.File, .held = .field, .with = own.OwnedIo, .why = "a file held by value in a field is an owner nothing checks: own.OwnedIo releases it once" },
-        .{ .rule = .A015, .decl = std.Io.Dir, .held = .field, .with = own.OwnedIo, .why = "a directory held by value in a field is an owner nothing checks: own.OwnedIo releases it once" },
-        .{ .rule = .A015, .decl = std.Io.net.Stream, .held = .field, .with = own.OwnedIo, .why = "a stream held by value in a field is an owner nothing checks: own.OwnedIo releases it once" },
-        .{ .rule = .A015, .decl = std.Io.net.Server, .held = .field, .with = own.OwnedIo, .why = "a server held by value in a field is an owner nothing checks: own.OwnedIo releases it once" },
-        .{ .rule = .A015, .decl = std.process.Child, .held = .field, .with = own.OwnedIo, .why = "a child held by value in a field is an owner nothing checks: own.OwnedIo waits for it once" },
+        .{ .rule = .A015, .decl = std.Io.File, .held = .field, .with = .{ own.OwnedIo, own.Unowned }, .why = "a file held by value in a field is an owner nothing checks: own.OwnedIo releases it once; own.Unowned names one its owner keeps and closes" },
+        .{ .rule = .A015, .decl = std.Io.Dir, .held = .field, .with = .{ own.OwnedIo, own.Unowned }, .why = "a directory held by value in a field is an owner nothing checks: own.OwnedIo releases it once; own.Unowned names one its owner keeps and closes" },
+        .{ .rule = .A015, .decl = std.Io.net.Stream, .held = .field, .with = .{ own.OwnedIo, own.Unowned }, .why = "a stream held by value in a field is an owner nothing checks: own.OwnedIo releases it once; own.Unowned names one its owner keeps and closes" },
+        .{ .rule = .A015, .decl = std.Io.net.Server, .held = .field, .with = .{ own.OwnedIo, own.Unowned }, .why = "a server held by value in a field is an owner nothing checks: own.OwnedIo releases it once; own.Unowned names one its owner keeps and closes" },
+        .{ .rule = .A015, .decl = std.process.Child, .held = .field, .with = .{ own.OwnedIo, own.Unowned }, .why = "a child held by value in a field is an owner nothing checks: own.OwnedIo waits for it once; own.Unowned names one its owner waits for" },
         // A012: growth with a stated limit, where a project selects it. std's maps, MultiArrayList and
         // priority queues have no bounded answer in aegis, so they are not named.
         .{ .rule = .A012, .decl = std.ArrayList, .with = .{ bounded.Array, bounded.Buffer }, .why = "a list that grows without a limit: bounded.Array holds its capacity inline, bounded.Buffer over memory the caller states" },

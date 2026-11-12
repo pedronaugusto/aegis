@@ -11,6 +11,7 @@ pub fn Owner(comptime wrapped: bool) type {
 }
 pub const SignalState = enum(u32) { unset, setting, set };
 pub const DirectSignal = struct { state: std.atomic.Value(SignalState) = .init(.unset), value: u64 = undefined };
+pub const DirectPulse = struct { generation: std.atomic.Value(u32) = .init(0) };
 pub const DirectLazy = struct { state: std.atomic.Value(enum(u8) { empty, ready }) = .init(.empty), mutex: Io.Mutex = .init, data: u64 = undefined };
 pub const DirectBlock = struct { count: std.atomic.Value(usize) = .init(1), gpa: std.mem.Allocator, data: u64 };
 pub const handle_limit = std.math.maxInt(usize) / 2;
@@ -389,6 +390,20 @@ pub fn signalSet(comptime wrapped: bool, io: Io, owner: if (wrapped) *a.Signal(u
     owner.state.store(.set, .release);
     io.futexWake(SignalState, &owner.state.raw, std.math.maxInt(u32));
     return true;
+}
+
+pub fn pulseCurrent(comptime wrapped: bool, owner: if (wrapped) *const a.Pulse else *const DirectPulse) u32 {
+    if (wrapped) return owner.current().raw();
+    return owner.generation.load(.acquire);
+}
+pub fn pulseBump(comptime wrapped: bool, io: Io, owner: if (wrapped) *a.Pulse else *DirectPulse) void {
+    if (wrapped) return owner.bump(io);
+    _ = owner.generation.fetchAdd(1, .release);
+    io.futexWake(u32, &owner.generation.raw, std.math.maxInt(u32));
+}
+pub fn unownedGet(comptime wrapped: bool, owner: if (wrapped) *const a.own.Unowned(Io.File) else *const Io.File) Io.File.Handle {
+    if (wrapped) return owner.get().handle;
+    return owner.handle;
 }
 
 pub fn readEndSettle(comptime wrapped: bool, file: *Io.File.Reader) error{ ReadFailed, Canceled } {

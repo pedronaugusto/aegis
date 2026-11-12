@@ -38,6 +38,39 @@ pub fn OwnedIo(comptime T: type, comptime cleanup: fn (*T, std.Io) void) type {
     return Owner(T, true, cleanup);
 }
 
+/// A handle held without ownership: a file, a directory, a stream, a server or a child process its holder
+/// uses and never releases, because someone else opened it and closes it: a caller's own standard stream
+/// handed to a proxy, a file lent for a spawn, a view of a handle a terminal keeps. Where `OwnedIo` says
+/// "released here, once", `Unowned` says "never released here": it has no `deinit`, no `take` and no way to
+/// become an owner. It is made explicitly, by `of`, from a handle its owner keeps.
+///
+/// `get` hands the handle back by value, to read, write or ask with. Closing what `get` returned is still
+/// closing a handle the holder does not own: the type states the rule, review and glint's lending rule keep it.
+/// The owner keeps the handle open for as long as any `Unowned` naming it is used.
+pub fn Unowned(comptime T: type) type {
+    comptime {
+        const handles = [_]type{ std.Io.File, std.Io.Dir, std.Io.net.Stream, std.Io.net.Server, std.process.Child };
+        for (handles) |handle| {
+            if (T == handle) break;
+        } else @compileError("own.Unowned holds a std handle (Io.File, Io.Dir, net.Stream, net.Server, process.Child), not " ++ @typeName(T));
+    }
+    return struct {
+        const Self = @This();
+        /// Private: the handle, named and used here, released by its owner.
+        aegis_handle: T,
+
+        /// Names `handle`, which its owner keeps and closes.
+        pub fn of(handle: T) Self {
+            return .{ .aegis_handle = handle };
+        }
+
+        /// The handle, to use and not to release.
+        pub fn get(self: Self) T {
+            return self.aegis_handle;
+        }
+    };
+}
+
 fn Owner(comptime T: type, comptime with_io: bool, comptime cleanup: if (with_io) fn (*T, std.Io) void else fn (*T) void) type {
     return struct {
         const Self = @This();
@@ -215,4 +248,11 @@ pub fn MustUse(comptime T: type, comptime obligation: []const u8) type {
             }
         }
     };
+}
+
+test "an unowned handle names its owner's handle and hands it back, the same size as the handle" {
+    const file: std.Io.File = .{ .handle = undefined, .flags = .{ .nonblocking = false } };
+    const named = Unowned(std.Io.File).of(file);
+    try std.testing.expectEqual(file.flags.nonblocking, named.get().flags.nonblocking);
+    comptime std.debug.assert(@sizeOf(Unowned(std.Io.File)) == @sizeOf(std.Io.File));
 }

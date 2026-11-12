@@ -297,7 +297,28 @@ export fn baselineGapsSignalSet(io: *const std.Io, owner: *c.DirectSignal, value
 export fn wrapperGapsSignalSet(io: *const std.Io, owner: *a.Signal(u64), value: u64) bool {
     return c.signalSet(true, io.*, owner, value);
 }
+export fn baselineGapsPulseCurrent(owner: *const c.DirectPulse) u32 {
+    return c.pulseCurrent(false, owner);
+}
+export fn wrapperGapsPulseCurrent(owner: *const a.Pulse) u32 {
+    return c.pulseCurrent(true, owner);
+}
+export fn baselineGapsPulseBump(io: *const std.Io, owner: *c.DirectPulse) void {
+    c.pulseBump(false, io.*, owner);
+}
+export fn wrapperGapsPulseBump(io: *const std.Io, owner: *a.Pulse) void {
+    c.pulseBump(true, io.*, owner);
+}
+export fn baselineGapsUnownedGet(owner: *const std.Io.File) std.Io.File.Handle {
+    return c.unownedGet(false, owner);
+}
+export fn wrapperGapsUnownedGet(owner: *const a.own.Unowned(std.Io.File)) std.Io.File.Handle {
+    return c.unownedGet(true, owner);
+}
 comptime {
+    std.debug.assert(@sizeOf(c.DirectPulse) == @sizeOf(a.Pulse));
+    std.debug.assert(@alignOf(c.DirectPulse) == @alignOf(a.Pulse));
+    std.debug.assert(@sizeOf(std.Io.File) == @sizeOf(a.own.Unowned(std.Io.File)));
     std.debug.assert(@sizeOf(c.DirectSignal) == @sizeOf(a.Signal(u64)));
     std.debug.assert(@alignOf(c.DirectSignal) == @alignOf(a.Signal(u64)));
     std.debug.assert(@sizeOf(c.DirectSpin) == @sizeOf(c.Owner(true)));
