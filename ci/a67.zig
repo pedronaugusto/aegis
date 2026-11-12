@@ -170,9 +170,9 @@ pub fn buffer(comptime wrapped: bool, owner: if (wrapped) *a.bounded.Buffer(u64)
 pub fn budget(comptime wrapped: bool, owner: if (wrapped) *a.bounded.Budget(u64) else *DirectBudget, amount: u64, release: u64) bool {
     if (wrapped) {
         owner.consume(amount) catch return false;
-        var reservation: a.bounded.Budget(u64).Reservation = .{ .budget = owner, .amount = release };
+        var reservation: a.bounded.Budget(u64).Reservation = .{ .aegis_budget = owner, .aegis_amount = release };
         // Built by hand, the reservation is counted open as one `reserve` gives.
-        if (@import("builtin").optimize == .debug) owner.unsettled += 1;
+        if (@import("builtin").optimize == .debug) owner.aegis_unsettled += 1;
         reservation.release();
         return true;
     }

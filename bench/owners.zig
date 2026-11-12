@@ -39,9 +39,9 @@ pub fn main(init: std.process.Init) !void {
 // Keep the timing loop out of caller-specific inlining/layout; both variants compile in identical contexts.
 noinline fn measure(comptime wrapped: bool, comptime name: []const u8, io: std.Io, count: usize) !f64 {
     var accumulator: usize = 0;
-    var shared: cases.Owner(usize, wrapped) = .{ .data = 0 };
-    var budget: cases.Owner(cases.Counts, wrapped) = .{ .data = .{} };
-    var completion: cases.Owner(cases.Completion, wrapped) = .{ .data = .{} };
+    var shared: cases.Owner(usize, wrapped) = if (wrapped) .{ .aegis_data = 0 } else .{ .data = 0 };
+    var budget: cases.Owner(cases.Counts, wrapped) = if (wrapped) .{ .aegis_data = .{} } else .{ .data = .{} };
+    var completion: cases.Owner(cases.Completion, wrapped) = if (wrapped) .{ .aegis_data = .{} } else .{ .data = .{} };
     const threads: usize = if (std.mem.eql(u8, name, "contention2")) 2 else if (std.mem.eql(u8, name, "contention8")) 8 else 1;
     const start = std.Io.Clock.awake.now(io);
     if (threads > 1) {

@@ -13,24 +13,24 @@ pub fn Guarded(comptime T: type) type {
         /// Spins taken before the yielding wait first parks through Io.
         const spins = 64;
         /// Private: never acquire or release directly.
-        lock: std.atomic.Value(bool) = .init(false),
+        aegis_lock: std.atomic.Value(bool) = .init(false),
         /// Private: use a live guard; never copy/move a published owner.
-        data: T,
+        aegis_data: T,
         pub const AcquireError = std.Io.Cancelable;
 
         /// Initialize before publishing; the consumer owns data cleanup and reclamation.
         pub fn init(value: T) Self {
-            return .{ .data = value };
+            return .{ .aegis_data = value };
         }
 
         /// Acquire exclusive access. Pair immediately with defer guard.deinit().
         /// One acquire swap when free; contended waiters spin on a plain load, so the lock
         /// line is not rewritten while it is held.
         pub fn acquire(owner: *Self) Guard {
-            while (owner.lock.swap(true, .acquire)) {
-                while (owner.lock.load(.monotonic)) std.atomic.spinLoopHint();
+            while (owner.aegis_lock.swap(true, .acquire)) {
+                while (owner.aegis_lock.load(.monotonic)) std.atomic.spinLoopHint();
             }
-            return .{ .owner = owner };
+            return .{ .aegis_owner = owner };
         }
 
         /// Acquire for a section a few system calls long, on OS threads and with no `Io` to wait through
@@ -38,27 +38,27 @@ pub fn Guarded(comptime T: type) type {
         /// tries, so a holder that was descheduled can run. A system that cannot yield only brings the next
         /// try sooner. Not for a cooperative `Io` (use `acquireYielding`).
         pub fn acquireScheduling(owner: *Self) Guard {
-            while (owner.lock.swap(true, .acquire)) {
-                while (owner.lock.load(.monotonic)) {
+            while (owner.aegis_lock.swap(true, .acquire)) {
+                while (owner.aegis_lock.load(.monotonic)) {
                     std.Thread.yield() catch |err| switch (err) {
                         error.SystemCannotYield => std.atomic.spinLoopHint(),
                     };
                 }
             }
-            return .{ .owner = owner };
+            return .{ .aegis_owner = owner };
         }
 
         /// Whether some task holds the lock at this instant, read without taking it. A snapshot for tests
         /// and diagnostics: an unheld lock can be taken a moment later, and a held one says nothing about
         /// who holds it. Never a substitute for acquiring.
         pub fn isHeld(owner: *const Self) bool {
-            return owner.lock.load(.acquire);
+            return owner.aegis_lock.load(.acquire);
         }
 
         /// Exclusive access if the lock is free right now, otherwise null. Never waits.
         pub fn tryAcquire(owner: *Self) ?Guard {
-            if (owner.lock.swap(true, .acquire)) return null;
-            return .{ .owner = owner };
+            if (owner.aegis_lock.swap(true, .acquire)) return null;
+            return .{ .aegis_owner = owner };
         }
 
         /// Acquire for a lock that may stay held while its holder is not running, such as on a
@@ -66,8 +66,8 @@ pub fn Guarded(comptime T: type) type {
         /// run. Cancellation grants no guard. The critical section itself stays bounded.
         pub fn acquireYielding(owner: *Self, io: std.Io) AcquireError!Guard {
             var tries: usize = 0;
-            while (owner.lock.swap(true, .acquire)) {
-                while (owner.lock.load(.monotonic)) {
+            while (owner.aegis_lock.swap(true, .acquire)) {
+                while (owner.aegis_lock.load(.monotonic)) {
                     tries += 1;
                     if (tries <= spins) {
                         std.atomic.spinLoopHint();
@@ -76,7 +76,7 @@ pub fn Guarded(comptime T: type) type {
                     }
                 }
             }
-            return .{ .owner = owner };
+            return .{ .aegis_owner = owner };
         }
 
         /// `acquireYielding` for a cleanup path that cannot take an error: cancellation is blocked for the
@@ -91,24 +91,24 @@ pub fn Guarded(comptime T: type) type {
         /// acquiring would be needless. Asserts the lock is free in Debug and ReleaseSafe. The owner
         /// is not used again; this ends every borrow and takes no lock.
         pub fn teardown(owner: *Self) *T {
-            std.debug.assert(!owner.lock.load(.monotonic));
-            return &owner.data;
+            std.debug.assert(!owner.aegis_lock.load(.monotonic));
+            return &owner.aegis_data;
         }
 
         /// A single borrowed capability. Never copy it; release exactly once.
         pub const Guard = struct {
             /// Private: valid only until deinit, on the same logical execution.
-            owner: *Self,
+            aegis_owner: *Self,
 
             /// Borrow until release. Escaping slices/pointers need separate lifetime ownership.
             pub fn value(guard: *const Guard) *T {
-                return &guard.owner.data;
+                return &guard.aegis_owner.aegis_data;
             }
 
             /// Release with publication ordering and consume this capability.
             /// Does not destroy T or reclaim the owner; no copied-guard detection is promised.
             pub fn deinit(guard: *Guard) void {
-                guard.owner.lock.store(false, .release);
+                guard.aegis_owner.aegis_lock.store(false, .release);
             }
 
             /// Consume this capability, the lock still held, and give its release to the
@@ -116,7 +116,7 @@ pub fn Guarded(comptime T: type) type {
             /// hands it to, as a scheduler releases a lock once the holder's task is off its
             /// stack. The guard is not used again; the hand-off is released exactly once.
             pub fn handOff(guard: *Guard) Handoff {
-                return .{ .owner = guard.owner };
+                return .{ .owner = guard.aegis_owner };
             }
         };
 
@@ -128,7 +128,7 @@ pub fn Guarded(comptime T: type) type {
 
             /// Release with publication ordering and consume the hand-off.
             pub fn release(handoff: *Handoff) void {
-                handoff.owner.lock.store(false, .release);
+                handoff.owner.aegis_lock.store(false, .release);
             }
         };
     };

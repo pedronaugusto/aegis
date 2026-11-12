@@ -20,30 +20,30 @@ pub fn RunPool(comptime T: type, comptime Tag: type) type {
         pub const Error = Region.Error;
 
         /// Private: the region the items grow on.
-        region: Region,
+        aegis_region: Region,
         /// Private: the first item.
-        items: [*]T,
+        aegis_items: [*]T,
         /// Private: the items pushed so far; every run and free span lies below it.
-        end: u32 = 0,
+        aegis_end: u32 = 0,
         /// Private: the free spans below `end`.
-        free_spans: Spans,
+        aegis_free_spans: Spans,
         /// Private: the runs holding items. Free spans are separated by them, so there are never
         /// more spans than runs, which bounds the tree a free may need.
-        runs: u32 = 0,
+        aegis_runs: u32 = 0,
 
         /// The pool owns both regions from here on: `items` for the runs, `nodes` for the free
         /// spans' tree.
         pub fn init(items: Region, nodes: Region) Self {
             return .{
-                .region = items,
-                .items = @ptrFromInt(std.mem.alignForward(usize, items.top, @alignOf(T))), // safe: the items start at the region's top, aligned as its pushes align them
-                .free_spans = .{ .nodes = .init(nodes) },
+                .aegis_region = items,
+                .aegis_items = @ptrFromInt(std.mem.alignForward(usize, items.top, @alignOf(T))), // safe: the items start at the region's top, aligned as its pushes align them
+                .aegis_free_spans = .{ .nodes = .init(nodes) },
             };
         }
         /// Returns both regions; values in the runs are the caller's to have cleaned.
         pub fn deinit(p: *Self) void {
-            p.free_spans.nodes.deinit();
-            p.region.deinit();
+            p.aegis_free_spans.nodes.deinit();
+            p.aegis_region.deinit();
             p.* = undefined;
         }
         /// `n` items, uninitialized: the first free span that holds them, in index order, else room
@@ -51,20 +51,20 @@ pub fn RunPool(comptime T: type, comptime Tag: type) type {
         pub fn alloc(p: *Self, n: u32) Error!Run {
             if (n == 0) return .{ .start = @fromBackingInt(0), .len = 0 };
             // Every node the tree can need once this run exists, so no free ever fails.
-            try p.free_spans.reserve(p.runs + 1);
-            defer p.runs += 1;
-            if (p.free_spans.firstFit(n)) |span| {
-                if (span.len == n) p.free_spans.remove(span.start) else p.free_spans.set(span.start, span.start + n, span.len - n);
+            try p.aegis_free_spans.reserve(p.aegis_runs + 1);
+            defer p.aegis_runs += 1;
+            if (p.aegis_free_spans.firstFit(n)) |span| {
+                if (span.len == n) p.aegis_free_spans.remove(span.start) else p.aegis_free_spans.set(span.start, span.start + n, span.len - n);
                 return .{ .start = @fromBackingInt(span.start), .len = n };
             }
-            const start = p.end;
+            const start = p.aegis_end;
             try p.grow(n);
             return .{ .start = @fromBackingInt(start), .len = n };
         }
         fn grow(p: *Self, n: u32) Error!void {
-            const end = std.math.add(u32, p.end, n) catch return error.LimitExceeded;
-            _ = try p.region.push(T, n);
-            p.end = end;
+            const end = std.math.add(u32, p.aegis_end, n) catch return error.LimitExceeded;
+            _ = try p.aegis_region.push(T, n);
+            p.aegis_end = end;
         }
         /// The run at `n` items: in place when it shrinks, when the span after it is free and
         /// long enough, or when it ends the pool; else a new run with the items copied and the old
@@ -83,12 +83,12 @@ pub fn RunPool(comptime T: type, comptime Tag: type) type {
             }
             const more = n - run.len;
             const after = start + run.len;
-            if (after == p.end) {
+            if (after == p.aegis_end) {
                 try p.grow(more);
                 return .{ .start = run.start, .len = n };
             }
-            if (p.free_spans.atOrAfter(after)) |next| if (next.start == after and next.len >= more) {
-                if (next.len == more) p.free_spans.remove(next.start) else p.free_spans.set(next.start, next.start + more, next.len - more);
+            if (p.aegis_free_spans.atOrAfter(after)) |next| if (next.start == after and next.len >= more) {
+                if (next.len == more) p.aegis_free_spans.remove(next.start) else p.aegis_free_spans.set(next.start, next.start + more, next.len - more);
                 return .{ .start = run.start, .len = n };
             };
             const moved = try p.alloc(n);
@@ -102,11 +102,11 @@ pub fn RunPool(comptime T: type, comptime Tag: type) type {
             p.check(run);
             if (run.len == 0) return;
             p.release(run.start.raw(), run.len);
-            p.runs -= 1;
+            p.aegis_runs -= 1;
         }
         fn release(p: *Self, start: u32, len: u32) void {
             if (len == 0) return;
-            const spans = &p.free_spans;
+            const spans = &p.aegis_free_spans;
             var merged: Span = .{ .start = start, .len = len };
             const before = if (start == 0) null else spans.below(start);
             const after = spans.atOrAfter(start);
@@ -121,11 +121,11 @@ pub fn RunPool(comptime T: type, comptime Tag: type) type {
                 const b = before.?;
                 merged = .{ .start = b.start, .len = b.len + merged.len };
             }
-            if (merged.start + merged.len == p.end) {
+            if (merged.start + merged.len == p.aegis_end) {
                 // The pool's last items: the end comes back to the span's start.
                 if (joins_before) spans.remove(merged.start);
-                p.end = merged.start;
-                p.region.top = @intFromPtr(p.items + merged.start);
+                p.aegis_end = merged.start;
+                p.aegis_region.top = @intFromPtr(p.aegis_items + merged.start);
             } else if (joins_before) {
                 spans.set(merged.start, merged.start, merged.len);
             } else {
@@ -133,23 +133,23 @@ pub fn RunPool(comptime T: type, comptime Tag: type) type {
             }
         }
         fn check(p: *const Self, run: Run) void {
-            assert.invariant(run.len <= p.end and run.start.raw() <= p.end - run.len, "run outside its pool");
+            assert.invariant(run.len <= p.aegis_end and run.start.raw() <= p.aegis_end - run.len, "run outside its pool");
         }
         /// The run's items, valid until it is freed or the pool ends, whatever else is allocated.
         pub fn slice(p: *const Self, run: Run) []T {
             p.check(run);
-            return p.items[run.start.raw()..][0..run.len];
+            return p.aegis_items[run.start.raw()..][0..run.len];
         }
         /// Every run back at once, pages kept committed; every earlier run is outside the pool.
         pub fn recycleAll(p: *Self) void {
-            p.free_spans.clear();
-            p.end = 0;
-            p.runs = 0;
-            p.region.top = @intFromPtr(p.items);
+            p.aegis_free_spans.clear();
+            p.aegis_end = 0;
+            p.aegis_runs = 0;
+            p.aegis_region.top = @intFromPtr(p.aegis_items);
         }
         /// The items in runs: pushed and not free.
         pub fn used(p: *const Self) usize {
-            return p.end - p.free_spans.total;
+            return p.aegis_end - p.aegis_free_spans.total;
         }
     };
 }

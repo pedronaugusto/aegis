@@ -37,7 +37,7 @@ export fn baselineGapsSharedRetain(owner: *const c.DirectHandle) *c.DirectBlock 
 }
 export fn wrapperGapsSharedRetain(owner: *const c.Handle) *anyopaque {
     // aegis: boundary: the parity export returns the retained handle's block, as the baseline returns its own; the retain stays observable to the codegen comparison
-    return c.sharedRetain(true, owner).block;
+    return c.sharedRetain(true, owner).aegis_block;
 }
 export fn baselineGapsSharedGet(owner: *const c.DirectHandle) *const u64 {
     return c.sharedGet(false, owner);
@@ -307,5 +307,5 @@ comptime {
     std.debug.assert(@sizeOf(a.Atomic(c.Hits)) == @sizeOf(std.atomic.Value(u32)));
     std.debug.assert(@alignOf(a.Atomic(c.Hits)) == @alignOf(std.atomic.Value(u32)));
     std.debug.assert(@sizeOf(base.DirectBudget) == @sizeOf(a.bounded.Budget(u64)));
-    std.debug.assert(@sizeOf(c.DirectBlock) == @sizeOf(@typeInfo(@FieldType(c.Handle, "block")).pointer.child));
+    std.debug.assert(@sizeOf(c.DirectBlock) == @sizeOf(@typeInfo(@FieldType(c.Handle, "aegis_block")).pointer.child));
 }

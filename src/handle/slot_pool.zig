@@ -44,99 +44,99 @@ fn Indexed(comptime T: type, comptime Tag: type) type {
         pub const Created = struct { handle: Handle, value: *T };
 
         /// Private: the pool's own region; it is the region's only grower.
-        region: Region,
+        aegis_region: Region,
         /// Private: the first slot.
-        slots: [*]Slot,
+        aegis_slots: [*]Slot,
         /// Private: the slots pushed.
-        count: u32 = 0,
+        aegis_count: u32 = 0,
         /// Private: the newest freed slot, or none.
-        free_head: u32 = none,
+        aegis_free_head: u32 = none,
         /// Private: the slots holding a value.
-        used: u32 = 0,
+        aegis_used: u32 = 0,
 
         /// The pool owns `region` from here on.
         pub fn init(region: Region) Self {
-            return .{ .region = region, .slots = @ptrFromInt(std.mem.alignForward(usize, region.top, @alignOf(Slot))) }; // safe: the slots start at the region's top, aligned as its pushes align them
+            return .{ .aegis_region = region, .aegis_slots = @ptrFromInt(std.mem.alignForward(usize, region.top, @alignOf(Slot))) }; // safe: the slots start at the region's top, aligned as its pushes align them
         }
         /// Returns the region; values in the slots are the caller's to have cleaned.
         pub fn deinit(p: *Self) void {
-            p.region.deinit();
+            p.aegis_region.deinit();
             p.* = undefined;
         }
         /// The newest freed slot, else one more on the region.
         pub inline fn alloc(p: *Self, value: T) Error!Handle {
             const i = try p.take();
-            p.slots[i].value = value;
+            p.aegis_slots[i].value = value;
             return @fromBackingInt(i);
         }
         /// A slot whose value is the caller's to build in place, knowing its own handle.
         pub inline fn create(p: *Self) Error!Created {
             const i = try p.take();
-            return .{ .handle = @fromBackingInt(i), .value = &p.slots[i].value };
+            return .{ .handle = @fromBackingInt(i), .value = &p.aegis_slots[i].value };
         }
         inline fn take(p: *Self) Error!u32 {
-            const i = p.free_head;
+            const i = p.aegis_free_head;
             if (i == none) return p.grow();
-            const slot = &p.slots[i];
-            p.free_head = slot.next;
+            const slot = &p.aegis_slots[i];
+            p.aegis_free_head = slot.next;
             if (checked) slot.live = true;
-            p.used += 1;
+            p.aegis_used += 1;
             return i;
         }
         fn grow(p: *Self) Error!u32 {
-            if (p.count == none) return error.LimitExceeded;
-            const slot = try p.region.create(Slot);
+            if (p.aegis_count == none) return error.LimitExceeded;
+            const slot = try p.aegis_region.create(Slot);
             if (checked) slot.live = true;
-            p.count += 1;
-            p.used += 1;
-            return p.count - 1;
+            p.aegis_count += 1;
+            p.aegis_used += 1;
+            return p.aegis_count - 1;
         }
         /// Room for `n` more values: the next `n` allocs take freed slots and cannot fail.
         pub fn reserve(p: *Self, n: u32) Error!void {
-            while (p.count - p.used < n) {
-                if (p.count == none) return error.LimitExceeded;
-                const slot = try p.region.create(Slot);
+            while (p.aegis_count - p.aegis_used < n) {
+                if (p.aegis_count == none) return error.LimitExceeded;
+                const slot = try p.aegis_region.create(Slot);
                 if (checked) slot.live = false;
-                slot.next = p.free_head;
-                p.free_head = p.count;
-                p.count += 1;
+                slot.next = p.aegis_free_head;
+                p.aegis_free_head = p.aegis_count;
+                p.aegis_count += 1;
             }
         }
         /// Out of range stops in every build. A freed slot's value stays until the slot is reused.
         pub fn free(p: *Self, h: Handle) void {
             const i = h.raw();
-            assert.invariant(i < p.count, "slot handle out of range");
-            const slot = &p.slots[i];
+            assert.invariant(i < p.aegis_count, "slot handle out of range");
+            const slot = &p.aegis_slots[i];
             if (checked) {
                 if (!slot.live) @panic("slot freed twice");
                 slot.live = false;
             }
-            slot.next = p.free_head;
-            p.free_head = i;
-            p.used -= 1;
+            slot.next = p.aegis_free_head;
+            p.aegis_free_head = i;
+            p.aegis_used -= 1;
         }
         /// The slot's value, valid until the pool ends whatever is freed or grown. Out of range stops
         /// in every build.
         pub inline fn get(p: *const Self, h: Handle) *T {
             const i = h.raw();
-            assert.invariant(i < p.count, "slot handle out of range");
-            return &p.slots[i].value;
+            assert.invariant(i < p.aegis_count, "slot handle out of range");
+            return &p.aegis_slots[i].value;
         }
         /// The handle of a value in the pool; a pointer that is not one stops in every build.
         pub fn handleOf(p: *const Self, item: *const T) Handle {
-            const at = @intFromPtr(item) -% @intFromPtr(p.slots); // safe: compared against the pool's own extent only
-            assert.invariant(at < @as(usize, p.count) * @sizeOf(Slot) and at % @sizeOf(Slot) == @offsetOf(Slot, "value"), "pointer is not a value of this pool");
+            const at = @intFromPtr(item) -% @intFromPtr(p.aegis_slots); // safe: compared against the pool's own extent only
+            assert.invariant(at < @as(usize, p.aegis_count) * @sizeOf(Slot) and at % @sizeOf(Slot) == @offsetOf(Slot, "value"), "pointer is not a value of this pool");
             return @fromBackingInt(@intCast(at / @sizeOf(Slot)));
         }
         pub fn len(p: *const Self) usize {
-            return p.used;
+            return p.aegis_used;
         }
         /// Every slot back at once, pages kept committed; every earlier handle is out of range.
         pub fn recycleAll(p: *Self) void {
-            p.region.top = @intFromPtr(p.slots);
-            p.count = 0;
-            p.free_head = none;
-            p.used = 0;
+            p.aegis_region.top = @intFromPtr(p.aegis_slots);
+            p.aegis_count = 0;
+            p.aegis_free_head = none;
+            p.aegis_used = 0;
         }
     };
 }

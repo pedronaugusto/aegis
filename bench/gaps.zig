@@ -42,10 +42,10 @@ fn Adding(comptime wrapped: bool, comptime hardware: bool) type {
 
 noinline fn measure(comptime wrapped: bool, comptime name: []const u8, io: Io, count: usize) !f64 {
     var accumulator: u64 = 0;
-    var owner: gaps.Owner(wrapped) = .{ .data = 0 };
+    var owner: gaps.Owner(wrapped) = if (wrapped) .{ .aegis_data = 0 } else .{ .data = 0 };
     var lazy: if (wrapped) aegis.Lazy(u64) else gaps.DirectLazy = .{};
     var block: gaps.DirectBlock = .{ .gpa = std.testing.failing_allocator, .data = 7 };
-    var churn: Churn(wrapped) = .{ .handle = if (wrapped) .{ .block = @ptrCast(&block) } else .{ .block = &block } }; // safe: Handle's block is the same one-pointer layout as the hand-written block, asserted by the parity gate
+    var churn: Churn(wrapped) = .{ .handle = if (wrapped) .{ .aegis_block = @ptrCast(&block) } else .{ .block = &block } }; // safe: Handle's block is the same one-pointer layout as the hand-written block, asserted by the parity gate
     block.count.store(1 << 20, .monotonic);
     if (comptime std.mem.eql(u8, name, "lazy_ready")) _ = try gaps.lazyCold(wrapped, io, &lazy, 5);
     const hardware = comptime std.mem.find(u8, name, "vs_hardware") != null;
@@ -68,7 +68,7 @@ noinline fn measure(comptime wrapped: bool, comptime name: []const u8, io: Io, c
             adding.add();
         } else if (comptime std.mem.eql(u8, name, "lazy_cold")) {
             // aegis: boundary: the cold path is measured again each round; the harness empties the Lazy, which has no public reset
-            lazy.state.store(.empty, .monotonic);
+            if (wrapped) lazy.aegis_state.store(.empty, .monotonic) else lazy.state.store(.empty, .monotonic);
             accumulator +%= (try gaps.lazyCold(wrapped, io, &lazy, i + 1)).*;
         } else Churn(wrapped).worker(&churn, 1);
     }

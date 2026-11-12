@@ -244,7 +244,7 @@ test "A6 isHeld reads a lock without taking it, for the spin guard, the blocking
     const O = a.Order(&.{.{ .name = "root" }});
     var ordered = O.Ordered(a.Guarded(u32), 0).init(.init(3));
     try t.expect(!ordered.isHeld());
-    try t.expect(!ordered.base.isHeld());
+    try t.expect(!ordered.aegis_base.isHeld());
 }
 
 fn holdWhile(owner: *a.Guarded(u32), held: *std.atomic.Value(bool), release: *std.atomic.Value(bool)) void {
@@ -544,7 +544,7 @@ const Drain = struct {
         self.changed.signal(io);
         held.deinit(io);
         try t.expectEqual(@as(u32, 7), try canceler.await(io));
-        try t.expectEqual(@as(usize, 0), self.changed.count);
+        try t.expectEqual(@as(usize, 0), self.changed.aegis_count);
     }
 };
 
@@ -567,7 +567,7 @@ const DrainTimeout = struct {
         try t.expectError(error.Timeout, held.waitUncancelable(&self.changed, io, deadline));
         // The guard is held on every return, and the registration is gone.
         try t.expect(self.owner.tryAcquire() == null);
-        try t.expectEqual(@as(usize, 0), self.changed.count);
+        try t.expectEqual(@as(usize, 0), self.changed.aegis_count);
     }
 };
 

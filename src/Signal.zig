@@ -22,9 +22,9 @@ pub fn Signal(comptime T: type) type {
         const State = enum(u32) { unset, setting, set, _ };
 
         /// Private: unset; claimed by the one setter while it writes the value; or set, published with release.
-        state: Atomic(State) = .init(.unset),
+        aegis_state: Atomic(State) = .init(.unset),
         /// Private: written once, by the setter that claimed the state, before the state is set.
-        value: T = undefined,
+        aegis_value: T = undefined,
 
         pub const SetError = error{AlreadySet};
         pub const WaitTimeoutError = error{Timeout} || Io.Cancelable;
@@ -36,33 +36,33 @@ pub fn Signal(comptime T: type) type {
         /// Sets the signal to `value` and wakes every waiter; `error.AlreadySet` if any side set it first, the
         /// value it set kept.
         pub fn set(self: *Self, io: Io, value: T) SetError!void {
-            if (self.state.cmpxchgStrong(.unset, .setting, .monotonic, .monotonic) != null) return error.AlreadySet;
-            self.value = value;
-            self.state.store(.set, .release);
+            if (self.aegis_state.cmpxchgStrong(.unset, .setting, .monotonic, .monotonic) != null) return error.AlreadySet;
+            self.aegis_value = value;
+            self.aegis_state.store(.set, .release);
             // Once per Signal: whoever waits on `unset` or `setting` is woken, whenever it began to wait.
-            self.state.wake(io, std.math.maxInt(u32));
+            self.aegis_state.wake(io, std.math.maxInt(u32));
         }
 
         /// The value the signal was set with, or null while it is not set. Never waits.
         pub fn get(self: *const Self) ?*const T {
-            return if (self.state.load(.acquire) == .set) &self.value else null;
+            return if (self.aegis_state.load(.acquire) == .set) &self.aegis_value else null;
         }
 
         /// Waits until the signal is set and returns its value; a cancellation point, as `std.Io.Event.wait`.
         pub fn wait(self: *const Self, io: Io) Io.Cancelable!*const T {
             while (true) {
-                const seen = self.state.load(.acquire);
-                if (seen == .set) return &self.value;
-                try self.state.wait(io, seen);
+                const seen = self.aegis_state.load(.acquire);
+                if (seen == .set) return &self.aegis_value;
+                try self.aegis_state.wait(io, seen);
             }
         }
 
         /// As `wait`, never canceled.
         pub fn waitUncancelable(self: *const Self, io: Io) *const T {
             while (true) {
-                const seen = self.state.load(.acquire);
-                if (seen == .set) return &self.value;
-                self.state.waitUncancelable(io, seen);
+                const seen = self.aegis_state.load(.acquire);
+                if (seen == .set) return &self.aegis_value;
+                self.aegis_state.waitUncancelable(io, seen);
             }
         }
 
@@ -71,10 +71,10 @@ pub fn Signal(comptime T: type) type {
         pub fn waitTimeout(self: *const Self, io: Io, timeout: Io.Timeout) WaitTimeoutError!*const T {
             const deadline = timeout.toDeadline(io);
             while (true) {
-                const seen = self.state.load(.acquire);
-                if (seen == .set) return &self.value;
+                const seen = self.aegis_state.load(.acquire);
+                if (seen == .set) return &self.aegis_value;
                 if (deadline.toDurationFromNow(io)) |left| if (left.raw.nanoseconds <= 0) return error.Timeout;
-                try self.state.waitTimeout(io, seen, deadline);
+                try self.aegis_state.waitTimeout(io, seen, deadline);
             }
         }
     };

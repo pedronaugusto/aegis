@@ -17,32 +17,32 @@ pub fn SpinRwGuarded(comptime T: type) type {
         /// The most readers at once; one more would reach the writer bits.
         pub const maximum_readers: u32 = readers;
         /// Private: the reader count, the waiting-writer bit and the writing bit.
-        state: std.atomic.Value(u32) = .init(0),
+        aegis_state: std.atomic.Value(u32) = .init(0),
         /// Private: use a live guard; never copy/move a published owner.
-        data: T,
+        aegis_data: T,
 
         pub fn init(value: T) Self {
-            return .{ .data = value };
+            return .{ .aegis_data = value };
         }
 
         /// Shared access, waiting while a writer holds the lock or waits for it. Pair with `defer guard.deinit()`.
         pub fn read(owner: *Self) ReadGuard {
             while (true) {
-                if (owner.tryReadOnce()) return .{ .owner = owner };
-                while (owner.state.load(.monotonic) & (writing | waiting) != 0) std.atomic.spinLoopHint();
+                if (owner.tryReadOnce()) return .{ .aegis_owner = owner };
+                while (owner.aegis_state.load(.monotonic) & (writing | waiting) != 0) std.atomic.spinLoopHint();
             }
         }
 
         /// Shared access if no writer holds or awaits the lock right now, otherwise null. Never waits.
         pub fn tryRead(owner: *Self) ?ReadGuard {
-            return if (owner.tryReadOnce()) .{ .owner = owner } else null;
+            return if (owner.tryReadOnce()) .{ .aegis_owner = owner } else null;
         }
 
         fn tryReadOnce(owner: *Self) bool {
-            var current = owner.state.load(.monotonic);
+            var current = owner.aegis_state.load(.monotonic);
             while (current & (writing | waiting) == 0) {
                 std.debug.assert(current & readers != readers);
-                current = owner.state.cmpxchgWeak(current, current + 1, .acquire, .monotonic) orelse return true;
+                current = owner.aegis_state.cmpxchgWeak(current, current + 1, .acquire, .monotonic) orelse return true;
             }
             return false;
         }
@@ -50,22 +50,22 @@ pub fn SpinRwGuarded(comptime T: type) type {
         /// Exclusive access, waiting for the readers and any writer ahead to end. Pair with `defer guard.deinit()`.
         pub fn write(owner: *Self) WriteGuard {
             while (true) {
-                var current = owner.state.load(.monotonic);
+                var current = owner.aegis_state.load(.monotonic);
                 if (current & (writing | readers) == 0) {
-                    current = owner.state.cmpxchgWeak(current, (current & ~waiting) | writing, .acquire, .monotonic) orelse return .{ .owner = owner };
+                    current = owner.aegis_state.cmpxchgWeak(current, (current & ~waiting) | writing, .acquire, .monotonic) orelse return .{ .aegis_owner = owner };
                     continue;
                 }
                 // Hold off new readers while the present ones end.
-                if (current & waiting == 0) _ = owner.state.fetchOr(waiting, .monotonic);
+                if (current & waiting == 0) _ = owner.aegis_state.fetchOr(waiting, .monotonic);
                 std.atomic.spinLoopHint();
             }
         }
 
         /// Exclusive access if the lock is free right now, otherwise null. Never waits.
         pub fn tryWrite(owner: *Self) ?WriteGuard {
-            var current = owner.state.load(.monotonic);
+            var current = owner.aegis_state.load(.monotonic);
             while (current & (writing | readers) == 0) {
-                current = owner.state.cmpxchgWeak(current, (current & ~waiting) | writing, .acquire, .monotonic) orelse return .{ .owner = owner };
+                current = owner.aegis_state.cmpxchgWeak(current, (current & ~waiting) | writing, .acquire, .monotonic) orelse return .{ .aegis_owner = owner };
             }
             return null;
         }
@@ -73,42 +73,42 @@ pub fn SpinRwGuarded(comptime T: type) type {
         /// Whether some task holds the lock, for reading or writing, at this instant. A snapshot for tests
         /// and diagnostics, never a substitute for acquiring.
         pub fn isHeld(owner: *const Self) bool {
-            return owner.state.load(.acquire) & (writing | readers) != 0;
+            return owner.aegis_state.load(.acquire) & (writing | readers) != 0;
         }
 
         /// The data of an owner that no other task can reach: for the sole owner's teardown. Asserts the lock
         /// is free in Debug and ReleaseSafe.
         pub fn teardown(owner: *Self) *T {
-            std.debug.assert(owner.state.load(.monotonic) & (writing | readers | waiting) == 0);
-            return &owner.data;
+            std.debug.assert(owner.aegis_state.load(.monotonic) & (writing | readers | waiting) == 0);
+            return &owner.aegis_data;
         }
 
         pub const ReadGuard = struct {
-            owner: *Self,
+            aegis_owner: *Self,
 
             /// Borrow until release. Several readers hold the data at once.
             pub fn value(guard: *const ReadGuard) *const T {
-                return &guard.owner.data;
+                return &guard.aegis_owner.aegis_data;
             }
 
             /// Release and consume this capability.
             pub fn deinit(guard: *ReadGuard) void {
-                const before = guard.owner.state.fetchSub(1, .release);
+                const before = guard.aegis_owner.aegis_state.fetchSub(1, .release);
                 std.debug.assert(before & readers != 0);
             }
         };
 
         pub const WriteGuard = struct {
-            owner: *Self,
+            aegis_owner: *Self,
 
             /// Borrow until release. No reader or writer holds the data meanwhile.
             pub fn value(guard: *const WriteGuard) *T {
-                return &guard.owner.data;
+                return &guard.aegis_owner.aegis_data;
             }
 
             /// Release with publication ordering and consume this capability.
             pub fn deinit(guard: *WriteGuard) void {
-                const before = guard.owner.state.fetchAnd(~writing, .release);
+                const before = guard.aegis_owner.aegis_state.fetchAnd(~writing, .release);
                 std.debug.assert(before & writing != 0);
             }
         };

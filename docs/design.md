@@ -339,6 +339,8 @@ aegis declares in `lint_rules` (vocabulary version 2) the raw constructs its typ
 
 Every type that holds state is also `governed` (A001): its fields are aegis's, and a cast or reflection over it outside aegis is a finding. Where the table says no entry, glint does not enforce the type; a package's own review does.
 
+Each field a `governed` entry lists as `.internal` is named `aegis_<name>` (`aegis_material`, `aegis_count`). That is glint's convention for every package that declares rules: an internal field starts with the package's name and an underscore, and glint refuses a declaration whose internal field does not. The prefix makes the name the field's alone in any program. A reference glint cannot resolve, `x.aegis_count` on a value of unknown type, still names it, so a hand-made `.{ .aegis_count = 0 }` or a read through `anytype` is a finding. A plain name like `count` would be shared with a hundred other declarations and could not be named that way.
+
 ## One module, a checked layer graph
 
 aegis is one build module, `aegis`, rooted at `src/root.zig`; `secret`, `sync`, `id`, `units`, `int`, `handle` and the rest are namespaces of it. Separate modules per namespace bought nothing a user could feel, because Zig compiles only the declarations a program reaches, and they cost build wiring, a heavier hosted job (every profile compiled once per module) and a copy of any helper two namespaces shared: a separate module cannot import another module's file, so the move rule below existed five times.

@@ -31,20 +31,20 @@ pub fn Order(comptime ranks: []const Rank) type {
         /// One context per logical task, never simultaneously shared. Release is zero-sized.
         pub const Context = struct {
             /// Private: bounded diagnostic stack and suspension state.
-            stack: if (diagnostics) [32]Held else void = if (diagnostics) undefined else {},
-            used: if (diagnostics) usize else void = if (diagnostics) 0 else {},
-            suspended: if (diagnostics) bool else void = if (diagnostics) false else {},
+            aegis_stack: if (diagnostics) [32]Held else void = if (diagnostics) undefined else {},
+            aegis_used: if (diagnostics) usize else void = if (diagnostics) 0 else {},
+            aegis_suspended: if (diagnostics) bool else void = if (diagnostics) false else {},
             /// Diagnostic preflight, before any base lock/Io call. Release always succeeds.
             pub fn check(self: *const Context, owner: *const anyopaque, comptime rank: usize) CheckError!void {
                 if (rank >= ranks.len) @compileError("order rank outside relation");
                 if (diagnostics) {
-                    if (self.suspended) return error.Suspended;
-                    for (self.stack[0..self.used]) |held| {
+                    if (self.aegis_suspended) return error.Suspended;
+                    for (self.aegis_stack[0..self.aegis_used]) |held| {
                         if (held.owner == owner) return error.SameOwner;
                     }
-                    for (self.stack[0..self.used]) |held| if (relation[rank][held.rank]) return error.Inversion;
-                    for (self.stack[0..self.used]) |held| if (!relation[held.rank][rank]) return error.Unordered;
-                    if (self.used == self.stack.len) return error.StackOverflow;
+                    for (self.aegis_stack[0..self.aegis_used]) |held| if (relation[rank][held.rank]) return error.Inversion;
+                    for (self.aegis_stack[0..self.aegis_used]) |held| if (!relation[held.rank][rank]) return error.Unordered;
+                    if (self.aegis_used == self.aegis_stack.len) return error.StackOverflow;
                 }
             }
             fn require(self: *Context, owner: *const anyopaque, comptime rank: usize) void {
@@ -52,16 +52,16 @@ pub fn Order(comptime ranks: []const Rank) type {
             }
             fn push(self: *Context, owner: *const anyopaque, comptime rank: usize) void {
                 if (diagnostics) {
-                    self.stack[self.used] = .{ .owner = owner, .rank = rank };
-                    self.used += 1;
+                    self.aegis_stack[self.aegis_used] = .{ .owner = owner, .rank = rank };
+                    self.aegis_used += 1;
                 }
             }
             fn pop(self: *Context, owner: *const anyopaque) void {
                 if (diagnostics) {
-                    std.debug.assert(!self.suspended);
-                    std.debug.assert(self.used != 0);
-                    std.debug.assert(self.stack[self.used - 1].owner == owner);
-                    self.used -= 1;
+                    std.debug.assert(!self.aegis_suspended);
+                    std.debug.assert(self.aegis_used != 0);
+                    std.debug.assert(self.aegis_stack[self.aegis_used - 1].owner == owner);
+                    self.aegis_used -= 1;
                 }
             }
         };
@@ -71,33 +71,33 @@ pub fn Order(comptime ranks: []const Rank) type {
             return struct {
                 const Self = @This();
                 /// Private: access only through an ordered guard.
-                base: LockType,
+                aegis_base: LockType,
                 /// As the base lock's: all access is behind its lock.
                 pub const interior_lock = LockType.interior_lock;
                 pub fn init(base: LockType) Self {
-                    return .{ .base = base };
+                    return .{ .aegis_base = base };
                 }
                 /// The data of a sole owner, with no lock, no Io and no rank check, as the base lock's `teardown`.
                 pub fn teardown(self: *Self) @typeInfo(@TypeOf(LockType.teardown)).@"fn".return_type.? {
-                    return self.base.teardown();
+                    return self.aegis_base.teardown();
                 }
                 /// As the base lock's `isHeld`, for the locks that have one.
                 pub fn isHeld(self: *const Self) bool {
-                    return self.base.isHeld();
+                    return self.aegis_base.isHeld();
                 }
                 fn wrap(self: *Self, context: *Context, base: anytype) Capability(@TypeOf(base), Context) {
                     context.push(self, rank);
-                    return .{ .base = base, .context = if (diagnostics) context else {} };
+                    return .{ .aegis_base = base, .aegis_context = if (diagnostics) context else {} };
                 }
                 pub fn acquireOrdered(self: *Self, io: std.Io, context: *Context) LockType.AcquireError!Capability(LockType.Guard, Context) {
                     context.require(self, rank);
-                    return self.wrap(context, try self.base.acquire(io));
+                    return self.wrap(context, try self.aegis_base.acquire(io));
                 }
                 /// `acquireOrdered` for a cleanup path that cannot take an error: cancellation does not
                 /// interrupt the wait, as the base lock's `acquireUncancelable`. The rank check is the same.
                 pub fn acquireOrderedUncancelable(self: *Self, io: std.Io, context: *Context) Capability(LockType.Guard, Context) {
                     context.require(self, rank);
-                    return self.wrap(context, self.base.acquireUncancelable(io));
+                    return self.wrap(context, self.aegis_base.acquireUncancelable(io));
                 }
                 pub fn readOrdered(self: *Self, io: std.Io, context: *Context) LockType.AcquireError!Capability(LockType.ReadGuard, Context) {
                     context.require(self, rank);
@@ -126,30 +126,30 @@ pub fn Order(comptime ranks: []const Rank) type {
 /// (aegis's `lint_rules` includes this).
 pub const lint_rules = .{
     .version = 2,
-    .governed = .{.{ .type = Capability, .internal = .{ .base, .context } }},
+    .governed = .{.{ .type = Capability, .internal = .{ .aegis_base, .aegis_context } }},
 };
 
 fn Capability(comptime Base: type, comptime Context: type) type {
     return struct {
         const Self = @This();
         /// Private: uncopied base capability and Debug task witness.
-        base: Base,
-        context: if (diagnostics) *Context else void,
+        aegis_base: Base,
+        aegis_context: if (diagnostics) *Context else void,
         pub fn value(self: *const Self) @typeInfo(@TypeOf(Base.value)).@"fn".return_type.? {
-            return self.base.value();
+            return self.aegis_base.value();
         }
         pub fn deinit(self: *Self, io: std.Io) void {
-            if (diagnostics) self.context.pop(@ptrCast(self.base.owner)); // safe: ordered owner has base as its first/only field
-            self.base.deinit(io);
+            if (diagnostics) self.aegis_context.pop(@ptrCast(self.aegis_base.aegis_owner)); // safe: ordered owner has base as its first/only field
+            self.aegis_base.deinit(io);
         }
         /// The base guard's `wait`. Rank remains reserved throughout suspension; context cannot acquire
         /// another lock.
         pub fn wait(self: *Self, condition: *Condition, io: std.Io, timeout: std.Io.Timeout) Condition.WaitError!void {
-            if (diagnostics) self.context.suspended = true;
+            if (diagnostics) self.aegis_context.aegis_suspended = true;
             defer if (diagnostics) {
-                self.context.suspended = false;
+                self.aegis_context.aegis_suspended = false;
             };
-            return condition.waitMutex(io, &self.base.owner.mutex, timeout);
+            return condition.waitMutex(io, &self.aegis_base.aegis_owner.aegis_mutex, timeout);
         }
         /// The base guard's `waitUncancelable`, the rank reserved as `wait` reserves it.
         pub fn waitUncancelable(self: *Self, condition: *Condition, io: std.Io, timeout: std.Io.Timeout) Condition.UncancelableWaitError!void {

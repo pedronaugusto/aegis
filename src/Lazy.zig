@@ -19,11 +19,11 @@ pub fn Lazy(comptime T: type) type {
         /// The pointer handed out: mutable only for a type that locks itself.
         pub const Ref = interior.Handout(T);
         /// Private: publication state; the ready fast path reads it with acquire.
-        state: std.atomic.Value(State) = .init(.empty),
+        aegis_state: std.atomic.Value(State) = .init(.empty),
         /// Private: serializes elections and holds the initializer.
-        mutex: Io.Mutex = .init,
+        aegis_mutex: Io.Mutex = .init,
         /// Private: initialized only in ready, never moved after a successful initializer.
-        data: T = undefined,
+        aegis_data: T = undefined,
 
         pub fn init() Self {
             return .{};
@@ -31,7 +31,7 @@ pub fn Lazy(comptime T: type) type {
 
         /// The initialized value, or null while empty. Never waits.
         pub fn get(self: *Self) ?Ref {
-            return if (self.state.load(.acquire) == .ready) &self.data else null;
+            return if (self.aegis_state.load(.acquire) == .ready) &self.aegis_data else null;
         }
 
         /// The result of `getOrInit`: the initializer's errors and nothing added.
@@ -47,22 +47,22 @@ pub fn Lazy(comptime T: type) type {
         /// Initializes on first use. On an initializer error the value stays empty, the error is returned
         /// and the next caller tries again; the initializer cleans every partial acquisition itself.
         pub fn getOrInit(self: *Self, io: Io, context: anytype, comptime init_fn: anytype) Result(init_fn) {
-            if (self.state.load(.acquire) == .ready) return &self.data;
-            self.mutex.lockUncancelable(io);
-            defer self.mutex.unlock(io);
-            if (self.state.load(.monotonic) == .empty) {
+            if (self.aegis_state.load(.acquire) == .ready) return &self.aegis_data;
+            self.aegis_mutex.lockUncancelable(io);
+            defer self.aegis_mutex.unlock(io);
+            if (self.aegis_state.load(.monotonic) == .empty) {
                 if (comptime @typeInfo(@typeInfo(@TypeOf(init_fn)).@"fn".return_type.?) == .error_union) {
-                    try init_fn(context, &self.data);
-                } else init_fn(context, &self.data);
-                self.state.store(.ready, .release);
+                    try init_fn(context, &self.aegis_data);
+                } else init_fn(context, &self.aegis_data);
+                self.aegis_state.store(.ready, .release);
             }
-            return &self.data;
+            return &self.aegis_data;
         }
 
         /// Requires join/drain and no borrows. Static infallible nonblocking cleanup.
         /// Empty storage is never read or cleaned as T. Does not reset the owner.
         pub fn deinit(self: *Self, comptime cleanup: fn (*T) void) void {
-            if (self.state.load(.acquire) == .ready) cleanup(&self.data);
+            if (self.aegis_state.load(.acquire) == .ready) cleanup(&self.aegis_data);
             self.* = undefined;
         }
     };

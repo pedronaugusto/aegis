@@ -13,7 +13,7 @@ const Connections = scope.Table(Connection);
 
 /// Whether a reference would pass its check now, read without stopping the program.
 fn live(reference: anytype) bool {
-    return !checked or reference.slot.generation.load(.monotonic) == reference.generation;
+    return !checked or reference.aegis_slot.generation.load(.monotonic) == reference.aegis_generation;
 }
 
 /// Outside Debug and ReleaseSafe nothing records that a scope ended, so nothing can be stale.
@@ -53,7 +53,7 @@ test "A12 ending a scope moves its generation on and a reopened slot hands out t
     const fresh = second.ref(&value);
     try t.expect(live(fresh));
     try stale(old);
-    if (checked) try t.expectEqual(old.generation + 1, fresh.generation);
+    if (checked) try t.expectEqual(old.aegis_generation + 1, fresh.aegis_generation);
     second.end();
     try stale(fresh);
 }
@@ -114,7 +114,7 @@ test "A12 a slot that used every generation retires and the table reports exhaus
     const view = last.ref(&value);
     last.end();
     try stale(view); // the generation after the last one is never handed out
-    try t.expectEqual(@as(usize, 1), table.used_up);
+    try t.expectEqual(@as(usize, 1), table.aegis_used_up);
     try t.expectError(error.Full, table.open()); // slot 1 is still open
     other.end();
     const only = try table.open();
@@ -191,7 +191,7 @@ fn trace(_: void, case: *shake.Case) anyerror!void {
                     try t.expectEqual(error.Full, err);
                     continue;
                 };
-                const slot = opened.index;
+                const slot = opened.aegis_index;
                 try t.expect(!model.open[slot]);
                 model.open[slot] = true;
                 held[slot] = .{ .scope = opened, .slot = slot, .generation = model.generation[slot] };

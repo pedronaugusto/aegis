@@ -283,7 +283,7 @@ test "A6 Shared cleans once at the last release and frees the block" {
     var second = first.retain();
     var third = second.retain();
     try t.expect(first.get() == second.get());
-    try t.expectEqual(@as(usize, 3), first.block.count.load(.monotonic));
+    try t.expectEqual(@as(usize, 3), first.aegis_block.count.load(.monotonic));
     first.release();
     third.release();
     try t.expectEqual(@as(u32, 0), cleaned.load(.monotonic));
@@ -385,7 +385,7 @@ test "A6 Shared concurrent retain and release run cleanup exactly once on the la
     for (0..6) |_| try group.concurrent(t.io, Churn.worker, .{&churn});
     try group.await(t.io);
     try t.expectEqual(@as(u32, 0), cleaned.load(.monotonic));
-    try t.expectEqual(@as(usize, 1), churn.shared.block.count.load(.monotonic));
+    try t.expectEqual(@as(usize, 1), churn.shared.aegis_block.count.load(.monotonic));
     churn.shared.release();
     try t.expectEqual(@as(u32, 1), cleaned.load(.monotonic));
 }
@@ -561,7 +561,7 @@ test "A7 Owned takes a reservation by move so it releases once" {
     try t.expectEqual(@as(u8, 3), budget.remaining());
     var owner = Held.initFrom(&reservation);
     // The source was consumed: the one charge belongs to the owner alone.
-    if (builtin.optimize == .debug) try t.expect(!reservation.live);
+    if (builtin.optimize == .debug) try t.expect(!reservation.aegis_live);
     try t.expectEqual(@as(u8, 3), budget.remaining());
     owner.deinit();
     try t.expectEqual(@as(u8, 10), budget.remaining());

@@ -8,58 +8,58 @@ pub fn BlockingGuarded(comptime T: type) type {
         /// Marks the owner as safe to share through a mutable pointer: all access is behind its lock.
         pub const interior_lock = true;
         /// Private: synchronization kernel; no unlocked data access.
-        mutex: std.Io.Mutex = .init,
+        aegis_mutex: std.Io.Mutex = .init,
         /// Private: only borrow through a live guard.
-        data: T,
+        aegis_data: T,
         pub const AcquireError = std.Io.Cancelable;
         pub fn init(value: T) Self {
-            return .{ .data = value };
+            return .{ .aegis_data = value };
         }
         /// Immediate success uses std's cancellation-point semantics.
         pub fn acquire(self: *Self, io: std.Io) AcquireError!Guard {
-            try self.mutex.lock(io);
-            return .{ .owner = self };
+            try self.aegis_mutex.lock(io);
+            return .{ .aegis_owner = self };
         }
         pub fn acquireUncancelable(self: *Self, io: std.Io) Guard {
-            self.mutex.lockUncancelable(io);
-            return .{ .owner = self };
+            self.aegis_mutex.lockUncancelable(io);
+            return .{ .aegis_owner = self };
         }
         /// Whether some task holds the mutex at this instant, read without taking it: a snapshot for tests and
         /// diagnostics, with no word on who holds it.
         pub fn isHeld(self: *const Self) bool {
-            return self.mutex.state.load(.acquire) != .unlocked;
+            return self.aegis_mutex.state.load(.acquire) != .unlocked;
         }
         pub fn tryAcquire(self: *Self) ?Guard {
-            if (!self.mutex.tryLock()) return null;
-            return .{ .owner = self };
+            if (!self.aegis_mutex.tryLock()) return null;
+            return .{ .aegis_owner = self };
         }
         /// The data of an owner that no other task can reach: for the sole owner's teardown, which
         /// then needs no Io. Asserts the mutex is free in Debug and ReleaseSafe. The owner is not
         /// used again; this ends every borrow and takes no lock.
         pub fn teardown(self: *Self) *T {
-            std.debug.assert(self.mutex.state.load(.monotonic) == .unlocked);
-            return &self.data;
+            std.debug.assert(self.aegis_mutex.state.load(.monotonic) == .unlocked);
+            return &self.aegis_data;
         }
         /// Uncopied single-task capability. All borrows end before wait or release.
         pub const Guard = struct {
             /// Private: stable owner, valid until explicit release.
-            owner: *Self,
+            aegis_owner: *Self,
             pub fn value(self: *const Guard) *T {
-                return &self.owner.data;
+                return &self.aegis_owner.aegis_data;
             }
             /// Exactly once, using the same Io execution domain. Does not clean T.
             pub inline fn deinit(self: *Guard, io: std.Io) void {
-                self.owner.mutex.unlock(io);
+                self.aegis_owner.aegis_mutex.unlock(io);
             }
             /// Waits on `condition`, releasing the lock for the wait; held again on every return. Reborrow
             /// afterward; predicate loops retain one absolute deadline.
             pub fn wait(self: *Guard, condition: *Condition, io: std.Io, timeout: std.Io.Timeout) Condition.WaitError!void {
-                return condition.waitMutex(io, &self.owner.mutex, timeout);
+                return condition.waitMutex(io, &self.aegis_owner.aegis_mutex, timeout);
             }
             /// `wait` for a cleanup path that must see the state change it waits for: cancellation is
             /// blocked for the wait, so it returns only on a wake, the timeout or the waiter limit.
             pub fn waitUncancelable(self: *Guard, condition: *Condition, io: std.Io, timeout: std.Io.Timeout) Condition.UncancelableWaitError!void {
-                return condition.waitMutexUncancelable(io, &self.owner.mutex, timeout);
+                return condition.waitMutexUncancelable(io, &self.aegis_owner.aegis_mutex, timeout);
             }
         };
     };

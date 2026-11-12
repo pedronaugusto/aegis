@@ -55,8 +55,8 @@ pub const testing = if (builtin.is_test) struct {
 pub fn reserve(limit: bounded.Limit(usize)) error{OutOfMemory}!Region {
     if (!can_reserve) @compileError("Region.reserve: this target has no virtual memory to reserve; use Region.fixed");
     const page = std.heap.pageSize();
-    if (limit.maximum > std.math.maxInt(usize) - page) return error.OutOfMemory;
-    const length = std.mem.alignForward(usize, @max(limit.maximum, 1), page);
+    if (limit.aegis_maximum > std.math.maxInt(usize) - page) return error.OutOfMemory;
+    const length = std.mem.alignForward(usize, @max(limit.aegis_maximum, 1), page);
     const base = try map(length);
     const start = @intFromPtr(base);
     return .{ .base = base, .top = start, .committed_end = start, .reservation_end = start + length };

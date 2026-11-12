@@ -38,12 +38,20 @@ noinline fn measure(comptime wrapped: bool, comptime name: []const u8, io: Io, c
             const result = @call(.never_inline, c.step, .{ wrapped, &machine, e });
             accumulator +%= result;
             // aegis: boundary: a closed machine is restarted for the next round as the direct side is; a runtime machine has no public restart
-            if ((if (wrapped) machine.current() else machine.state) == .closed) machine.state = .idle;
+            if ((if (wrapped) machine.current() else machine.state) == .closed) if (wrapped) {
+                machine.aegis_state = .idle;
+            } else {
+                machine.state = .idle;
+            };
         } else if (comptime std.mem.eql(u8, name, "plan_commit")) {
             const result = @call(.never_inline, c.planCommit, .{ wrapped, &machine, e });
             accumulator +%= result;
             // aegis: boundary: a closed machine is restarted for the next round as the direct side is; a runtime machine has no public restart
-            if ((if (wrapped) machine.current() else machine.state) == .closed) machine.state = .idle;
+            if ((if (wrapped) machine.current() else machine.state) == .closed) if (wrapped) {
+                machine.aegis_state = .idle;
+            } else {
+                machine.state = .idle;
+            };
         } else {
             const fresh: c.Key = .init(@splat(@truncate(stream)));
             idle = if (wrapped) .init(fresh) else fresh;

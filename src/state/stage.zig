@@ -37,38 +37,38 @@ pub fn At(comptime M: type, comptime P: type, comptime s: M.State) type {
         /// The state this stage is at.
         pub const state: M.State = s;
         /// Private: reach it through `get`, `getConst` or `take`.
-        payload: P,
+        aegis_payload: P,
         /// Private: Debug-only, false once the payload has moved on.
-        live: if (diagnostics) bool else void = if (diagnostics) true else {},
+        aegis_live: if (diagnostics) bool else void = if (diagnostics) true else {},
 
         /// The first stage, holding a copy of `payload`. Every later stage is reached by transition.
         pub fn init(payload: P) Self {
             if (comptime s != M.initial) @compileError("state: only the initial stage is constructed; later stages are reached by transition");
-            return .{ .payload = payload };
+            return .{ .aegis_payload = payload };
         }
 
         /// The first stage, taking the payload from `source` by its `moveInto` when `P` declares one and
         /// consuming the source, for a payload that must not exist twice.
         pub fn initFrom(source: *P) Self {
             if (comptime s != M.initial) @compileError("state: only the initial stage is constructed; later stages are reached by transition");
-            var self: Self = .{ .payload = undefined };
-            move.into(P, source, &self.payload);
+            var self: Self = .{ .aegis_payload = undefined };
+            move.into(P, source, &self.aegis_payload);
             return self;
         }
 
         fn check(self: *const Self) void {
-            if (diagnostics and !self.live) @panic("state stage used after its payload moved on");
+            if (diagnostics and !self.aegis_live) @panic("state stage used after its payload moved on");
         }
 
         /// The payload, borrowed until this stage transitions or its payload is taken.
         pub fn get(self: *Self) *P {
             self.check();
-            return &self.payload;
+            return &self.aegis_payload;
         }
 
         pub fn getConst(self: *const Self) *const P {
             self.check();
-            return &self.payload;
+            return &self.aegis_payload;
         }
 
         /// Moves the payload out of a terminal stage, which ends it. A payload leaves no other stage:
@@ -76,8 +76,8 @@ pub fn At(comptime M: type, comptime P: type, comptime s: M.State) type {
         pub fn take(self: *Self, destination: *P) void {
             if (comptime !M.isTerminal(s)) @compileError("state: a payload is taken from a terminal stage; ." ++ @tagName(s) ++ " is not terminal");
             self.check();
-            move.into(P, &self.payload, destination);
-            if (diagnostics) self.live = false;
+            move.into(P, &self.aegis_payload, destination);
+            if (diagnostics) self.aegis_live = false;
         }
 
         fn Next(comptime event: M.Event) type {
@@ -94,10 +94,10 @@ pub fn At(comptime M: type, comptime P: type, comptime s: M.State) type {
         pub fn transition(self: *Self, comptime event: M.Event, destination: *Next(event)) void {
             self.check();
             self.apart(destination);
-            move.into(P, &self.payload, &destination.payload);
+            move.into(P, &self.aegis_payload, &destination.aegis_payload);
             if (diagnostics) {
-                destination.live = true;
-                self.live = false;
+                destination.aegis_live = true;
+                self.aegis_live = false;
             }
         }
 
@@ -110,11 +110,11 @@ pub fn At(comptime M: type, comptime P: type, comptime s: M.State) type {
             const D = Destination(M, @TypeOf(destination), M.after(s, event));
             self.check();
             self.apart(destination);
-            const target = &@as(*D, destination).payload;
-            if (comptime @typeInfo(Prepared(prepare)) == .error_union) try prepare(context, &self.payload, target) else prepare(context, &self.payload, target);
+            const target = &@as(*D, destination).aegis_payload;
+            if (comptime @typeInfo(Prepared(prepare)) == .error_union) try prepare(context, &self.aegis_payload, target) else prepare(context, &self.aegis_payload, target);
             if (diagnostics) {
-                destination.live = true;
-                self.live = false;
+                destination.aegis_live = true;
+                self.aegis_live = false;
             }
         }
     };

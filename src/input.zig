@@ -30,12 +30,12 @@ pub fn Untrusted(comptime T: type) type {
     return struct {
         const Self = @This();
         pub const aegis_untrusted = true;
-        value: View(T),
+        aegis_value: View(T),
         pub fn init(value: T) Self {
-            return .{ .value = value };
+            return .{ .aegis_value = value };
         }
         pub inline fn readForParse(self: Self) View(T) {
-            return self.value;
+            return self.aegis_value;
         }
         pub inline fn parse(self: Self, context: anytype, comptime parser: anytype) Result(parser) {
             return parser(context, self.readForParse());

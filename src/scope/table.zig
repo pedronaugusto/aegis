@@ -22,38 +22,38 @@ pub fn Table(comptime Brand: type) type {
         /// `Full` while every slot is open; `Exhausted` once every slot has used all its generations.
         pub const OpenError = error{ Full, Exhausted };
         /// Private: the caller's slot storage.
-        slots: if (checked) []Slot else void,
+        aegis_slots: if (checked) []Slot else void,
         /// Private: the first free slot, threaded through the slots.
-        free_head: if (checked) usize else void,
+        aegis_free_head: if (checked) usize else void,
         /// Private: slots that used up their generations.
-        used_up: if (checked) usize else void,
+        aegis_used_up: if (checked) usize else void,
         /// Private: scopes opened and not yet ended.
-        open_count: if (checked) usize else void,
+        aegis_open_count: if (checked) usize else void,
 
         /// A table over `slots`, which it takes over for as long as it lives. The number of slots is the
         /// number of scopes that can be open and checked at once; it is not an admission limit, since
         /// ReleaseFast and ReleaseSmall keep no record and open without limit.
         pub fn init(slots: []Slot) Self {
-            if (!checked) return .{ .slots = {}, .free_head = {}, .used_up = {}, .open_count = {} };
+            if (!checked) return .{ .aegis_slots = {}, .aegis_free_head = {}, .aegis_used_up = {}, .aegis_open_count = {} };
             for (slots, 0..) |*each, i| each.* = .{ .next = if (i + 1 < slots.len) i + 1 else none };
-            return .{ .slots = slots, .free_head = if (slots.len == 0) none else 0, .used_up = 0, .open_count = 0 };
+            return .{ .aegis_slots = slots, .aegis_free_head = if (slots.len == 0) none else 0, .aegis_used_up = 0, .aegis_open_count = 0 };
         }
 
         /// Opens a scope with the slot's current generation.
         pub fn open(self: *Self) OpenError!Scope {
-            if (!checked) return .{ .table = {}, .index = {}, .generation = {} };
-            const index = self.free_head;
-            if (index == none) return if (self.slots.len != 0 and self.used_up == self.slots.len) error.Exhausted else error.Full;
-            const opened = &self.slots[index];
-            self.free_head = opened.next;
-            self.open_count += 1;
-            return .{ .table = self, .index = index, .generation = opened.generation.load(.monotonic) };
+            if (!checked) return .{ .aegis_table = {}, .aegis_index = {}, .aegis_generation = {} };
+            const index = self.aegis_free_head;
+            if (index == none) return if (self.aegis_slots.len != 0 and self.aegis_used_up == self.aegis_slots.len) error.Exhausted else error.Full;
+            const opened = &self.aegis_slots[index];
+            self.aegis_free_head = opened.next;
+            self.aegis_open_count += 1;
+            return .{ .aegis_table = self, .aegis_index = index, .aegis_generation = opened.generation.load(.monotonic) };
         }
 
         /// Ends with the table. Debug and ReleaseSafe stop the program if a scope is still open: its
         /// references would outlive the records that check them.
         pub fn deinit(self: *Self) void {
-            if (checked and self.open_count != 0) @panic("scope table torn down with a scope still open");
+            if (checked and self.aegis_open_count != 0) @panic("scope table torn down with a scope still open");
             self.* = undefined;
         }
     };
@@ -67,24 +67,24 @@ fn ScopeOf(comptime Brand: type) type {
         /// The brand: the kind of scope this is.
         pub const brand = Brand;
         /// Private: the creator's table; checked builds only.
-        table: if (checked) *Table(Brand) else void,
+        aegis_table: if (checked) *Table(Brand) else void,
         /// Private: this scope's slot in the table; checked builds only.
-        index: if (checked) usize else void,
+        aegis_index: if (checked) usize else void,
         /// Private: the generation this scope holds; checked builds only.
-        generation: if (checked) u64 else void,
+        aegis_generation: if (checked) u64 else void,
 
         /// This scope's record, after checking the scope has not ended.
         fn record(self: Self, comptime message: []const u8) *slot.Slot {
-            const found = &self.table.slots[self.index];
-            if (found.generation.load(.monotonic) != self.generation) @panic(message);
+            const found = &self.aegis_table.aegis_slots[self.aegis_index];
+            if (found.generation.load(.monotonic) != self.aegis_generation) @panic(message);
             return found;
         }
 
         /// A reference to `pointer` that is good while this scope is open. The scope vouches for the memory:
         /// the creator frees or resets it when the scope ends.
         pub fn ref(self: Self, pointer: anytype) refs.Ref(Brand, @TypeOf(pointer)) {
-            if (!checked) return .{ .pointer = pointer, .slot = {}, .generation = {} };
-            return .{ .pointer = pointer, .slot = self.record("scope used after it ended"), .generation = self.generation };
+            if (!checked) return .{ .aegis_pointer = pointer, .aegis_slot = {}, .aegis_generation = {} };
+            return .{ .aegis_pointer = pointer, .aegis_slot = self.record("scope used after it ended"), .aegis_generation = self.aegis_generation };
         }
 
         /// Binds a reference made in another scope, of any brand, to this one. This is the one way a
@@ -99,14 +99,14 @@ fn ScopeOf(comptime Brand: type) type {
         pub fn end(self: Self) void {
             if (!checked) return;
             const ending = self.record("scope ended twice");
-            const next_generation = self.generation + 1;
+            const next_generation = self.aegis_generation + 1;
             ending.generation.store(next_generation, .monotonic);
-            self.table.open_count -= 1;
+            self.aegis_table.aegis_open_count -= 1;
             if (next_generation == slot.retired) {
-                self.table.used_up += 1;
+                self.aegis_table.aegis_used_up += 1;
             } else {
-                ending.next = self.table.free_head;
-                self.table.free_head = self.index;
+                ending.next = self.aegis_table.aegis_free_head;
+                self.aegis_table.aegis_free_head = self.aegis_index;
             }
         }
     };

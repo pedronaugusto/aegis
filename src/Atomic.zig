@@ -71,7 +71,7 @@ pub fn Atomic(comptime T: type) type {
     return struct {
         const Self = @This();
         /// Private: the backing integer or the pointer, only ever read and written whole.
-        cell: std.atomic.Value(Repr),
+        aegis_cell: std.atomic.Value(Repr),
         inline fn raw(value: T) Repr {
             return if (comptime pointer(T)) value else @backingInt(value);
         }
@@ -79,66 +79,66 @@ pub fn Atomic(comptime T: type) type {
             return if (comptime pointer(T)) value else @fromBackingInt(value);
         }
         pub fn init(value: T) Self {
-            return .{ .cell = .init(raw(value)) };
+            return .{ .aegis_cell = .init(raw(value)) };
         }
         pub inline fn load(self: *const Self, order: Order) T {
-            return cooked(self.cell.load(order));
+            return cooked(self.aegis_cell.load(order));
         }
         pub inline fn store(self: *Self, value: T, order: Order) void {
-            self.cell.store(raw(value), order);
+            self.aegis_cell.store(raw(value), order);
         }
         /// Replaces the value and returns the one it replaced.
         pub inline fn swap(self: *Self, value: T, order: Order) T {
-            return cooked(self.cell.swap(raw(value), order));
+            return cooked(self.aegis_cell.swap(raw(value), order));
         }
         /// Replaces `expected` with `new`; null on success, else the value found.
         pub inline fn cmpxchgStrong(self: *Self, expected: T, new: T, success: Order, failure: Order) ?T {
-            const found = self.cell.cmpxchgStrong(raw(expected), raw(new), success, failure) orelse return null;
+            const found = self.aegis_cell.cmpxchgStrong(raw(expected), raw(new), success, failure) orelse return null;
             return cooked(found);
         }
         /// As `cmpxchgStrong`, and it may fail without a difference, for use in a loop.
         pub inline fn cmpxchgWeak(self: *Self, expected: T, new: T, success: Order, failure: Order) ?T {
-            const found = self.cell.cmpxchgWeak(raw(expected), raw(new), success, failure) orelse return null;
+            const found = self.aegis_cell.cmpxchgWeak(raw(expected), raw(new), success, failure) orelse return null;
             return cooked(found);
         }
         /// Raises the value to `value` if it is lower; returns the value before.
         pub inline fn fetchMax(self: *Self, value: T, order: Order) T {
             comptime if (pointer(T)) @compileError("fetchMax orders scalars; an address has no order here");
-            return @fromBackingInt(self.cell.fetchMax(@backingInt(value), order));
+            return @fromBackingInt(self.aegis_cell.fetchMax(@backingInt(value), order));
         }
         /// Lowers the value to `value` if it is higher; returns the value before.
         pub inline fn fetchMin(self: *Self, value: T, order: Order) T {
             comptime if (pointer(T)) @compileError("fetchMin orders scalars; an address has no order here");
-            return @fromBackingInt(self.cell.fetchMin(@backingInt(value), order));
+            return @fromBackingInt(self.aegis_cell.fetchMin(@backingInt(value), order));
         }
         /// Adds `delta` with the domain's checked `add` and returns the value before. On overflow the cell is
         /// untouched and the domain's error returns. `order` is the ordering of the successful exchange.
         pub inline fn fetchAdd(self: *Self, delta: T, order: Order) AddResult(T, "fetchAdd") {
-            var seen = self.cell.load(.monotonic);
+            var seen = self.aegis_cell.load(.monotonic);
             while (true) {
                 const before: T = @fromBackingInt(seen);
                 const after = try before.add(delta);
-                seen = self.cell.cmpxchgWeak(seen, @backingInt(after), order, .monotonic) orelse return before;
+                seen = self.aegis_cell.cmpxchgWeak(seen, @backingInt(after), order, .monotonic) orelse return before;
             }
         }
         /// As `fetchAdd`, with the domain's checked `sub`.
         pub inline fn fetchSub(self: *Self, delta: T, order: Order) SubResult(T, "fetchSub") {
-            var seen = self.cell.load(.monotonic);
+            var seen = self.aegis_cell.load(.monotonic);
             while (true) {
                 const before: T = @fromBackingInt(seen);
                 const after = try before.sub(delta);
-                seen = self.cell.cmpxchgWeak(seen, @backingInt(after), order, .monotonic) orelse return before;
+                seen = self.aegis_cell.cmpxchgWeak(seen, @backingInt(after), order, .monotonic) orelse return before;
             }
         }
         /// Adds `delta` as one hardware instruction and wraps at the width of the backing integer.
         pub inline fn fetchAddWrapping(self: *Self, delta: T, order: Order) T {
             comptime if (!adds(T)) @compileError("fetchAddWrapping needs a domain whose add and sub take its own type");
-            return @fromBackingInt(self.cell.fetchAdd(@backingInt(delta), order));
+            return @fromBackingInt(self.aegis_cell.fetchAdd(@backingInt(delta), order));
         }
         /// Subtracts `delta` as one hardware instruction and wraps at the width of the backing integer.
         pub inline fn fetchSubWrapping(self: *Self, delta: T, order: Order) T {
             comptime if (!adds(T)) @compileError("fetchSubWrapping needs a domain whose add and sub take its own type");
-            return @fromBackingInt(self.cell.fetchSub(@backingInt(delta), order));
+            return @fromBackingInt(self.aegis_cell.fetchSub(@backingInt(delta), order));
         }
         /// Waits while the cell holds `expected`, over `futex`'s futex: returns when woken, spuriously, or at
         /// once when the cell no longer holds it, so the caller reads the cell again. `futex` is whatever gives
@@ -146,22 +146,22 @@ pub fn Atomic(comptime T: type) type {
         /// is cancelable as its `futexWait` is. Only a cell of a 32-bit backing has a futex word.
         pub inline fn wait(self: *const Self, futex: anytype, expected: T) FutexResult(@TypeOf(futex), "futexWait") {
             comptime word();
-            return futex.futexWait(Repr, &self.cell.raw, raw(expected));
+            return futex.futexWait(Repr, &self.aegis_cell.raw, raw(expected));
         }
         /// As `wait`, giving up at `timeout`, as `futex`'s `futexWaitTimeout` does.
         pub inline fn waitTimeout(self: *const Self, futex: anytype, expected: T, timeout: TimeoutOf(@TypeOf(futex))) FutexResult(@TypeOf(futex), "futexWaitTimeout") {
             comptime word();
-            return futex.futexWaitTimeout(Repr, &self.cell.raw, raw(expected), timeout);
+            return futex.futexWaitTimeout(Repr, &self.aegis_cell.raw, raw(expected), timeout);
         }
         /// As `wait`, never canceled, as `futex`'s `futexWaitUncancelable` is.
         pub inline fn waitUncancelable(self: *const Self, futex: anytype, expected: T) FutexResult(@TypeOf(futex), "futexWaitUncancelable") {
             comptime word();
-            return futex.futexWaitUncancelable(Repr, &self.cell.raw, raw(expected));
+            return futex.futexWaitUncancelable(Repr, &self.aegis_cell.raw, raw(expected));
         }
         /// Wakes at most `max_waiters` tasks waiting on the cell, through `futex`'s `futexWake`.
         pub inline fn wake(self: *const Self, futex: anytype, max_waiters: u32) FutexResult(@TypeOf(futex), "futexWake") {
             comptime word();
-            return futex.futexWake(Repr, &self.cell.raw, max_waiters);
+            return futex.futexWake(Repr, &self.aegis_cell.raw, max_waiters);
         }
         fn word() void {
             if (pointer(T) or @bitSizeOf(Repr) != 32) @compileError("a futex waits on a 32-bit word: this cell's backing is " ++ @typeName(Repr));

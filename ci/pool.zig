@@ -66,6 +66,6 @@ pub const Runs = a.handle.RunPool(u64, Tag);
 /// A run's items: in the pool, checked in every build, then the base plus the start.
 pub fn slice(comptime wrapped: bool, p: *const Runs, start: u32, len: u32) [*]u64 {
     if (wrapped) return p.slice(.{ .start = @fromBackingInt(start), .len = len }).ptr;
-    a.assert.invariant(len <= p.end and start <= p.end - len, "run outside its pool");
-    return p.items + start;
+    a.assert.invariant(len <= p.aegis_end and start <= p.aegis_end - len, "run outside its pool");
+    return p.aegis_items + start;
 }

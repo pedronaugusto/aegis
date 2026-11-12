@@ -14,7 +14,7 @@ fn State(comptime wrapped: bool) type {
         mutex: if (wrapped) a.BlockingGuarded(u64) else c.DirectMutex = if (wrapped) .init(0) else .{ .data = 0 },
         rw: if (wrapped) a.RwGuarded(u64) else c.DirectRw = if (wrapped) .init(0) else .{ .data = 0 },
         once: if (wrapped) a.Once(u64) else c.DirectOnce = if (wrapped) .init() else .{},
-        changed: if (wrapped) a.Condition else c.DirectCondition = .{ .limit = 0 },
+        changed: if (wrapped) a.Condition else c.DirectCondition = if (wrapped) .{ .aegis_limit = 0 } else .{ .limit = 0 },
         array: if (wrapped) a.bounded.Array(u64, 3) else c.DirectArray = if (wrapped) .init else .{},
         queue: if (wrapped) a.bounded.Ring(u64, 3) else c.DirectQueue = if (wrapped) .init else .{},
         budget: if (wrapped) a.bounded.Budget(u64) else c.DirectBudget = if (wrapped) .init(1024) else .{ .maximum = 1024 },
@@ -30,9 +30,13 @@ fn State(comptime wrapped: bool) type {
             self.buffer = if (wrapped) .initBuffer(&self.memory) else .{ .storage = &self.memory, .gpa = null, .maximum = 3 };
             self.ring = if (wrapped) (a.bounded.RingBuffer(u64).initBuffer(&self.memory) catch @panic("nonzero storage")) else .{ .storage = &self.memory, .gpa = null, .maximum = 3 };
             // aegis: boundary: the harness seeds a ready Once before timing; Once has no ready constructor and getOrInit needs an Io and a task
-            self.once.data = 42;
+            if (wrapped) {
+                self.once.aegis_data = 42;
+            } else {
+                self.once.data = 42;
+            }
             // aegis: boundary: the seeded value's publication; as getOrInit's would be, before timing
-            self.once.state.store(.ready, .release);
+            if (wrapped) self.once.aegis_state.store(.ready, .release) else self.once.state.store(.ready, .release);
         }
     };
 }
@@ -56,7 +60,7 @@ fn operation(comptime name: []const u8, comptime wrapped: bool) Operation {
             if (comptime std.mem.eql(u8, name, "once_cold")) {
                 const owner = &state.once;
                 // aegis: boundary: the cold path is measured again each round; the harness empties the Once, which has no public reset
-                owner.state.store(.empty, .monotonic);
+                if (wrapped) owner.aegis_state.store(.empty, .monotonic) else owner.state.store(.empty, .monotonic);
                 return (c.onceCold(wrapped, io, owner, input) catch return 0).*;
             }
             if (comptime std.mem.eql(u8, name, "condition")) return c.condition(wrapped, io, &state.changed, &state.mutex, .none) catch |err| @intFromError(err);
@@ -64,7 +68,11 @@ fn operation(comptime name: []const u8, comptime wrapped: bool) Operation {
                 const owner = &state.array;
                 const admitted = c.array(wrapped, owner, input);
                 // aegis: boundary: a full owner is emptied for the next round as the direct side is, by its count; clear would loop over the elements
-                if (!admitted) owner.used = 0;
+                if (!admitted) if (wrapped) {
+                    owner.aegis_used = 0;
+                } else {
+                    owner.used = 0;
+                };
                 return @intFromBool(admitted);
             }
             if (comptime std.mem.eql(u8, name, "queue")) {
@@ -85,7 +93,11 @@ fn operation(comptime name: []const u8, comptime wrapped: bool) Operation {
                 const owner = &state.buffer;
                 const admitted = c.buffer(wrapped, owner, input);
                 // aegis: boundary: a full owner is emptied for the next round as the direct side is, by its count; clear would loop over the elements
-                if (!admitted) owner.used = 0;
+                if (!admitted) if (wrapped) {
+                    owner.aegis_used = 0;
+                } else {
+                    owner.used = 0;
+                };
                 return @intFromBool(admitted);
             }
             if (comptime std.mem.eql(u8, name, "ring_buffer")) {

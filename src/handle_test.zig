@@ -599,7 +599,7 @@ fn runTrace(_: void, case: *shake.Case) anyerror!void {
             for (p.slice(entry.run)) |item| try t.expectEqual(entry.id, item);
         }
         try t.expectEqual(used, p.used());
-        try t.expectEqual(owner.items.len, p.end);
+        try t.expectEqual(owner.items.len, p.aegis_end);
     }
 }
 

@@ -9,28 +9,28 @@ pub fn Secret(comptime T: type) type {
     return struct {
         const Self = @This();
         /// Private: access only through expose/exposeMut; never copy a live owner.
-        material: T,
+        aegis_material: T,
 
         /// Initializes by value; caller/parser temporaries still need their own erasure.
         pub fn init(value: T) Self {
-            return .{ .material = value };
+            return .{ .aegis_material = value };
         }
 
         /// Borrows until transfer or cleanup. Do not retain or return this pointer.
         pub fn expose(self: *const Self) *const T {
-            return &self.material;
+            return &self.aegis_material;
         }
 
         /// Borrows until transfer or cleanup. Erase displaced bytes before replacement.
         pub fn exposeMut(self: *Self) *T {
-            return &self.material;
+            return &self.aegis_material;
         }
 
         /// Transfers into uninitialized, disjoint storage and erases the source.
         /// Consumes self; all source borrows end. Never overwrite a live destination.
         pub fn moveInto(self: *Self, destination: *Self) void {
             @setRuntimeSafety(true);
-            @memcpy(std.mem.asBytes(&destination.material), std.mem.asBytes(&self.material));
+            @memcpy(std.mem.asBytes(&destination.aegis_material), std.mem.asBytes(&self.aegis_material));
             self.deinit();
         }
 
@@ -38,7 +38,7 @@ pub fn Secret(comptime T: type) type {
         /// Consumes self. The erased bytes need not represent a valid T; no typed reads afterward.
         /// No destructor/allocator is invoked and there is no automatic cleanup on abort.
         pub fn deinit(self: *Self) void {
-            std.crypto.secureZero(u8, std.mem.asBytes(&self.material));
+            std.crypto.secureZero(u8, std.mem.asBytes(&self.aegis_material));
         }
 
         /// Fails closed without writing secret bytes. Exposure/reflection can bypass it.

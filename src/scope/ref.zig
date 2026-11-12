@@ -28,17 +28,17 @@ pub fn Ref(comptime Brand: type, comptime P: type) type {
         /// The pointer type `get` returns.
         pub const Pointer = P;
         /// Private: reach it through `get`.
-        pointer: P,
+        aegis_pointer: P,
         /// Private: the creator's record of the scope; checked builds only.
-        slot: if (checked) *const slot.Slot else void,
+        aegis_slot: if (checked) *const slot.Slot else void,
         /// Private: the generation the scope had when this was made; checked builds only.
-        generation: if (checked) u64 else void,
+        aegis_generation: if (checked) u64 else void,
 
         /// The pointer, valid until the scope ends. Debug and ReleaseSafe stop the program if it already has.
         /// The raw pointer carries no check: use it now and do not keep it.
         pub fn get(self: *const Self) P {
-            if (checked and self.slot.generation.load(.monotonic) != self.generation) @panic("scope reference used after its scope ended");
-            return self.pointer;
+            if (checked and self.aegis_slot.generation.load(.monotonic) != self.aegis_generation) @panic("scope reference used after its scope ended");
+            return self.aegis_pointer;
         }
     };
 }

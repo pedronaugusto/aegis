@@ -42,18 +42,18 @@ fn Owner(comptime T: type, comptime with_io: bool, comptime cleanup: if (with_io
     return struct {
         const Self = @This();
         /// Private: access only through a live owner.
-        data: T,
+        aegis_data: T,
         /// Private: Debug-only live/address witness.
-        state: State = .{},
+        aegis_state: State = .{},
         pub fn init(value: T) Self {
-            return .{ .data = value };
+            return .{ .aegis_data = value };
         }
         /// Takes the payload out of `source` by its `moveInto` when `T` declares one, else by assignment,
         /// and consumes `source`. For a payload that must not exist twice, such as a Budget reservation:
         /// `init` would copy it and leave the source able to release it again.
         pub fn initFrom(source: *T) Self {
-            var self: Self = .{ .data = undefined };
-            moves.into(T, source, &self.data);
+            var self: Self = .{ .aegis_data = undefined };
+            moves.into(T, source, &self.aegis_data);
             return self;
         }
         /// The one way to lend: the payload in place, for the task's use and not its release. A payload
@@ -62,20 +62,20 @@ fn Owner(comptime T: type, comptime with_io: bool, comptime cleanup: if (with_io
         /// keeps a holder from releasing it: only what a body acquired, or took out of an owner, is its
         /// to close. The lend ends on mutation, transfer or cleanup of the owner.
         pub fn borrow(self: *Self) *const T {
-            bind(&self.state, self);
-            return &self.data;
+            bind(&self.aegis_state, self);
+            return &self.aegis_data;
         }
         pub fn borrowMut(self: *Self) *T {
-            bind(&self.state, self);
-            return &self.data;
+            bind(&self.aegis_state, self);
+            return &self.aegis_data;
         }
         /// Transfers into uninitialized disjoint wrapper storage; destination binds on first use.
         pub fn moveInto(self: *Self, destination: *Self) void {
-            bind(&self.state, self);
+            bind(&self.aegis_state, self);
             std.debug.assert(self != destination);
-            destination.* = .{ .data = undefined };
-            moves.into(T, &self.data, &destination.data);
-            consume(&self.state);
+            destination.* = .{ .aegis_data = undefined };
+            moves.into(T, &self.aegis_data, &destination.aegis_data);
+            consume(&self.aegis_state);
         }
         /// Transfers into a fresh owner returned by value, as `moveInto` does: binds and consumes `self`; the
         /// result binds at its first use, so it may be moved freely until then, as after `init`.
@@ -87,22 +87,22 @@ fn Owner(comptime T: type, comptime with_io: bool, comptime cleanup: if (with_io
         }
         /// Transfers payload into uninitialized disjoint storage; deinit is no longer owed.
         pub fn take(self: *Self, destination: *T) void {
-            bind(&self.state, self);
-            moves.into(T, &self.data, destination);
-            consume(&self.state);
+            bind(&self.aegis_state, self);
+            moves.into(T, &self.aegis_data, destination);
+            consume(&self.aegis_state);
         }
         /// Runs exactly once, without implicit waiting, allocation or unwind on abort. An owner released
         /// through `Io` takes it here: `deinit(io)`.
         pub const deinit = if (with_io) deinitIo else deinitPlain;
         fn deinitPlain(self: *Self) void {
-            bind(&self.state, self);
-            consume(&self.state);
-            cleanup(&self.data);
+            bind(&self.aegis_state, self);
+            consume(&self.aegis_state);
+            cleanup(&self.aegis_data);
         }
         fn deinitIo(self: *Self, io: std.Io) void {
-            bind(&self.state, self);
-            consume(&self.state);
-            cleanup(&self.data, io);
+            bind(&self.aegis_state, self);
+            consume(&self.aegis_state);
+            cleanup(&self.aegis_data, io);
         }
     };
 }
@@ -182,36 +182,36 @@ pub fn MustUse(comptime T: type, comptime obligation: []const u8) type {
     return struct {
         const Self = @This();
         /// Private: take rather than copying.
-        data: T,
+        aegis_data: T,
         /// Private: Debug-only discharge state.
-        pending: if (diagnostics) bool else void = if (diagnostics) true else {},
+        aegis_pending: if (diagnostics) bool else void = if (diagnostics) true else {},
         /// Private: Debug-only teardown state.
-        live: if (diagnostics) bool else void = if (diagnostics) true else {},
+        aegis_live: if (diagnostics) bool else void = if (diagnostics) true else {},
         pub fn init(value: T) Self {
-            return .{ .data = value };
+            return .{ .aegis_data = value };
         }
         fn check(self: *Self) void {
             if (diagnostics) {
-                std.debug.assert(self.live);
-                std.debug.assert(self.pending);
+                std.debug.assert(self.aegis_live);
+                std.debug.assert(self.aegis_pending);
             }
         }
         pub fn take(self: *Self, destination: *T) void {
             self.check();
-            destination.* = self.data;
-            if (diagnostics) self.pending = false;
+            destination.* = self.aegis_data;
+            if (diagnostics) self.aegis_pending = false;
         }
         /// Non-resource results only. A static public reason documents intentional discard.
         pub fn acknowledge(self: *Self, comptime reason: []const u8) void {
             if (reason.len == 0) @compileError("acknowledge requires a reason");
             self.check();
-            if (diagnostics) self.pending = false;
+            if (diagnostics) self.aegis_pending = false;
         }
         pub fn deinit(self: *Self) void {
             if (diagnostics) {
-                std.debug.assert(self.live);
-                if (self.pending) @panic(obligation);
-                self.live = false;
+                std.debug.assert(self.aegis_live);
+                if (self.aegis_pending) @panic(obligation);
+                self.aegis_live = false;
             }
         }
     };

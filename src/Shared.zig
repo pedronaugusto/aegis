@@ -26,15 +26,15 @@ pub fn Shared(comptime T: type, comptime cleanup: fn (*T) void) type {
         /// Past this many handles `retain` fails stop: the count is a resource limit, never wrapped.
         pub const maximum_handles = std.math.maxInt(usize) / 2;
         /// Private: the shared block, stable until the last handle is released.
-        block: *Block,
+        aegis_block: *Block,
         /// Private: Debug-only exactly-once witness for this handle value.
-        live: if (diagnostics) bool else void = if (diagnostics) true else {},
+        aegis_live: if (diagnostics) bool else void = if (diagnostics) true else {},
 
         /// A new block holding `value`, with one handle.
         pub fn create(gpa: std.mem.Allocator, value: T) std.mem.Allocator.Error!Self {
             const block = try gpa.create(Block);
             block.* = .{ .gpa = gpa, .data = value };
-            return .{ .block = block };
+            return .{ .aegis_block = block };
         }
 
         /// A new block that takes the payload from `source` by `moveInto` when `T` declares it, else by
@@ -44,7 +44,7 @@ pub fn Shared(comptime T: type, comptime cleanup: fn (*T) void) type {
             block.gpa = gpa;
             block.count = .init(1);
             move.into(T, source, &block.data);
-            return .{ .block = block };
+            return .{ .aegis_block = block };
         }
 
         /// What `createWith` fails with: `init_fn`'s errors, or the block's allocation. An `init_fn`
@@ -70,7 +70,7 @@ pub fn Shared(comptime T: type, comptime cleanup: fn (*T) void) type {
             const Return = @typeInfo(@TypeOf(init_fn)).@"fn".return_type.?;
             if (comptime @typeInfo(Return) != .error_union) {
                 init_fn(context, &block.data);
-                return .{ .block = block };
+                return .{ .aegis_block = block };
             }
             init_fn(context, &block.data) catch |err| {
                 const bytes = std.mem.asBytes(block);
@@ -80,30 +80,30 @@ pub fn Shared(comptime T: type, comptime cleanup: fn (*T) void) type {
                 gpa.rawFree(bytes, .of(Block), @returnAddress());
                 return err;
             };
-            return .{ .block = block };
+            return .{ .aegis_block = block };
         }
 
         /// Another handle to the same value. Release both.
         pub fn retain(self: *const Self) Self {
-            if (diagnostics) std.debug.assert(self.live);
-            const before = self.block.count.fetchAdd(1, .monotonic);
+            if (diagnostics) std.debug.assert(self.aegis_live);
+            const before = self.aegis_block.count.fetchAdd(1, .monotonic);
             if (before >= maximum_handles) @panic("shared owner handle count overflow");
-            return .{ .block = self.block };
+            return .{ .aegis_block = self.aegis_block };
         }
 
         /// The value, for as long as this handle is held.
         pub fn get(self: *const Self) Ref {
-            if (diagnostics) std.debug.assert(self.live);
-            return &self.block.data;
+            if (diagnostics) std.debug.assert(self.aegis_live);
+            return &self.aegis_block.data;
         }
 
         /// Gives this handle up; the last one runs cleanup and frees the block. The handle is consumed.
         pub fn release(self: *Self) void {
             if (diagnostics) {
-                std.debug.assert(self.live);
-                self.live = false;
+                std.debug.assert(self.aegis_live);
+                self.aegis_live = false;
             }
-            const block = self.block;
+            const block = self.aegis_block;
             if (block.count.fetchSub(1, .release) != 1) return;
             // Acquire what every earlier release published before the value is cleaned.
             _ = block.count.load(.acquire);

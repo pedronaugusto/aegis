@@ -6,7 +6,7 @@ const profiles = @import("profiles.zig");
 
 /// Copyable one-bit decision. Explicit casts can bypass this API in Zig.
 pub const Choice = packed struct(u1) {
-    bit: u1,
+    aegis_bit: u1,
     pub const FromBitError = error{InvalidBit};
     /// Whether this build is one whose lowering of these kernels `zig build check-choices`
     /// inspects: Zig 0.17.0's LLVM backend, a listed target and CPU model with that model's
@@ -19,21 +19,21 @@ pub const Choice = packed struct(u1) {
         return fromKernel(bit);
     }
     pub inline fn @"and"(self: Choice, other: Choice) Choice {
-        return fromKernel(@as(u32, self.bit & other.bit));
+        return fromKernel(@as(u32, self.aegis_bit & other.aegis_bit));
     }
     pub inline fn @"or"(self: Choice, other: Choice) Choice {
-        return fromKernel(@as(u32, self.bit | other.bit));
+        return fromKernel(@as(u32, self.aegis_bit | other.aegis_bit));
     }
     pub inline fn xor(self: Choice, other: Choice) Choice {
-        return fromKernel(@as(u32, self.bit ^ other.bit));
+        return fromKernel(@as(u32, self.aegis_bit ^ other.aegis_bit));
     }
     pub inline fn not(self: Choice) Choice {
-        return fromKernel(@as(u32, self.bit ^ 1));
+        return fromKernel(@as(u32, self.aegis_bit ^ 1));
     }
     /// Only this explicit boundary releases a verdict for branching or logging.
     pub inline fn declassify(self: Choice, comptime reason: []const u8) bool {
         if (comptime std.mem.trim(u8, reason, " \t\r\n").len == 0) @compileError("Choice declassification requires a nonempty reason");
-        return self.bit != 0;
+        return self.aegis_bit != 0;
     }
     /// Zero chooses a; one chooses b. Both inputs must already be initialized.
     pub inline fn selectInt(self: Choice, comptime T: type, a: T, b: T) T {
@@ -43,7 +43,7 @@ pub const Choice = packed struct(u1) {
         if (bits != 8 and bits != 16 and bits != 32 and bits != 64) @compileError("Choice selectInt supports only 8/16/32/64-bit integers");
         const unsigned = @Int(.unsigned, bits);
         const register = if (bits == 64) u64 else u32;
-        const mask = barrier(register, 0 -% @as(register, self.bit));
+        const mask = barrier(register, 0 -% @as(register, self.aegis_bit));
         const inverse = barrier(register, ~mask);
         const x: unsigned = @bitCast(a); // safe: same-width representation, including signed integers
         const y: unsigned = @bitCast(b); // safe: same-width representation
@@ -53,7 +53,7 @@ pub const Choice = packed struct(u1) {
     pub inline fn selectBytes(self: Choice, comptime N: usize, out: *[N]u8, a: *const [N]u8, b: *const [N]u8) SelectError!void {
         @setRuntimeSafety(true);
         if (partialOverlap(N, out, a) or partialOverlap(N, out, b)) return error.PartialOverlap;
-        const mask = barrier(u32, 0 -% @as(u32, self.bit));
+        const mask = barrier(u32, 0 -% @as(u32, self.aegis_bit));
         const inverse = barrier(u32, ~mask);
         const x: *const volatile [N]u8 = a;
         const y: *const volatile [N]u8 = b;
@@ -109,7 +109,7 @@ pub inline fn compareUnsigned(comptime N: usize, endian: std.lang.Endian, a: *co
     return .{ .lt = fromKernel(lt), .eq = fromKernel(eq), .gt = fromKernel(gt) };
 }
 inline fn fromKernel(bit: u32) Choice {
-    return .{ .bit = @truncate(barrier(u32, bit)) }; // safe: kernels establish 0/1; truncation never branches
+    return .{ .aegis_bit = @truncate(barrier(u32, bit)) }; // safe: kernels establish 0/1; truncation never branches
 }
 inline fn barrier(comptime T: type, value: T) T {
     // The tied register is opaque to LLVM; it emits no instruction on enabled ISAs.

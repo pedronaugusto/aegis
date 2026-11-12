@@ -5,12 +5,12 @@ const std = @import("std");
 const SecretBytes = @This();
 
 // Private by contract: never copy a live descriptor or truncate its allocation.
-allocation: []u8,
-used_len: usize,
+aegis_allocation: []u8,
+aegis_used_len: usize,
 
 /// No allocation: nothing to erase, and `deinit` frees nothing. Grows through `reserve` and
 /// `appendSlice` like any other owner.
-pub const empty: SecretBytes = .{ .allocation = &.{}, .used_len = 0 };
+pub const empty: SecretBytes = .{ .aegis_allocation = &.{}, .aegis_used_len = 0 };
 
 pub const InitError = std.mem.Allocator.Error;
 pub const AdoptError = error{InvalidLength};
@@ -24,7 +24,7 @@ pub const AppendError = error{ OutOfMemory, Overlap };
 pub fn init(gpa: std.mem.Allocator, full_capacity: usize) InitError!SecretBytes {
     const allocation = try gpa.alloc(u8, full_capacity);
     @memset(allocation, 0);
-    return .{ .allocation = allocation, .used_len = 0 };
+    return .{ .aegis_allocation = allocation, .aegis_used_len = 0 };
 }
 
 /// Takes exclusive ownership of the full allocator-owned slice on success only.
@@ -35,51 +35,51 @@ pub fn init(gpa: std.mem.Allocator, full_capacity: usize) InitError!SecretBytes 
 /// of the caller. Borrowed memory must never be adopted. Failure changes nothing.
 pub fn adopt(allocation: []u8, live_len: usize) AdoptError!SecretBytes {
     if (live_len > allocation.len) return error.InvalidLength;
-    return .{ .allocation = allocation, .used_len = live_len };
+    return .{ .aegis_allocation = allocation, .aegis_used_len = live_len };
 }
 
 /// Number of live bytes.
 pub fn len(self: *const SecretBytes) usize {
-    return self.used_len;
+    return self.aegis_used_len;
 }
 
 /// Full extent that will be erased before free, including unused slack.
 pub fn capacity(self: *const SecretBytes) usize {
-    return self.allocation.len;
+    return self.aegis_allocation.len;
 }
 
 /// Borrows only the initialized live prefix. Ends at successful reserve, move
 /// or cleanup; resize/replace can change its content. No concurrent mutation.
 pub fn expose(self: *const SecretBytes) []const u8 {
-    return self.allocation[0..self.used_len];
+    return self.aegis_allocation[0..self.aegis_used_len];
 }
 
 /// Mutable live-prefix borrow; the caller must erase displaced material.
 pub fn exposeMut(self: *SecretBytes) []u8 {
-    return self.allocation[0..self.used_len];
+    return self.aegis_allocation[0..self.aegis_used_len];
 }
 
 /// Shrink erases removed live bytes immediately; grow zeros newly live bytes.
 /// Never allocates. Failure preserves ownership, content and existing borrows.
 pub fn resizeWithinCapacity(self: *SecretBytes, new_len: usize) ResizeError!void {
-    if (new_len > self.allocation.len) return error.CapacityExceeded;
-    if (new_len < self.used_len) {
-        std.crypto.secureZero(u8, self.allocation[new_len..self.used_len]);
+    if (new_len > self.aegis_allocation.len) return error.CapacityExceeded;
+    if (new_len < self.aegis_used_len) {
+        std.crypto.secureZero(u8, self.aegis_allocation[new_len..self.aegis_used_len]);
     } else {
-        @memset(self.allocation[self.used_len..new_len], 0);
+        @memset(self.aegis_allocation[self.aegis_used_len..new_len], 0);
     }
-    self.used_len = new_len;
+    self.aegis_used_len = new_len;
 }
 
 /// Disjoint input only: rejects overlap with ANY part of the backing allocation,
 /// including slack, before mutation in every mode. No implicit capacity growth.
 /// Empty input has no occupied bytes. Borrowed input remains caller-owned.
 pub fn replace(self: *SecretBytes, bytes: []const u8) ReplaceError!void {
-    if (bytes.len > self.allocation.len) return error.CapacityExceeded;
+    if (bytes.len > self.aegis_allocation.len) return error.CapacityExceeded;
     if (self.overlaps(bytes)) return error.Overlap;
-    std.crypto.secureZero(u8, self.allocation[0..self.used_len]);
-    @memcpy(self.allocation[0..bytes.len], bytes);
-    self.used_len = bytes.len;
+    std.crypto.secureZero(u8, self.aegis_allocation[0..self.aegis_used_len]);
+    @memcpy(self.aegis_allocation[0..bytes.len], bytes);
+    self.aegis_used_len = bytes.len;
 }
 
 /// Disjoint input only, as `replace`: appends `bytes` after the live prefix,
@@ -87,20 +87,20 @@ pub fn replace(self: *SecretBytes, bytes: []const u8) ReplaceError!void {
 /// storage is left unerased. Failure changes nothing; growth ends borrows.
 pub fn appendSlice(self: *SecretBytes, gpa: std.mem.Allocator, bytes: []const u8) AppendError!void {
     if (self.overlaps(bytes)) return error.Overlap;
-    const new_len = std.math.add(usize, self.used_len, bytes.len) catch return error.OutOfMemory;
-    if (new_len > self.allocation.len) try self.reserve(gpa, @max(new_len, self.allocation.len *| 2));
-    @memcpy(self.allocation[self.used_len..new_len], bytes);
-    self.used_len = new_len;
+    const new_len = std.math.add(usize, self.aegis_used_len, bytes.len) catch return error.OutOfMemory;
+    if (new_len > self.aegis_allocation.len) try self.reserve(gpa, @max(new_len, self.aegis_allocation.len *| 2));
+    @memcpy(self.aegis_allocation[self.aegis_used_len..new_len], bytes);
+    self.aegis_used_len = new_len;
 }
 
 /// Whether `bytes` shares any address with the backing allocation, slack
 /// included. Empty input has no occupied bytes.
 fn overlaps(self: *const SecretBytes, bytes: []const u8) bool {
-    if (bytes.len != 0 and self.allocation.len != 0) {
-        const x = @intFromPtr(self.allocation.ptr); // safe: numerical address comparison only, no dereference
+    if (bytes.len != 0 and self.aegis_allocation.len != 0) {
+        const x = @intFromPtr(self.aegis_allocation.ptr); // safe: numerical address comparison only, no dereference
         const y = @intFromPtr(bytes.ptr); // safe: valid input slice address, compared without dereferencing
         // Subtract from the greater address: no end-pointer overflow.
-        if (if (x <= y) y - x < self.allocation.len else x - y < bytes.len) return true;
+        if (if (x <= y) y - x < self.aegis_allocation.len else x - y < bytes.len) return true;
     }
     return false;
 }
@@ -121,7 +121,7 @@ pub const Writer = struct {
     const vtable: std.Io.Writer.VTable = .{ .drain = drain, .flush = flush, .rebase = rebase };
 
     pub fn init(owner: *SecretBytes, gpa: std.mem.Allocator) Writer {
-        return .{ .owner = owner, .gpa = gpa, .interface = .{ .buffer = owner.allocation, .end = owner.used_len, .vtable = &vtable } };
+        return .{ .owner = owner, .gpa = gpa, .interface = .{ .buffer = owner.aegis_allocation, .end = owner.aegis_used_len, .vtable = &vtable } };
     }
 
     fn of(w: *std.Io.Writer) *Writer {
@@ -131,16 +131,16 @@ pub const Writer = struct {
     /// Room for `extra` bytes after what is written, through `reserve`.
     fn grow(self: *Writer, extra: usize) std.Io.Writer.Error!void {
         const owner = self.owner;
-        owner.used_len = self.interface.end;
-        const needed = std.math.add(usize, owner.used_len, extra) catch {
+        owner.aegis_used_len = self.interface.end;
+        const needed = std.math.add(usize, owner.aegis_used_len, extra) catch {
             self.err = error.OutOfMemory;
             return error.WriteFailed;
         };
-        owner.reserve(self.gpa, @max(needed, owner.allocation.len *| 2)) catch |err| {
+        owner.reserve(self.gpa, @max(needed, owner.aegis_allocation.len *| 2)) catch |err| {
             self.err = err;
             return error.WriteFailed;
         };
-        self.interface.buffer = owner.allocation;
+        self.interface.buffer = owner.aegis_allocation;
     }
 
     fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
@@ -166,7 +166,7 @@ pub const Writer = struct {
     }
 
     fn flush(w: *std.Io.Writer) std.Io.Writer.Error!void {
-        of(w).owner.used_len = w.end;
+        of(w).owner.aegis_used_len = w.end;
     }
 };
 
@@ -175,12 +175,12 @@ pub const Writer = struct {
 /// OOM preserves the old owner and all its borrows. Success ends old borrows.
 /// A request at or below capacity is a no-op and preserves borrows.
 pub fn reserve(self: *SecretBytes, gpa: std.mem.Allocator, new_capacity: usize) ReserveError!void {
-    if (new_capacity <= self.allocation.len) return;
+    if (new_capacity <= self.aegis_allocation.len) return;
     const replacement = try gpa.alloc(u8, new_capacity);
     @memset(replacement, 0);
-    @memcpy(replacement[0..self.used_len], self.expose());
-    eraseAndFree(gpa, self.allocation);
-    self.allocation = replacement;
+    @memcpy(replacement[0..self.aegis_used_len], self.expose());
+    eraseAndFree(gpa, self.aegis_allocation);
+    self.aegis_allocation = replacement;
 }
 
 /// Transfers into uninitialized disjoint descriptor storage, consuming self.
@@ -197,7 +197,7 @@ pub fn moveInto(self: *SecretBytes, destination: *SecretBytes) void {
 /// Consumes self: no typed reads, reuse or second cleanup of the erased owner.
 /// No promise of erasing prior compiler copies, registers, paging or core dumps.
 pub fn deinit(self: *SecretBytes, gpa: std.mem.Allocator) void {
-    eraseAndFree(gpa, self.allocation);
+    eraseAndFree(gpa, self.aegis_allocation);
     self.* = undefined;
 }
 

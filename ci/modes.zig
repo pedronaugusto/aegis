@@ -178,7 +178,7 @@ fn sharedOverflow(_: std.process.Init) !void {
     // aegis: design: never released, as the retain past the limit stops the run in every build; an isolated child process runs it
     var owner = try S.create(std.heap.page_allocator, 1);
     // aegis: design: a deliberately corrupted count in an isolated child process; it isolates the all-mode limit
-    owner.block.count.store(S.maximum_handles, .monotonic);
+    owner.aegis_block.count.store(S.maximum_handles, .monotonic);
     _ = owner.retain();
 }
 
@@ -216,7 +216,7 @@ fn budgetUnderflow(_: std.process.Init) !void {
     var budget = a.bounded.Budget(u8).init(1);
     var reservation = try budget.reserve(1);
     // aegis: design: a deliberately corrupted admission state in an isolated child process; it isolates the all-mode underflow check
-    budget.taken = 0;
+    budget.aegis_taken = 0;
     reservation.release();
 }
 

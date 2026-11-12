@@ -29,5 +29,5 @@ export fn wrapperRunSlice(p: *const c.Runs, start: u32, len: u32) [*]u64 {
 comptime {
     std.debug.assert(@sizeOf(c.Slots) == @sizeOf(c.Direct));
     std.debug.assert(@sizeOf(c.Slots.Slot) == @sizeOf(c.DirectSlot));
-    std.debug.assert(@offsetOf(c.Slots, "slots") == @offsetOf(c.Direct, "slots"));
+    std.debug.assert(@offsetOf(c.Slots, "aegis_slots") == @offsetOf(c.Direct, "slots"));
 }

@@ -61,7 +61,7 @@ test "A4 SecretBytes init zeros entire capacity and exposes only live bytes" {
     try std.testing.expectEqual(@as(usize, 64), owner.capacity());
     try std.testing.expectEqual(@as(usize, 0), owner.expose().len);
     try std.testing.expectEqual(@as(usize, 0), owner.exposeMut().len);
-    try zero(owner.allocation);
+    try zero(owner.aegis_allocation);
     try owner.resizeWithinCapacity(8);
     @memset(owner.exposeMut(), 0x5b);
     owner.deinit(observe.allocator());
@@ -155,7 +155,7 @@ test "A4 SecretBytes reserve OOM preserves ownership and borrows without remap" 
     var observe: Observer = .{ .child = std.testing.allocator };
     var owner = try SecretBytes.init(observe.allocator(), 16);
     try owner.replace("payload");
-    @memset(owner.allocation[owner.len()..], 0xa1);
+    @memset(owner.aegis_allocation[owner.len()..], 0xa1);
     const borrow = owner.expose();
     observe.fail = true;
     try std.testing.expectError(error.OutOfMemory, owner.reserve(observe.allocator(), 80));
@@ -170,7 +170,7 @@ test "A4 SecretBytes reserve OOM preserves ownership and borrows without remap" 
     // Do not dereference old borrow after successful reserve.
     try std.testing.expectEqual(@as(usize, 80), owner.capacity());
     try quietEqual(owner.expose(), "payload");
-    try zero(owner.allocation[owner.len()..]);
+    try zero(owner.aegis_allocation[owner.len()..]);
     try std.testing.expectEqual(@as(usize, 1), observe.frees);
     try std.testing.expectEqual(@as(usize, 16), observe.bytes_freed);
     try std.testing.expectEqual(@as(usize, 0), observe.resize_calls + observe.remap_calls);
@@ -184,7 +184,7 @@ test "A4 SecretBytes explicit move preserves full owner and erases source descri
     var observe: Observer = .{ .child = std.testing.allocator };
     var owner = try SecretBytes.init(observe.allocator(), 48);
     try owner.replace("key");
-    @memset(owner.allocation[3..], 0x93);
+    @memset(owner.aegis_allocation[3..], 0x93);
     const address = owner.expose().ptr;
     var destination: SecretBytes = undefined;
     owner.moveInto(&destination);
@@ -241,14 +241,14 @@ fn allocationFailures(gpa: std.mem.Allocator) !void {
     var owner = try SecretBytes.init(observe.allocator(), 32);
     defer owner.deinit(observe.allocator());
     try owner.replace("private-material");
-    @memset(owner.allocation[owner.len()..], 0x9b);
+    @memset(owner.aegis_allocation[owner.len()..], 0x9b);
     const borrow = owner.expose();
     owner.reserve(observe.allocator(), 96) catch |err| {
         try std.testing.expect(owner.expose().ptr == borrow.ptr and owner.capacity() == 32);
         try quietEqual(borrow, "private-material");
         return err;
     };
-    try zero(owner.allocation[owner.len()..]);
+    try zero(owner.aegis_allocation[owner.len()..]);
     try quietEqual(owner.expose(), "private-material");
     const retained = owner.expose();
     owner.reserve(observe.allocator(), 192) catch |err| {
@@ -311,7 +311,7 @@ fn resizeProperty(_: void, c: *shake.Case) !void {
             live = next;
         }
         try std.testing.expect(owner.len() == live and owner.capacity() == cap);
-        try quietEqual(owner.allocation, oracle[0..cap]);
+        try quietEqual(owner.aegis_allocation, oracle[0..cap]);
         const public_pattern = shake.gen.int(c.source, u8);
         @memset(owner.exposeMut(), public_pattern);
         @memset(oracle[0..live], public_pattern);
@@ -334,7 +334,7 @@ test "A4 SecretBytes appendSlice grows by erasing every storage it leaves" {
     try std.testing.expect(observe.allocations >= 3);
     try std.testing.expectEqual(observe.allocations - 1, observe.frees);
     try std.testing.expectEqual(@as(usize, 0), observe.resize_calls + observe.remap_calls);
-    try zero(owner.allocation[owner.len()..]);
+    try zero(owner.aegis_allocation[owner.len()..]);
     owner.deinit(observe.allocator());
     try std.testing.expectEqual(@as(usize, 0), observe.live);
 }
@@ -345,7 +345,7 @@ test "A4 SecretBytes appendSlice refuses overlap and failure changes nothing" {
     defer owner.deinit(observe.allocator());
     try owner.appendSlice(observe.allocator(), "12345678");
     try std.testing.expectError(error.Overlap, owner.appendSlice(observe.allocator(), owner.expose()[2..4]));
-    try std.testing.expectError(error.Overlap, owner.appendSlice(observe.allocator(), owner.allocation[7..8]));
+    try std.testing.expectError(error.Overlap, owner.appendSlice(observe.allocator(), owner.aegis_allocation[7..8]));
     observe.fail = true;
     try std.testing.expectError(error.OutOfMemory, owner.appendSlice(observe.allocator(), "9"));
     observe.fail = false;
@@ -373,7 +373,7 @@ test "A4 SecretBytes Writer prints into the owner and publishes at flush" {
     try again.interface.writeAll("!");
     try again.interface.flush();
     try std.testing.expectEqual(want.len + 1, owner.len());
-    try zero(owner.allocation[owner.len()..]);
+    try zero(owner.aegis_allocation[owner.len()..]);
     owner.deinit(observe.allocator());
     try std.testing.expectEqual(@as(usize, 0), observe.live);
 }
@@ -411,7 +411,7 @@ fn appendProperty(_: void, c: *shake.Case) !void {
         @memcpy(oracle[live..][0..n], chunk[0..n]);
         live += n;
         try quietEqual(owner.expose(), oracle[0..live]);
-        try zero(owner.allocation[live..]);
+        try zero(owner.aegis_allocation[live..]);
     }
 }
 test "A4 SecretBytes shakedown appends and writes match an oracle with slack zero" {

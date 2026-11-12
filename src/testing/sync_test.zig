@@ -41,18 +41,18 @@ test "A6 rw all-build reader writer admission and cancel rollback" {
     read2.deinit(io);
     try t.expect((try owner.tryWrite(io)) == null);
     try t.expectError(error.Canceled, owner.write(io));
-    try t.expectEqual(@as(usize, 1), owner.admitted.load(.monotonic));
+    try t.expectEqual(@as(usize, 1), owner.aegis_admitted.load(.monotonic));
     read1.deinit(io);
     var write = try owner.writeUncancelable(io);
     write.value().* = 43;
     try t.expect((try owner.tryRead(io)) == null);
     try t.expectError(error.Canceled, owner.read(io));
-    try t.expectEqual(@as(usize, 1), owner.admitted.load(.monotonic));
+    try t.expectEqual(@as(usize, 1), owner.aegis_admitted.load(.monotonic));
     write.deinit(io);
     var read3 = try owner.readUncancelable(io);
     try t.expectEqual(@as(u32, 43), read3.value().*);
     read3.deinit(io);
-    try t.expectEqual(@as(usize, 0), owner.admitted.load(.monotonic));
+    try t.expectEqual(@as(usize, 0), owner.aegis_admitted.load(.monotonic));
 }
 
 const WaitState = struct {
@@ -75,7 +75,7 @@ const WaitState = struct {
         self.changed.signal(io);
         held.deinit(io);
         try t.expectEqual(@as(u32, 11), try future.await(io));
-        try t.expectEqual(@as(usize, 0), self.changed.count);
+        try t.expectEqual(@as(usize, 0), self.changed.aegis_count);
     }
     fn cancel(self: *WaitState, io: Io) !void {
         var future = try io.concurrent(wait, .{ self, io });
@@ -83,13 +83,13 @@ const WaitState = struct {
         var held = try self.owner.acquire(io);
         held.deinit(io);
         try t.expectError(error.Canceled, future.cancel(io));
-        try t.expectEqual(@as(usize, 0), self.changed.count);
+        try t.expectEqual(@as(usize, 0), self.changed.aegis_count);
         held = self.owner.tryAcquire().?;
         held.deinit(io);
     }
     fn timeout(self: *WaitState, io: Io) !void {
         try t.expectError(error.Timeout, self.wait(io));
-        try t.expectEqual(@as(usize, 0), self.changed.count);
+        try t.expectEqual(@as(usize, 0), self.changed.aegis_count);
         var held = self.owner.tryAcquire().?;
         held.deinit(io);
     }
@@ -155,7 +155,7 @@ test "A6 condition cancellation wins raced signal and returns with guard" {
     var held = try owner.acquire(layer.io());
     defer held.deinit(layer.io());
     try t.expectError(error.Canceled, held.wait(&changed, layer.io(), .none));
-    try t.expectEqual(@as(usize, 0), changed.count);
+    try t.expectEqual(@as(usize, 0), changed.aegis_count);
     try t.expectEqual(@as(u32, 3), held.value().*);
     try t.expect(owner.tryAcquire() == null);
 }
@@ -182,7 +182,7 @@ test "A6 condition accepts pending cancellation after a normally returned signal
     var held = try owner.acquire(layer.io());
     defer held.deinit(layer.io());
     try t.expectError(error.Canceled, held.wait(&changed, layer.io(), .none));
-    try t.expectEqual(@as(usize, 0), changed.count);
+    try t.expectEqual(@as(usize, 0), changed.aegis_count);
     try t.expectEqual(@as(u32, 3), held.value().*);
     try t.expect(owner.tryAcquire() == null);
 }
@@ -207,7 +207,7 @@ const ForwardedSignal = struct {
         try t.expectError(error.Canceled, held.wait(&self.changed, layer.io(), .none));
         held.deinit(io);
         try survivor_task.await(io);
-        try t.expectEqual(@as(usize, 0), self.changed.count);
+        try t.expectEqual(@as(usize, 0), self.changed.aegis_count);
     }
 };
 test "A6 condition canceled notified waiter forwards the signal to a survivor" {
@@ -235,7 +235,7 @@ test "A6 once failure retries stable destination and only publishes complete own
     try t.expectError(error.BadInit, once.getOrInit(t.io, &task, &calls, initialize));
     try t.expect(once.get() == null);
     const value = try once.getOrInit(t.io, &task, &calls, initialize);
-    try t.expect(value == &once.data);
+    try t.expect(value == &once.aegis_data);
     try t.expectEqual(@as(u64, 456), value.b);
     try t.expect(value == try once.getOrInit(t.io, &task, &calls, initialize));
     try t.expectEqual(@as(usize, 2), calls);
@@ -268,7 +268,7 @@ const OnceRace = struct {
         const published = try winner.await(io);
         try t.expectEqual(@as(u64, 456), published.b);
         try t.expectEqual(@as(usize, 1), self.calls);
-        try t.expectEqual(@as(usize, 0), self.once.changed.count);
+        try t.expectEqual(@as(usize, 0), self.once.aegis_changed.aegis_count);
     }
 };
 test "A6 once simulated waiting cancel never cancels initializer or publishes partial" {
@@ -431,14 +431,14 @@ const BroadcastState = struct {
         var second = try io.concurrent(waiter, .{ self, io, 1 });
         for (&self.started) |*event| try event.wait(io);
         var held = try self.owner.acquire(io);
-        try t.expectEqual(@as(usize, 2), self.changed.count);
+        try t.expectEqual(@as(usize, 2), self.changed.aegis_count);
         try t.expectError(error.WaiterLimit, held.wait(&self.changed, io, .none));
         held.value().* = 1;
         self.changed.broadcast(io);
         held.deinit(io);
         try first.await(io);
         try second.await(io);
-        try t.expectEqual(@as(usize, 0), self.changed.count);
+        try t.expectEqual(@as(usize, 0), self.changed.aegis_count);
     }
 };
 test "A6 condition broadcast wakes every registered waiter and cap refuses excess" {
@@ -479,7 +479,7 @@ fn canceledWinner(state: *OnceRace, io: Io) !void {
     state.finish.set(io);
     try t.expectEqual(@as(u64, 456), (try waiter.await(io)).b);
     try t.expectEqual(@as(usize, 2), state.calls);
-    try t.expectEqual(@as(usize, 0), state.once.changed.count);
+    try t.expectEqual(@as(usize, 0), state.once.aegis_changed.aegis_count);
 }
 test "A6 canceled initializer wakes existing waiters to retry publication" {
     for (0..4) |seed| {
