@@ -82,7 +82,8 @@ pub inline fn shorten(point: anytype, n: usize) usize {
     if (n == 0) return 0;
     const driver = points_driver_slot.load(.acquire) orelse return n;
     const short = driver.vtable.shorten(driver.context, of(point), n);
-    std.debug.assert(short >= 1 and short <= n);
+    std.debug.assert(short >= 1);
+    std.debug.assert(short <= n);
     return short;
 }
 
