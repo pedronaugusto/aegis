@@ -73,6 +73,12 @@ pub fn Checked(comptime Repr: type) type {
         pub inline fn raw(self: Self) Repr {
             return self.value;
         }
+        pub inline fn eql(self: Self, other: Self) bool {
+            return self.value == other.value;
+        }
+        pub inline fn compare(self: Self, other: Self) std.math.Order {
+            return std.math.order(self.value, other.value);
+        }
         pub inline fn add(self: Self, rhs: Repr) AddError!Self {
             const result = @addWithOverflow(self.value, rhs);
             if (result[1] != 0) return if (rhs < 0) error.Underflow else error.Overflow;
@@ -140,6 +146,12 @@ pub fn Saturating(comptime Repr: type) type {
         }
         pub inline fn raw(self: Self) Repr {
             return self.value;
+        }
+        pub inline fn eql(self: Self, other: Self) bool {
+            return self.value == other.value;
+        }
+        pub inline fn compare(self: Self, other: Self) std.math.Order {
+            return std.math.order(self.value, other.value);
         }
         pub inline fn add(self: Self, rhs: Repr) Self {
             return init(self.value +| rhs);
@@ -213,6 +225,12 @@ pub fn Ranged(comptime Repr: type, comptime min: Repr, comptime max: Repr) type 
         }
         pub fn raw(self: Self) Repr {
             return @backingInt(self);
+        }
+        pub fn eql(self: Self, other: Self) bool {
+            return @backingInt(self) == @backingInt(other);
+        }
+        pub fn compare(self: Self, other: Self) std.math.Order {
+            return std.math.order(@backingInt(self), @backingInt(other));
         }
         pub fn add(self: Self, rhs: Repr) AddError!Self {
             return init((try Checked(Repr).init(@backingInt(self)).add(rhs)).raw());

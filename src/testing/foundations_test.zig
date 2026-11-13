@@ -66,6 +66,23 @@ test "A3 ranged operations and failing casts" {
     try t.expectError(error.DivisionByZero, aegis.int.Saturating(u8).init(1).div(0));
 }
 
+test "A3 checked, saturating and ranged values compare through their own eql and compare" {
+    const R = aegis.int.Ranged(i16, -10, 10);
+    try t.expect(R.literal(-3).eql(try R.init(-3)));
+    try t.expect(!R.literal(-3).eql(R.literal(3)));
+    try t.expectEqual(std.math.Order.lt, R.literal(-3).compare(R.literal(3)));
+    try t.expectEqual(std.math.Order.gt, R.literal(10).compare(R.literal(-10)));
+    try t.expectEqual(std.math.Order.eq, R.literal(0).compare(R.literal(0)));
+    const C = aegis.int.Checked(i8);
+    try t.expect(C.init(-128).eql(C.init(-128)));
+    try t.expectEqual(std.math.Order.lt, C.init(-128).compare(C.init(127)));
+    try t.expectEqual(std.math.Order.gt, C.init(1).compare(C.init(-1)));
+    const S = aegis.int.Saturating(u8);
+    try t.expect(S.init(200).add(100).eql(S.init(255)));
+    try t.expectEqual(std.math.Order.lt, S.init(0).compare(S.init(255)));
+    try t.expectEqual(std.math.Order.eq, S.init(7).compare(S.init(7)));
+}
+
 test "A3 IDs exhaustion and endian encoding" {
     const Tag = enum { request };
     const I = aegis.id.Id(Tag, u16);

@@ -28,6 +28,7 @@ One release of the breaking cleanups an independent review (2026-10-28) asked fo
 
 ### Added
 
+- `eql` and `compare` on `int.Checked`, `int.Saturating` and `int.Ranged`, as the units and ids have: A004 sends a governed value's comparison to the type's own operation, and these had none, so a caller compared `raw()`s.
 - `Secret.make(maker, args)`: an owner's material made in its own storage, the maker's result written through the owner's field, so the caller's frame holds no copy, as it does for a value handed to `init` (std's `KeyPair.generate` returns its pair by value). A maker that can fail makes `make` fail with its errors: its result is held in `make`'s frame and erased, and an error leaves the owner erased. A008's key and key pair entries name it beside `Secret`.
 - `aegis.Pulse`, a repeated wake: `bump(io)` advances a 32-bit generation and wakes every waiter; `current()` reads it; `waitPast(io, seen)`, `waitPastTimeout` and `waitPastUncancelable` return once the generation has moved past `seen`, never missing a bump made after it was read. No reset to race and no value carried. A007's `std.Io.Event` entry names it beside `Signal` (once) for a wake given again and again.
 - `own.Unowned(T)`, a std handle (`Io.File`, `Io.Dir`, `net.Stream`, `net.Server`, `process.Child`) held without ownership: made by `of`, read by `get`, with no `deinit` and no way to become an owner. A015's entries name it beside `own.OwnedIo` for a handle whose owner keeps and closes it.
