@@ -20,6 +20,7 @@ test "every public type function, made at a representative parameter, compiles e
     r(Dense);
     const Pool = @import("../handle/slot_pool.zig").SlotPool(u32, Tag, .{});
     r(Pool);
+    r(@import("../handle/slot_pool.zig").SlotPool(u32, Tag, .{ .generation = u32 }));
     r(@import("../handle/run_pool.zig").RunPool(u32, Tag));
     r(@import("../handle/secondary.zig").SecondaryMap(Dense, u32));
     const own = @import("../own.zig");

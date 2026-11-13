@@ -5,6 +5,8 @@ const shake = @import("shakedown");
 const c = @import("safety");
 pub const samples = 32;
 const count = 1_000_000;
+/// The instance every benchmark owner carries.
+const owner_instance: @FieldType(c.Key, "instance") = .{ .namespace = 17, .serial = 1 };
 pub const Pair = struct { baseline: f64, wrapper: f64 };
 const names = [_][]const u8{ "sequential", "random", "churn", "index", "parse", "parse_failure", "context", "diagnostics_null", "diagnostics_enabled", "dense" };
 fn Owner(comptime wrapped: bool) type {
@@ -17,7 +19,7 @@ fn Diagnostic(comptime wrapped: bool) type {
 /// `i` holds `i` at generation 1.
 fn filled(comptime wrapped: bool, slots: []Owner(wrapped).Slot) Owner(wrapped) {
     const bytes = std.mem.sliceAsBytes(slots);
-    const instance: @FieldType(Owner(wrapped), "instance") = .{ .namespace = 17, .serial = 1 };
+    const instance = owner_instance;
     var owner: Owner(wrapped) = if (wrapped)
         c.Pool.init(.fixed(bytes), instance) catch |e| @panic(@errorName(e))
     else
@@ -33,7 +35,7 @@ noinline fn measure(comptime name: []const u8, comptime wrapped: bool, io: std.I
     var slots: [256]Owner(wrapped).Slot = undefined;
     var owner = filled(wrapped, &slots);
     var keys: [256]c.Key = undefined;
-    for (&keys, 0..) |*key, i| key.* = .{ .instance = owner.instance, .index = i, .generation = 1 };
+    for (&keys, 0..) |*key, i| key.* = .{ .instance = owner_instance, .index = i, .generation = 1 };
     var values: [256]u32 = undefined;
     for (&values, 0..) |*value, i| value.* = @intCast(i); // safe: capacity is 256
     var ctx: Diagnostic(wrapped) = .{};

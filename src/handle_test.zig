@@ -71,7 +71,7 @@ test "A8 pool stale forged cross-instance and clear keys fail in every mode" {
     try p.remove(key, &out);
     try t.expectEqual(@as(u32, 17), out);
     try t.expectError(error.InvalidKey, p.remove(key, &out));
-    try t.expectError(error.InvalidKey, p.handleOf(&p.slots[0].value));
+    try t.expectError(error.InvalidKey, p.handleOf(&p.aegis_slots[0].value));
     value = 18;
     const next = try p.insert(&value);
     try t.expect(next.generation != key.generation);
@@ -214,11 +214,11 @@ test "A8 transfers reject aliasing the owner metadata before mutation" {
     const P = h.SlotPool(usize, Tag, .{ .generation = u64 });
     var slots: Slots(P, 1) = .{};
     var p = try P.init(slots.region(), instance());
-    try t.expectError(error.AliasedStorage, p.insert(&p.used));
+    try t.expectError(error.AliasedStorage, p.insert(&p.aegis_used));
     try t.expectEqual(@as(usize, 0), p.len());
     var source: usize = 8;
     const key = try p.insert(&source);
-    try t.expectError(error.AliasedStorage, p.remove(key, &p.used));
+    try t.expectError(error.AliasedStorage, p.remove(key, &p.aegis_used));
     try t.expectEqual(@as(usize, 1), p.len());
     try t.expectEqual(@as(usize, 8), (try p.get(key)).*);
 }
@@ -286,7 +286,7 @@ test "A8 a refused commit and a full region preserve live keys, values and borro
     const key = try map.insert(&value);
     const borrow = try map.get(key);
     // The first commit holds 64 KiB of slots; the next insert past them needs a commit.
-    while (map.capacity() * @sizeOf(Keys.Slot) + @sizeOf(Keys.Slot) <= map.region.committed().raw()) {
+    while (map.capacity() * @sizeOf(Keys.Slot) + @sizeOf(Keys.Slot) <= map.aegis_region.committed().raw()) {
         var filler: u32 = 0;
         _ = try map.insert(&filler);
     }
@@ -360,7 +360,7 @@ test "A8 narrow generations retire a slot that used them all and removals stale 
     try t.expectEqual(@as(u32, 11), value);
     p.clear(ignore);
     try t.expectError(error.LimitExceeded, p.insert(&value));
-    try t.expectEqual(@as(usize, 2), p.retired);
+    try t.expectEqual(@as(usize, 2), p.aegis_retired);
 }
 
 test "A8 narrow generations retire a slot through clear" {
@@ -374,7 +374,7 @@ test "A8 narrow generations retire a slot through clear" {
     }
     var value: u32 = 2;
     try t.expectError(error.LimitExceeded, p.insert(&value));
-    try t.expectEqual(@as(usize, 1), p.retired);
+    try t.expectEqual(@as(usize, 1), p.aegis_retired);
 }
 
 test "SlotPool indexes are four bytes, reuse the newest freed slot and never move a value" {

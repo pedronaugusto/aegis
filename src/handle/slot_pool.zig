@@ -170,95 +170,95 @@ fn Keyed(comptime T: type, comptime Tag: type, comptime G: type) type {
         pub const InsertError = Region.Error || error{AliasedStorage};
 
         /// Private: the pool's own region; it is the region's only grower.
-        region: Region,
+        aegis_region: Region,
         /// Private: the first slot.
-        slots: [*]Slot,
-        instance: Domain.Instance,
+        aegis_slots: [*]Slot,
+        aegis_instance: Domain.Instance,
         /// Private: the slots pushed.
-        count: usize = 0,
+        aegis_count: usize = 0,
         /// Private: the newest freed slot, or none.
-        free_head: usize = none,
+        aegis_free_head: usize = none,
         /// Private: the slots holding a value.
-        used: usize = 0,
+        aegis_used: usize = 0,
         /// Private: the slots whose generations ran out.
-        retired: usize = 0,
+        aegis_retired: usize = 0,
 
         /// The pool owns `region` from here on.
         pub fn init(region: Region, instance: Domain.Instance) InitError!Self {
             if (instance.serial == 0) return error.InvalidInstance;
-            return .{ .region = region, .slots = @ptrFromInt(std.mem.alignForward(usize, region.top, @alignOf(Slot))), .instance = instance }; // safe: the slots start at the region's top, aligned as its pushes align them
+            return .{ .aegis_region = region, .aegis_slots = @ptrFromInt(std.mem.alignForward(usize, region.top, @alignOf(Slot))), .aegis_instance = instance }; // safe: the slots start at the region's top, aligned as its pushes align them
         }
         fn storage(self: *const Self) []Slot {
-            return self.slots[0..self.count];
+            return self.aegis_slots[0..self.aegis_count];
         }
         /// Moves `source` into the newest freed slot, else one more on the region.
         pub inline fn insert(self: *Self, source: *T) InsertError!Key {
             if (overlap.overlapsOwner(T, source, self)) return error.AliasedStorage;
             if (overlap.overlaps(T, source, self.storage())) return error.AliasedStorage;
-            if (self.free_head == none) try self.grow();
-            const i = self.free_head;
-            const slot = &self.slots[i];
-            self.free_head = slot.next;
+            if (self.aegis_free_head == none) try self.grow();
+            const i = self.aegis_free_head;
+            const slot = &self.aegis_slots[i];
+            self.aegis_free_head = slot.next;
             move.intoPoisoning(T, source, &slot.value);
             slot.state = .live;
-            self.used += 1;
-            return .{ .instance = self.instance, .index = i, .generation = slot.generation };
+            self.aegis_used += 1;
+            return .{ .instance = self.aegis_instance, .index = i, .generation = slot.generation };
         }
         fn grow(self: *Self) Region.Error!void {
             @branchHint(.unlikely);
-            const slot = try self.region.create(Slot);
+            const slot = try self.aegis_region.create(Slot);
             slot.* = .{};
-            self.free_head = self.count;
-            self.count += 1;
+            self.aegis_free_head = self.aegis_count;
+            self.aegis_count += 1;
         }
         pub inline fn contains(self: *const Self, key: Key) bool {
-            if (self.instance.namespace != key.instance.namespace or self.instance.serial != key.instance.serial or key.index >= self.count) return false;
-            const slot = &self.slots[key.index];
+            if (self.aegis_instance.namespace != key.instance.namespace or self.aegis_instance.serial != key.instance.serial or key.index >= self.aegis_count) return false;
+            const slot = &self.aegis_slots[key.index];
             return slot.state == .live and slot.generation == key.generation;
         }
         /// The value, valid until it is removed or the pool ends: growth never moves it.
         pub inline fn get(self: *Self, key: Key) KeyError!*T {
             if (!self.contains(key)) return error.InvalidKey;
-            return &self.slots[key.index].value;
+            return &self.aegis_slots[key.index].value;
         }
         pub inline fn getConst(self: *const Self, key: Key) KeyError!*const T {
             if (!self.contains(key)) return error.InvalidKey;
-            return &self.slots[key.index].value;
+            return &self.aegis_slots[key.index].value;
         }
         /// The key of a live value in the pool.
         pub fn handleOf(self: *const Self, item: *const T) KeyError!Key {
-            const at = @intFromPtr(item) -% @intFromPtr(self.slots); // safe: compared against the pool's own extent only
-            if (at >= self.count * @sizeOf(Slot) or at % @sizeOf(Slot) != @offsetOf(Slot, "value")) return error.InvalidKey;
+            const at = @intFromPtr(item) -% @intFromPtr(self.aegis_slots); // safe: compared against the pool's own extent only
+            if (at >= self.aegis_count * @sizeOf(Slot) or at % @sizeOf(Slot) != @offsetOf(Slot, "value")) return error.InvalidKey;
             const i = at / @sizeOf(Slot);
-            const slot = &self.slots[i];
+            const slot = &self.aegis_slots[i];
             if (slot.state != .live) return error.InvalidKey;
-            return .{ .instance = self.instance, .index = i, .generation = slot.generation };
+            return .{ .instance = self.aegis_instance, .index = i, .generation = slot.generation };
         }
         pub inline fn remove(self: *Self, key: Key, destination: *T) KeyError!void {
             if (!self.contains(key)) return error.InvalidKey;
             if (overlap.overlapsOwner(T, destination, self) or overlap.overlaps(T, destination, self.storage())) return error.AliasedStorage;
-            const slot = &self.slots[key.index];
+            const slot = &self.aegis_slots[key.index];
             move.intoPoisoning(T, &slot.value, destination);
             self.invalidate(slot, key.index);
         }
         fn invalidate(self: *Self, slot: *Slot, i: usize) void {
-            self.used -= 1;
+            self.aegis_used -= 1;
             if (slot.generation == std.math.maxInt(G)) {
                 slot.state = .retired;
-                self.retired += 1;
+                self.aegis_retired += 1;
             } else {
                 slot.generation += 1;
                 slot.state = .free;
-                slot.next = self.free_head;
-                self.free_head = i;
+                slot.next = self.aegis_free_head;
+                self.aegis_free_head = i;
             }
         }
         pub fn len(self: *const Self) usize {
-            return self.used;
+            return self.aegis_used;
         }
         /// The slots pushed so far, live, free and retired.
         pub fn capacity(self: *const Self) usize {
-            return self.count;
+            return self.aegis_count;
         }
         /// Ascending slot order. Cleanup sees detached values; reentry is forbidden.
         pub fn clear(self: *Self, comptime cleanup: fn (*T) void) void {
@@ -272,7 +272,7 @@ fn Keyed(comptime T: type, comptime Tag: type, comptime G: type) type {
         }
         pub fn deinit(self: *Self, comptime cleanup: fn (*T) void) void {
             self.clear(cleanup);
-            self.region.deinit();
+            self.aegis_region.deinit();
             self.* = undefined;
         }
     };
