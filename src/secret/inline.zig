@@ -16,6 +16,28 @@ pub fn Secret(comptime T: type) type {
             return .{ .aegis_material = value };
         }
 
+        /// Makes the material in this owner's own storage: `maker`'s result, called with `args`, is
+        /// written straight into the owner's field (its result location), so no copy of it lands in
+        /// the caller's frame, as one does when `init` takes a value. Copies inside `maker` itself (a
+        /// std generator's locals, its own return) are the maker's and out of reach: `make`
+        /// guarantees only that the caller holds none. The owner holds no live material before:
+        /// declare it `undefined`, or call it after `deinit`. A maker that can fail
+        /// (`KeyPair.generateDeterministic(seed)`) makes `make` fail with its errors: its result is
+        /// held in this function's frame and erased before it returns, and on an error the owner
+        /// holds none (its storage erased).
+        pub fn make(self: *Self, comptime maker: anytype, args: anytype) Made(maker) {
+            if (comptime Made(maker) == void) {
+                self.aegis_material = @call(.auto, maker, args);
+                return;
+            }
+            var made = @call(.auto, maker, args);
+            defer std.crypto.secureZero(u8, std.mem.asBytes(&made));
+            self.aegis_material = made catch |err| {
+                self.deinit();
+                return err;
+            };
+        }
+
         /// Borrows until transfer or cleanup. Do not retain or return this pointer.
         pub fn expose(self: *const Self) *const T {
             return &self.aegis_material;
@@ -45,6 +67,16 @@ pub fn Secret(comptime T: type) type {
         pub fn format(_: *const Self, _: *std.Io.Writer) error{SecretNotFormattable}!void {
             return error.SecretNotFormattable;
         }
+    };
+}
+
+/// What `Secret.make` returns for `maker`: nothing for a maker that cannot fail, its errors for
+/// one whose result is an error union.
+fn Made(comptime maker: anytype) type {
+    const Result = @typeInfo(@TypeOf(maker)).@"fn".return_type.?;
+    return switch (@typeInfo(Result)) {
+        .error_union => |info| info.error_set!void,
+        else => void,
     };
 }
 
