@@ -24,6 +24,7 @@ test {
     _ = @import("handle.zig");
     _ = @import("input.zig");
     _ = @import("err.zig");
+    _ = @import("own.zig");
     _ = @import("testing/boundaries_test.zig");
     _ = @import("root.zig");
     _ = @import("secret/value_test.zig");
