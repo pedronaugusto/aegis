@@ -55,8 +55,8 @@ pub fn SecondaryMap(comptime Primary: type, comptime V: type) type {
         }
         pub inline fn getConst(self: *const Self, primary: *const Primary, key: Key) KeyError!*const V {
             if (!primary.contains(key)) return error.InvalidKey;
-            const position = self.index.get(key) orelse return error.Missing;
-            return &self.first[position].value;
+            const position = self.aegis_index.get(key) orelse return error.Missing;
+            return &self.aegis_first[position].value;
         }
         /// Removal needs no witness: stale associations still own values needing cleanup.
         pub fn remove(self: *Self, key: Key, destination: *V) KeyError!void {

@@ -101,21 +101,21 @@ pub fn Order(comptime ranks: []const Rank) type {
                 }
                 pub fn readOrdered(self: *Self, io: std.Io, context: *Context) LockType.AcquireError!Capability(LockType.ReadGuard, Context) {
                     context.require(self, rank);
-                    return self.wrap(context, try self.base.read(io));
+                    return self.wrap(context, try self.aegis_base.read(io));
                 }
                 pub fn writeOrdered(self: *Self, io: std.Io, context: *Context) LockType.AcquireError!Capability(LockType.WriteGuard, Context) {
                     context.require(self, rank);
-                    return self.wrap(context, try self.base.write(io));
+                    return self.wrap(context, try self.aegis_base.write(io));
                 }
                 /// As `readOrdered`, uncancelable; only the admission ceiling can still refuse.
                 pub fn readOrderedUncancelable(self: *Self, io: std.Io, context: *Context) LockType.AdmissionError!Capability(LockType.ReadGuard, Context) {
                     context.require(self, rank);
-                    return self.wrap(context, try self.base.readUncancelable(io));
+                    return self.wrap(context, try self.aegis_base.readUncancelable(io));
                 }
                 /// As `writeOrdered`, uncancelable; only the admission ceiling can still refuse.
                 pub fn writeOrderedUncancelable(self: *Self, io: std.Io, context: *Context) LockType.AdmissionError!Capability(LockType.WriteGuard, Context) {
                     context.require(self, rank);
-                    return self.wrap(context, try self.base.writeUncancelable(io));
+                    return self.wrap(context, try self.aegis_base.writeUncancelable(io));
                 }
             };
         }
@@ -153,11 +153,11 @@ fn Capability(comptime Base: type, comptime Context: type) type {
         }
         /// The base guard's `waitUncancelable`, the rank reserved as `wait` reserves it.
         pub fn waitUncancelable(self: *Self, condition: *Condition, io: std.Io, timeout: std.Io.Timeout) Condition.UncancelableWaitError!void {
-            if (diagnostics) self.context.suspended = true;
+            if (diagnostics) self.aegis_context.aegis_suspended = true;
             defer if (diagnostics) {
-                self.context.suspended = false;
+                self.aegis_context.aegis_suspended = false;
             };
-            return condition.waitMutexUncancelable(io, &self.base.owner.mutex, timeout);
+            return condition.waitMutexUncancelable(io, &self.aegis_base.aegis_owner.aegis_mutex, timeout);
         }
     };
 }

@@ -47,7 +47,7 @@ pub fn DenseSlotMap(comptime T: type, comptime Tag: type) type {
             return self.aegis_values[0..self.aegis_used];
         }
         pub fn len(self: *const Self) usize {
-            return self.used;
+            return self.aegis_used;
         }
         pub fn insert(self: *Self, source: *T) InsertError!Key {
             if (overlap.overlapsOwner(T, source, self) or overlap.overlaps(T, source, self.aegis_values[0..self.aegis_value_room])) return error.AliasedStorage;
@@ -75,8 +75,8 @@ pub fn DenseSlotMap(comptime T: type, comptime Tag: type) type {
             return &self.aegis_values[i];
         }
         pub inline fn getConst(self: *const Self, key: Key) KeyError!*const T {
-            const i = (try self.primary.getConst(key)).*;
-            return &self.values[i];
+            const i = (try self.aegis_primary.getConst(key)).*;
+            return &self.aegis_values[i];
         }
         pub fn remove(self: *Self, key: Key, destination: *T) KeyError!void {
             if (!self.contains(key)) return error.InvalidKey;

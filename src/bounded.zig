@@ -17,7 +17,7 @@ pub fn Array(comptime T: type, comptime N: usize) type {
         pub const AtError = error{OutOfBounds};
         pub const PopError = error{Empty};
         pub fn len(self: *const Self) usize {
-            return self.used;
+            return self.aegis_used;
         }
         /// How many it holds as it stands; a full one fails its next append with `Full`.
         pub fn capacity(_: *const Self) usize {
@@ -182,8 +182,8 @@ pub fn Buffer(comptime T: type) type {
             return self.aegis_storage[0..self.aegis_used];
         }
         pub fn at(self: *Self, index: usize) AtError!*T {
-            if (index >= self.used) return error.OutOfBounds;
-            return &self.storage[index];
+            if (index >= self.aegis_used) return error.OutOfBounds;
+            return &self.aegis_storage[index];
         }
         pub fn append(self: *Self, value: *T) AppendError!void {
             if (self.aegis_used == self.aegis_storage.len) return error.Full;
@@ -269,7 +269,7 @@ pub fn RingBuffer(comptime T: type) type {
             self.aegis_used -= 1;
         }
         pub fn overwrite(self: *Self, value: *T, evicted: *T) bool {
-            const full = self.used == self.storage.len;
+            const full = self.aegis_used == self.aegis_storage.len;
             // unreachable: a full nonzero ring has a live head.
             if (full) self.pop(evicted) catch unreachable;
             // unreachable: eviction or nonfull admission leaves a free slot.
