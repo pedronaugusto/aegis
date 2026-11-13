@@ -123,16 +123,16 @@ pub fn Ring(comptime T: type, comptime N: usize) type {
         /// Returns whether eviction occurred. Input/destination must be disjoint from live storage.
         pub fn overwrite(self: *Self, value: *T, evicted: *T) bool {
             const full = self.aegis_used == N;
-            // unreachable: a full nonzero ring has a live head.
+            // glint-ignore: Z026 -- a full nonzero ring has a live head.
             if (full) self.pop(evicted) catch unreachable;
-            // unreachable: eviction or nonfull admission leaves one free slot.
+            // glint-ignore: Z026 -- eviction or nonfull admission leaves one free slot.
             self.push(value) catch unreachable;
             return full;
         }
         pub fn clear(self: *Self, comptime cleanup: fn (*T) void) void {
             while (self.aegis_used != 0) {
                 var value: T = undefined;
-                // unreachable: loop condition proves a live head.
+                // glint-ignore: Z026 -- loop condition proves a live head.
                 self.pop(&value) catch unreachable;
                 cleanup(&value);
             }
@@ -270,9 +270,9 @@ pub fn RingBuffer(comptime T: type) type {
         }
         pub fn overwrite(self: *Self, value: *T, evicted: *T) bool {
             const full = self.aegis_used == self.aegis_storage.len;
-            // unreachable: a full nonzero ring has a live head.
+            // glint-ignore: Z026 -- a full nonzero ring has a live head.
             if (full) self.pop(evicted) catch unreachable;
-            // unreachable: eviction or nonfull admission leaves a free slot.
+            // glint-ignore: Z026 -- eviction or nonfull admission leaves a free slot.
             self.push(value) catch unreachable;
             return full;
         }
@@ -290,7 +290,7 @@ pub fn RingBuffer(comptime T: type) type {
         pub fn clear(self: *Self, comptime cleanup: fn (*T) void) void {
             while (self.aegis_used != 0) {
                 var value: T = undefined;
-                // unreachable: loop condition proves a live head.
+                // glint-ignore: Z026 -- loop condition proves a live head.
                 self.pop(&value) catch unreachable;
                 cleanup(&value);
             }

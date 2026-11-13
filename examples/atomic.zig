@@ -8,8 +8,9 @@ const Open = aegis.units.Count(Connection, u16);
 
 fn churn(open: *aegis.Atomic(Open), rounds: usize) void {
     for (0..rounds) |_| {
-        _ = open.fetchAdd(.fromRaw(1), .monotonic) catch return;
-        _ = open.fetchSub(.fromRaw(1), .monotonic) catch return;
+        // Four tasks, each holding at most one open, stay far inside a u16 count.
+        _ = open.fetchAdd(.fromRaw(1), .monotonic) catch aegis.assert.never("four opens at most never reach the maximum");
+        _ = open.fetchSub(.fromRaw(1), .monotonic) catch aegis.assert.never("a close follows its own open");
     }
 }
 

@@ -36,7 +36,7 @@ export fn baselineGapsSharedRetain(owner: *const c.DirectHandle) *c.DirectBlock 
     return c.sharedRetain(false, owner).block;
 }
 export fn wrapperGapsSharedRetain(owner: *const c.Handle) *anyopaque {
-    // aegis: boundary: the parity export returns the retained handle's block, as the baseline returns its own; the retain stays observable to the codegen comparison
+    // The parity export returns the retained handle's block, as the baseline returns its own; the retain stays observable to the codegen comparison
     return c.sharedRetain(true, owner).aegis_block;
 }
 export fn baselineGapsSharedGet(owner: *const c.DirectHandle) *const u64 {

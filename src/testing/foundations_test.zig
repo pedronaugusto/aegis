@@ -192,7 +192,10 @@ test "A3 a duration reads as fractional seconds, the nearest float where its cou
 test "A3 a duration is a C timespec: whole seconds toward negative infinity and the nanoseconds past them, checked where seconds may not fit" {
     const U = aegis.units;
     const Ms = U.Duration(.millisecond, i64);
-    const Ts = std.posix.timespec;
+    // POSIX's where the target has one; on Windows `std.posix.timespec` is `std.c.timespec`, whose
+    // fields are void, so a struct of its shape stands in and one contract holds on every target.
+    const posix = std.posix.timespec;
+    const Ts = if (@typeInfo(posix) == .@"struct" and @typeInfo(@FieldType(posix, "sec")) == .int) posix else extern struct { sec: isize, nsec: isize };
     // nanosleep's argument: 1.5s.
     const a = try Ms.fromRaw(1500).toTimespec(Ts);
     try t.expectEqual(@as(@FieldType(Ts, "sec"), 1), a.sec);

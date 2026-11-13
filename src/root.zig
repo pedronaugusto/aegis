@@ -148,7 +148,7 @@ pub const lint_rules = .{
         .{ .type = own.OwnedIo, .internal = .{ .aegis_data, .aegis_state } },
         .{ .type = own.Unowned, .internal = .{.aegis_handle} },
         .{ .type = own.MustUse, .internal = .{ .aegis_data, .aegis_pending, .aegis_live } },
-        .{ .type = handle.SlotPool, .internal = .{ .aegis_region, .aegis_slots, .aegis_count, .aegis_free_head, .aegis_used } },
+        .{ .type = handle.SlotPool, .internal = .{ .aegis_region, .aegis_slots, .aegis_instance, .aegis_count, .aegis_free_head, .aegis_used, .aegis_retired } },
         .{ .type = handle.RunPool, .internal = .{ .aegis_region, .aegis_items, .aegis_end, .aegis_free_spans, .aegis_runs } },
         .{ .type = handle.DenseSlotMap, .internal = .{ .aegis_primary, .aegis_value_region, .aegis_key_region, .aegis_values, .aegis_keys, .aegis_value_room, .aegis_key_room, .aegis_used } },
         .{ .type = handle.SecondaryMap, .internal = .{ .aegis_index, .aegis_region, .aegis_first, .aegis_room, .aegis_free_head } },

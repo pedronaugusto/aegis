@@ -132,7 +132,7 @@ fn auditedBuild() bool {
     if (std.options.side_channels_mitigations == .none) return false;
     @setEvalBranchQuota(100_000);
     for (profiles.all) |profile| {
-        // unreachable: every listed profile parses; the A5 test parses each one.
+        // glint-ignore: Z026 -- every listed profile parses; the A5 test parses each one.
         const query = std.Target.Query.parse(.{ .arch_os_abi = profile.target, .cpu_features = profile.cpu }) catch unreachable;
         const arch = query.cpu_arch.?;
         const os = query.os_tag.?;

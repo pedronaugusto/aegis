@@ -865,7 +865,6 @@ const Counting = struct {
     won: std.atomic.Value(u32) = .init(0),
     fn worker(self: *Counting) void {
         for (0..100) |_| {
-            // glint-ignore: Z026 -- an add past the maximum is refused, which is what the race counts: only the adds that won are counted
             if (self.cell.fetchAdd(.fromRaw(1), .monotonic)) |_| {
                 _ = self.won.fetchAdd(1, .monotonic);
             } else |_| {}

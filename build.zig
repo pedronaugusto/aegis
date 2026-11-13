@@ -51,6 +51,23 @@ pub fn dev(b: *std.Build, tools: type) void {
         check.dependOn(&example.step);
     }
     test_step.dependOn(examples_step);
+    // The fixtures the codegen checks compile by hand (`zig build-obj` in ci/codegen.zig,
+    // ci/abi_check.zig and ci/choice_codegen.zig), built here too with the modules those
+    // compilations bind, in ReleaseFast as each of them is (parity's layouts hold in release
+    // modes): in the build's graph, so the lint reads them, and compiled on every host.
+    const release = testModule(b, target, .fast);
+    const parity_material = release.import_table.get("material").?;
+    const choice_profile = b.createModule(.{ .root_source_file = b.addWriteFiles().add("profile.zig", "const std = @import(\"std\");\npub const mitigation: std.crypto.SideChannelsMitigations = .full;\n") });
+    for ([_]struct { []const u8, []const std.Build.Module.Import }{
+        .{ "ci/parity.zig", &.{ .{ .name = "aegis", .module = release }, .{ .name = "material", .module = parity_material } } },
+        .{ "ci/abi.zig", &.{.{ .name = "aegis", .module = release }} },
+        .{ "ci/choice_parity.zig", &.{ .{ .name = "aegis", .module = release }, .{ .name = "profile", .module = choice_profile } } },
+    }) |fixture| check.dependOn(&b.addObject(.{ .name = b.fmt("aegis-{s}", .{std.Io.Dir.path.stem(fixture[0])}), .root_module = b.createModule(.{
+        .root_source_file = p.path(fixture[0]),
+        .target = target,
+        .optimize = .fast,
+        .imports = fixture[1],
+    }) }).step);
 
     // The catalogue: every module's release contract and what holds it. It prints the
     // README's contract table, which the docs check keeps in step.
@@ -66,7 +83,7 @@ pub fn dev(b: *std.Build, tools: type) void {
 
     preflight.addCi(b, p, .{ .tests = test_step, .portable_tests = true, .bench = .{
         .programs = &.{ .{ .name = "owners", .source = "bench/owners.zig" }, .{ .name = "numeric", .source = "bench/numeric.zig" }, .{ .name = "choices", .source = "bench/choices.zig" }, .{ .name = "bytes", .source = "bench/bytes.zig" }, .{ .name = "guarded-bounded", .source = "bench/a67.zig" }, .{ .name = "handles-input", .source = "bench/handles_input.zig" }, .{ .name = "gaps", .source = "bench/gaps.zig" }, .{ .name = "state", .source = "bench/state.zig" }, .{ .name = "scope", .source = "bench/scope.zig" }, .{ .name = "a11", .source = "bench/a11.zig" } },
-        .imports = benchImports,
+        .imports = tools.preflight.Bench.importsFrom(benchImports),
         .target = target,
         .optimize = optimize,
     } });

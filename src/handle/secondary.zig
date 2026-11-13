@@ -74,7 +74,7 @@ pub fn SecondaryMap(comptime Primary: type, comptime V: type) type {
             for (self.storage()) |*entry| {
                 if (!entry.live or primary.contains(entry.key)) continue;
                 var detached: V = undefined;
-                self.remove(entry.key, &detached) catch unreachable; // unreachable: the live association is indexed and detached storage is disjoint
+                self.remove(entry.key, &detached) catch unreachable; // glint-ignore: Z026 -- the live association is indexed and detached storage is disjoint
                 cleanup(&detached);
             }
         }
@@ -82,7 +82,7 @@ pub fn SecondaryMap(comptime Primary: type, comptime V: type) type {
             for (self.storage()) |*entry| {
                 if (!entry.live) continue;
                 var detached: V = undefined;
-                self.remove(entry.key, &detached) catch unreachable; // unreachable: the live association is indexed and detached storage is disjoint
+                self.remove(entry.key, &detached) catch unreachable; // glint-ignore: Z026 -- the live association is indexed and detached storage is disjoint
                 cleanup(&detached);
             }
         }

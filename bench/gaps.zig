@@ -31,7 +31,7 @@ fn Adding(comptime wrapped: bool, comptime hardware: bool) type {
             if (hardware and !wrapped) {
                 std.mem.doNotOptimizeAway(gaps.atomicAddWrapping(false, &self.cell, 1));
             } else {
-                std.mem.doNotOptimizeAway(gaps.atomicAdd(wrapped, &self.cell, 1) catch unreachable); // unreachable: the count stays far below the maximum
+                std.mem.doNotOptimizeAway(gaps.atomicAdd(wrapped, &self.cell, 1) catch unreachable); // glint-ignore: Z026 -- the count stays far below the maximum
             }
         }
         fn worker(self: *@This(), count: usize) void {
@@ -67,7 +67,7 @@ noinline fn measure(comptime wrapped: bool, comptime name: []const u8, io: Io, c
         } else if (comptime std.mem.startsWith(u8, name, "atomic")) {
             adding.add();
         } else if (comptime std.mem.eql(u8, name, "lazy_cold")) {
-            // aegis: boundary: the cold path is measured again each round; the harness empties the Lazy, which has no public reset
+            // The cold path is measured again each round; the harness empties the Lazy, which has no public reset
             if (wrapped) lazy.aegis_state.store(.empty, .monotonic) else lazy.state.store(.empty, .monotonic);
             accumulator +%= (try gaps.lazyCold(wrapped, io, &lazy, i + 1)).*;
         } else Churn(wrapped).worker(&churn, 1);

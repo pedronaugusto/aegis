@@ -5,10 +5,10 @@ const s = @import("aegis").secret;
 const base = @import("choice_baseline.zig");
 pub const names = .{ "equal0", "equal1", "equal32", "equal48", "equal512", "dynamic", "order_big", "order_little", "order_runtime", "int8", "int16", "int32", "int64", "signed8", "signed16", "signed32", "signed64", "logic", "bytes", "alias", "montgomery", "curve", "offline", "finished", "dead" };
 inline fn chosen(comptime wrapped: bool, a: *const [1]u8, b: *const [1]u8) if (wrapped) s.Choice else base.Bit {
-    return if (wrapped) s.equal(1, a, b) else base.equal(a, b) catch unreachable; // unreachable: both fixed arrays have identical public lengths
+    return if (wrapped) s.equal(1, a, b) else base.equal(a, b) catch unreachable; // glint-ignore: Z026 -- both fixed arrays have identical public lengths
 }
 inline fn equal(comptime wrapped: bool, comptime N: usize, a: *const [N]u8, b: *const [N]u8) u32 {
-    return if (wrapped) @intFromBool(s.equal(N, a, b).declassify("fixture completed equality verdict")) else (base.equal(a, b) catch unreachable).value; // unreachable: both fixed arrays have identical public lengths
+    return if (wrapped) @intFromBool(s.equal(N, a, b).declassify("fixture completed equality verdict")) else (base.equal(a, b) catch unreachable).value; // glint-ignore: Z026 -- both fixed arrays have identical public lengths
 }
 pub inline fn run(comptime name: []const u8, comptime wrapped: bool, out: *[512]u8, a: *const [512]u8, b: *const [512]u8, len: usize, endian: std.lang.Endian) u64 {
     @setRuntimeSafety(true);
@@ -90,12 +90,12 @@ pub inline fn run(comptime name: []const u8, comptime wrapped: bool, out: *[512]
             }
             return @intFromBool(valid.declassify("completed offline CBC padding verdict"));
         } else {
-            // unreachable: every equality compares two fixed one-byte arrays
+            // glint-ignore: Z026 -- every equality compares two fixed one-byte arrays
             var valid = base.bit(base.bit((base.equal(&padding, &zero) catch unreachable).value ^ 1).value & base.bit(base.order(1, .big, &padding, &limit).gt.value ^ 1).value);
             for (0..16) |i| {
                 const index: [1]u8 = .{@intCast(i)}; // safe: public 0..15
                 const value: [1]u8 = .{a[15 - i]};
-                // unreachable: both fixed one-byte arrays have identical public lengths
+                // glint-ignore: Z026 -- both fixed one-byte arrays have identical public lengths
                 valid = base.bit(valid.value & base.bit(base.bit(base.order(1, .big, &index, &padding).lt.value ^ 1).value | (base.equal(&value, &padding) catch unreachable).value).value);
             }
             return valid.value;

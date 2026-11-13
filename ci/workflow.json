@@ -1,5 +1,4 @@
 {
-  "attest": true,
   "compile_once": true,
   "targets": [
     "x86_64-linux-gnu",
@@ -14,19 +13,19 @@
     {
       "name": "Contracts (values)",
       "step": "contracts-values",
-      "tiers": ["fast", "merge", "release"],
+      "tiers": ["ci", "release"],
       "setup": false
     },
     {
       "name": "Contracts (choices)",
       "step": "contracts-choices",
-      "tiers": ["fast", "merge", "release"],
+      "tiers": ["ci", "release"],
       "setup": false
     },
     {
       "name": "Contracts (published)",
       "step": "contracts-published",
-      "tiers": ["fast", "merge", "release"],
+      "tiers": ["ci", "release"],
       "setup": false
     },
     {

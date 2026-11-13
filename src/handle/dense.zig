@@ -88,14 +88,14 @@ pub fn DenseSlotMap(comptime T: type, comptime Tag: type) type {
             if (position != self.aegis_used) {
                 move.intoPoisoning(T, &self.aegis_values[self.aegis_used], &self.aegis_values[position]);
                 self.aegis_keys[position] = self.aegis_keys[self.aegis_used];
-                (self.aegis_primary.get(self.aegis_keys[position]) catch unreachable).* = position; // unreachable: the live swapped key retains its primary association
+                (self.aegis_primary.get(self.aegis_keys[position]) catch unreachable).* = position; // glint-ignore: Z026 -- the live swapped key retains its primary association
             }
         }
         /// Reverse dense order; cleanup receives detached values, never a stored pointer.
         pub fn clear(self: *Self, comptime cleanup: fn (*T) void) void {
             while (self.aegis_used != 0) {
                 var detached: T = undefined;
-                self.remove(self.aegis_keys[self.aegis_used - 1], &detached) catch unreachable; // unreachable: the last dense entry is live and detached storage is disjoint
+                self.remove(self.aegis_keys[self.aegis_used - 1], &detached) catch unreachable; // glint-ignore: Z026 -- the last dense entry is live and detached storage is disjoint
                 cleanup(&detached);
             }
         }
