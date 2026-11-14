@@ -55,6 +55,14 @@ fn Identity(comptime Tag: type, comptime Repr: type, comptime nonzero: bool) typ
         pub inline fn raw(self: Self) Repr {
             return @backingInt(self);
         }
+        /// `ids` as their representations, the same memory read as `Repr`: for code that compares
+        /// and indexes ids in bulk (a diff's kernels over interned lines) without retyping it. Every
+        /// id is its representation, so the view holds for any slice of ids. Read only: a
+        /// representation written back need not be an id of this domain (zero, for `NonZero`).
+        pub inline fn raws(ids: []const Self) []const Repr {
+            comptime if (@sizeOf(Self) != @sizeOf(Repr) or @alignOf(Self) != @alignOf(Repr)) @compileError("an id is laid out as its representation");
+            return @ptrCast(ids); // safe: an id is an enum(Repr), its representation's size and alignment
+        }
         pub inline fn eql(self: Self, other: Self) bool {
             return @backingInt(self) == @backingInt(other);
         }

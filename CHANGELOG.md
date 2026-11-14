@@ -28,6 +28,7 @@ One release of the breaking cleanups an independent review (2026-10-28) asked fo
 
 ### Added
 
+- `id.Id(Tag, Repr).raws(ids)` (and `NonZero`'s): a slice of ids as their representations, the same memory, for code that compares and indexes ids in bulk without retyping it. Read only, since a representation written back need not be an id of the domain.
 - A span divides by a span: `Duration.ratio(by)` and `Duration.ratioFloor(by)` count the whole `by` in it, toward zero or toward negative infinity (a count, as `Bytes.ratio` gives), failing on a zero `by` and on the minimum by -1; `Duration.mod(by)` is what `ratioFloor` leaves, from zero toward `by` with `by`'s sign, failing only on a zero `by`. Days and the time of day of a nanosecond instant are `ratioFloor(day)` and `mod(day)` on either side of the epoch.
 - `Duration.negate()` and `Duration.abs()`, failing with `Overflow` on the minimum; an unsigned duration has neither (a compile error).
 - `int.Ranged.widen(Target)` and `units.Duration.fromRanged(value)`: a ranged value as an integer or a duration of any representation that holds its whole range, with no error and no check; a range the target does not hold whole is a compile error.

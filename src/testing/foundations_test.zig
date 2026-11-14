@@ -98,6 +98,18 @@ test "A3 IDs exhaustion and endian encoding" {
     try t.expectError(error.IdExhausted, counter.next());
 }
 
+test "A3 a slice of ids reads as their representations, the same memory, for every domain" {
+    const Class = aegis.id.Id(struct {}, u32);
+    const lines = [_]Class{ .fromRaw(7), .fromRaw(0), .fromRaw(std.math.maxInt(u32)), .fromRaw(7) };
+    const raws = Class.raws(&lines);
+    try t.expectEqualSlices(u32, &.{ 7, 0, std.math.maxInt(u32), 7 }, raws);
+    try t.expectEqual(@intFromPtr(&lines), @intFromPtr(raws.ptr));
+    try t.expectEqual(@as(usize, 0), Class.raws(&.{}).len);
+    const Node = aegis.id.NonZero(enum { node }, u16);
+    const nodes = [_]Node{ try .fromRaw(1), try .fromRaw(0xffff) };
+    try t.expectEqualSlices(u16, &.{ 1, 0xffff }, Node.raws(&nodes));
+}
+
 test "A3 a size divides into a size or a count, every quotient checked" {
     const B = aegis.units.Bytes(u64);
     try t.expectEqual(B.fromRaw(21), try B.fromRaw(64).divTrunc(3));
