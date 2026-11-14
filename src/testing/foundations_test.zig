@@ -181,6 +181,93 @@ test "A3 a duration divides by a count, toward zero or negative infinity, refusi
     }
 }
 
+test "A3 a duration divides by a duration into a count, toward zero or negative infinity, and mod leaves the rest with the divisor's sign" {
+    const D = aegis.units.Duration(.nanosecond, i8);
+    // An oracle over every i8 pair: the floored identity holds and the remainder lies from zero toward by.
+    for (0..256) |x| for (0..256) |y| {
+        const a: i8 = @bitCast(@as(u8, @intCast(x))); // safe: x is u8's domain
+        const b: i8 = @bitCast(@as(u8, @intCast(y))); // safe: y is u8's domain
+        if (b == 0) {
+            try t.expectError(error.DivisionByZero, D.fromRaw(a).ratioFloor(.fromRaw(b)));
+            try t.expectError(error.DivisionByZero, D.fromRaw(a).ratio(.fromRaw(b)));
+            try t.expectError(error.DivisionByZero, D.fromRaw(a).mod(.fromRaw(b)));
+            continue;
+        }
+        const rest = (try D.fromRaw(a).mod(.fromRaw(b))).raw();
+        const wide_rest = @as(i16, a) - @divFloor(@as(i16, a), b) * b;
+        try t.expectEqual(wide_rest, rest);
+        try t.expect(if (b > 0) rest >= 0 and rest < b else rest <= 0 and rest > b);
+        if (a == -128 and b == -1) {
+            try t.expectError(error.Overflow, D.fromRaw(a).ratioFloor(.fromRaw(b)));
+            try t.expectError(error.Overflow, D.fromRaw(a).ratio(.fromRaw(b)));
+            continue;
+        }
+        try t.expectEqual(@divFloor(a, b), try D.fromRaw(a).ratioFloor(.fromRaw(b)));
+        try t.expectEqual(@divTrunc(a, b), try D.fromRaw(a).ratio(.fromRaw(b)));
+    };
+    // Unsigned: every u8 pair.
+    const U = aegis.units.Duration(.second, u8);
+    for (0..256) |x| for (1..256) |y| {
+        const a: u8 = @intCast(x); // safe: x is u8's domain
+        const b: u8 = @intCast(y); // safe: y is u8's domain
+        try t.expectEqual(a / b, try U.fromRaw(a).ratioFloor(.fromRaw(b)));
+        try t.expectEqual(a % b, (try U.fromRaw(a).mod(.fromRaw(b))).raw());
+    };
+    // Days and the time of day of an instant before the epoch, as a calendar takes them.
+    const Ns = aegis.units.Duration(.nanosecond, i128);
+    const day = Ns.literal("1d");
+    const before = Ns.literal("-1d1h");
+    try t.expectEqual(@as(i128, -2), try before.ratioFloor(day));
+    try t.expect((try before.mod(day)).eql(Ns.literal("23h")));
+}
+
+test "A3 a duration negates and takes its length, refusing the minimum" {
+    const D = aegis.units.Duration(.second, i8);
+    try t.expect((try D.fromRaw(5).negate()).eql(.fromRaw(-5)));
+    try t.expect((try D.fromRaw(-127).negate()).eql(.fromRaw(127)));
+    try t.expectError(error.Overflow, D.fromRaw(-128).negate());
+    try t.expect((try D.fromRaw(-7).abs()).eql(.fromRaw(7)));
+    try t.expect((try D.fromRaw(7).abs()).eql(.fromRaw(7)));
+    try t.expectError(error.Overflow, D.fromRaw(-128).abs());
+}
+
+test "A3 a ranged value widens into any integer or duration that holds its whole range, with no error" {
+    const Hour = aegis.int.Ranged(u8, 0, 23);
+    try t.expectEqual(@as(u5, 23), Hour.literal(23).widen(u5));
+    try t.expectEqual(@as(i64, 7), Hour.literal(7).widen(i64));
+    const Offset = aegis.int.Ranged(i32, -86_399, 86_399);
+    try t.expectEqual(@as(i18, -86_399), Offset.literal(-86_399).widen(i18));
+    const hours = aegis.units.Duration(.hour, i64).fromRanged(Hour.literal(5));
+    try t.expect(hours.eql(.literal("5h")));
+    const offset = aegis.units.Duration(.second, i32).fromRanged(Offset.literal(-3600));
+    try t.expect(offset.eql(.literal("-1h")));
+    // A narrower duration than Ranged's representation, which holds the range.
+    try t.expect(aegis.units.Duration(.hour, u8).fromRanged(aegis.int.Ranged(i64, 0, 23).literal(9)).eql(.fromRaw(9)));
+}
+
+test "A3 an instant is its span since the clock's zero, both ways with no error, at i128 across Temporal's bounds" {
+    const Ns = aegis.units.Duration(.nanosecond, i128);
+    const At = aegis.units.Instant(.real, .nanosecond, i128);
+    try t.expect(At.epoch.sinceEpoch().eql(.fromRaw(0)));
+    // Temporal's instants lie within 10^8 days of the epoch, and a time duration within 2^53 seconds.
+    const limit = Ns.literal("100000000d");
+    const max_time = try (try Ns.literal("1s").mul(1 << 53)).sub(.fromRaw(1));
+    for ([_]Ns{ limit, try limit.negate() }) |edge| {
+        const instant = At.fromSinceEpoch(edge);
+        try t.expect(instant.sinceEpoch().eql(edge));
+        const later = try instant.add(max_time);
+        const earlier = try instant.sub(max_time);
+        try t.expect((try earlier.durationTo(later)).eql(try max_time.mul(2)));
+        try t.expect((try later.sinceEpoch().sub(max_time)).eql(edge));
+        // Whole days and the nanoseconds of the day past them, as a calendar reads an instant.
+        const day = Ns.literal("1d");
+        const days = try earlier.sinceEpoch().ratioFloor(day);
+        const of_day = try earlier.sinceEpoch().mod(day);
+        try t.expect((try (try day.mul(days)).add(of_day)).eql(earlier.sinceEpoch()));
+        try t.expect(of_day.compare(.fromRaw(0)) != .lt and of_day.compare(day) == .lt);
+    }
+}
+
 test "A3 a duration reads as fractional seconds, the nearest float where its count is exact" {
     const U = aegis.units;
     const Ms = U.Duration(.millisecond, i64);

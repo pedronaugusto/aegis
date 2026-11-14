@@ -232,6 +232,14 @@ pub fn Ranged(comptime Repr: type, comptime min: Repr, comptime max: Repr) type 
         pub fn compare(self: Self, other: Self) std.math.Order {
             return std.math.order(@backingInt(self), @backingInt(other));
         }
+        /// The value as a `Target` that holds the whole range, `u5` for an hour of the day: no error
+        /// and no check, where `int.cast` from `Repr` would have one. A range `Target` does not hold
+        /// whole is a compile error.
+        pub fn widen(self: Self, comptime Target: type) Target {
+            comptime if (@typeInfo(Target) != .int or min < std.math.minInt(Target) or max > std.math.maxInt(Target))
+                @compileError(std.fmt.comptimePrint("{d} to {d} does not fit {s}", .{ min, max, @typeName(Target) }));
+            return @intCast(@backingInt(self)); // safe: the range fits Target, checked above at compile time
+        }
         pub fn add(self: Self, rhs: Repr) AddError!Self {
             return init((try Checked(Repr).init(@backingInt(self)).add(rhs)).raw());
         }

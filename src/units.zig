@@ -642,6 +642,60 @@ pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
                 if (@backingInt(self) == std.math.minInt(Repr) and rhs == -1) return error.Overflow;
             }
         }
+        /// How many times `by` fits in the span, rounded toward zero: a count, not a span, as
+        /// `Bytes.ratio` gives. Fails as `divTrunc` does, on a zero `by` and the minimum by -1.
+        pub inline fn ratio(self: Self, by: Self) DivError!Repr {
+            try divisible(self, by.raw());
+            return @divTrunc(@backingInt(self), by.raw());
+        }
+        /// How many times `by` fits in the span, rounded toward negative infinity: the days before an
+        /// instant's day, whichever side of the epoch it is on. `mod` is what is left, so
+        /// `by.mul(ratioFloor(by)).add(mod(by))` is the span again. Fails as `divFloor` does.
+        pub inline fn ratioFloor(self: Self, by: Self) DivError!Repr {
+            try divisible(self, by.raw());
+            return @divFloor(@backingInt(self), by.raw());
+        }
+        /// A division by zero, the one remainder that fails.
+        pub const ModError = error{DivisionByZero};
+        /// What is left of the span past the last whole `by` `ratioFloor` counts: from zero up to `by`
+        /// with `by`'s sign, never reaching it (the time of day of an instant before the epoch is
+        /// still positive). The minimum by -1, whose quotient overflows, leaves zero.
+        pub inline fn mod(self: Self, by: Self) ModError!Self {
+            if (by.raw() == 0) return error.DivisionByZero;
+            if (comptime @typeInfo(Repr).int.signedness == .unsigned) return fromRaw(@backingInt(self) % by.raw());
+            // Worked one bit wider, where the quotient times `by` cannot overflow.
+            const Wider = @Int(.signed, @bitSizeOf(Repr) + 1);
+            const a: Wider = @backingInt(self);
+            const b: Wider = by.raw();
+            return fromRaw(@intCast(a - @divFloor(a, b) * b)); // safe: the remainder lies between zero and by
+        }
+        /// The minimum, whose negation the representation does not hold.
+        pub const NegateError = error{Overflow};
+        /// The span the other way: -1s from 1s. Only a signed representation has one.
+        pub inline fn negate(self: Self) NegateError!Self {
+            if (comptime @typeInfo(Repr).int.signedness == .unsigned) @compileError("an unsigned duration has no negation: " ++ @typeName(Repr));
+            if (@backingInt(self) == std.math.minInt(Repr)) return error.Overflow;
+            return fromRaw(-@backingInt(self));
+        }
+        /// The span's length, whichever way it runs. Only a signed representation can be negative.
+        pub inline fn abs(self: Self) NegateError!Self {
+            if (comptime @typeInfo(Repr).int.signedness == .unsigned) @compileError("an unsigned duration is never negative: " ++ @typeName(Repr));
+            return if (@backingInt(self) < 0) self.negate() else self;
+        }
+        /// A ranged integer counted in this duration's unit (an hour of the day, an offset in
+        /// seconds), as the span it is. No error and no check: a range this representation does not
+        /// hold whole is a compile error. `value` is an `int.Ranged` of any aegis copy, read through
+        /// its `aegis_scalar` (README, "Generic code").
+        pub inline fn fromRanged(value: anytype) Self {
+            const Value = @TypeOf(value);
+            const declared = comptime if (@hasDecl(Value, "aegis_scalar")) Value.aegis_scalar else @compileError("fromRanged takes an int.Ranged, not " ++ @typeName(Value));
+            comptime {
+                if (declared.contract != 1 or declared.kind != .ranged) @compileError("fromRanged takes an int.Ranged, not " ++ @typeName(Value));
+                if (declared.minimum < std.math.minInt(Repr) or declared.maximum > std.math.maxInt(Repr))
+                    @compileError(std.fmt.comptimePrint("{d} to {d} does not fit a duration of {s}", .{ declared.minimum, declared.maximum, @typeName(Repr) }));
+            }
+            return fromRaw(@intCast(value.raw())); // safe: the range fits Repr, checked above at compile time
+        }
         /// The same value in another unit and representation. It carries no error where every value of this
         /// representation converts exactly, no range check where none can fail, and only the errors that can
         /// occur otherwise (`ConvertError` is the widest set).
@@ -778,6 +832,17 @@ pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: t
         }
         pub inline fn sub(self: Self, span: Duration(unit, Repr)) SubError!Self {
             return fromRaw((try ints.Checked(Repr).init(@backingInt(self)).sub(span.raw())).raw());
+        }
+        /// The clock's zero, from which `sinceEpoch` counts.
+        pub const epoch: Self = @fromBackingInt(0);
+        /// The span from the clock's zero to this instant: an instant is that span, so no error.
+        pub inline fn sinceEpoch(self: Self) Duration(unit, Repr) {
+            return .fromRaw(@backingInt(self));
+        }
+        /// The instant `span` after the clock's zero (before it, for a negative span), `sinceEpoch`'s
+        /// inverse, with no error.
+        pub inline fn fromSinceEpoch(span: Duration(unit, Repr)) Self {
+            return fromRaw(span.raw());
         }
         pub inline fn durationTo(self: Self, other: Self) DurationToError!Duration(unit, Repr) {
             return Duration(unit, Repr).fromRaw((try ints.Checked(Repr).init(@backingInt(other)).sub(@backingInt(self))).raw());
