@@ -4,7 +4,6 @@ const builtin = @import("builtin");
 /// Fail-stop in every build; does not unwind cleanup or assume unreachable. The one always-on
 /// contract: a caller's precondition, a result's postcondition and a state's invariant alike, the
 /// condition evaluated once.
-// ziglint-ignore: Z023 condition then static message is the specified scalar contract
 pub fn invariant(condition: bool, comptime message: []const u8) void {
     if (!condition) @panic(message);
 }
@@ -16,7 +15,6 @@ pub inline fn never(comptime message: []const u8) noreturn {
     @panic(message);
 }
 /// Optional Debug diagnostic; argument evaluation still belongs to the caller.
-// ziglint-ignore: Z023 condition then static message is the specified scalar contract
 pub fn debug(condition: bool, comptime message: []const u8) void {
     if (builtin.optimize == .debug) invariant(condition, message);
 }

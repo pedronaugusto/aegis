@@ -31,7 +31,7 @@ fn Adding(comptime wrapped: bool, comptime hardware: bool) type {
             if (hardware and !wrapped) {
                 std.mem.doNotOptimizeAway(gaps.atomicAddWrapping(false, &self.cell, 1));
             } else {
-                std.mem.doNotOptimizeAway(gaps.atomicAdd(wrapped, &self.cell, 1) catch unreachable); // glint-ignore: Z026 -- the count stays far below the maximum
+                std.mem.doNotOptimizeAway(gaps.atomicAdd(wrapped, &self.cell, 1) catch aegis.assert.never("the count stays far below the maximum"));
             }
         }
         fn worker(self: *@This(), count: usize) void {

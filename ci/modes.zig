@@ -320,7 +320,7 @@ fn reborrowExpired(_: std.process.Init) !void {
     var other = a.scope.Table(Connection).init(&other_slots);
     defer other.deinit();
     const request = try table.open();
-    const connection = other.open() catch unreachable; // glint-ignore: Z026 -- a table of one slot opens its first scope
+    const connection = other.open() catch a.assert.never("a table of one slot opens its first scope");
     const view = request.ref(&storage);
     request.end();
     std.mem.doNotOptimizeAway(connection.reborrow(view));

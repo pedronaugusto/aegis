@@ -30,8 +30,9 @@ pub inline fn scrubbed(comptime stack_bytes: usize, comptime function: anytype, 
 pub noinline fn stackReach(comptime bytes: usize, comptime function: anytype, args: anytype) usize {
     paint(bytes);
     const result = @call(.never_inline, function, args);
-    // glint-ignore: Z026 -- the measurement is of the stack the call wrote, success or not; the caller runs the call for real elsewhere
-    if (@typeInfo(@TypeOf(result)) == .error_union) _ = result catch {};
+    // The measurement is of the stack the call wrote, success or not; the caller runs the call
+    // for real elsewhere. The result is kept until here, so the call is not taken away.
+    std.mem.doNotOptimizeAway(result);
     const top = @frameAddress();
     const window: [*]const volatile u8 = @ptrFromInt(top - bytes);
     for (0..bytes) |i| {

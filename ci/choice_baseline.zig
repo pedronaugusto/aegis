@@ -19,6 +19,16 @@ pub inline fn equal(a: []const u8, b: []const u8) error{LengthMismatch}!Bit {
     for (0..a.len) |i| acc |= x[i] ^ y[i];
     return bit(((barrier(u32, acc) -% 1) >> 8) & 1);
 }
+/// `equal` of two arrays of one public length, which no length can fail: the shape `s.equal`
+/// takes.
+pub inline fn equalFixed(comptime N: usize, a: *const [N]u8, b: *const [N]u8) Bit {
+    @setRuntimeSafety(true);
+    const x: [*]const volatile u8 = a;
+    const y: [*]const volatile u8 = b;
+    var acc: u32 = 0;
+    for (0..N) |i| acc |= x[i] ^ y[i];
+    return bit(((barrier(u32, acc) -% 1) >> 8) & 1);
+}
 pub inline fn order(comptime N: usize, endian: std.lang.Endian, a: *const [N]u8, b: *const [N]u8) struct { lt: Bit, eq: Bit, gt: Bit } {
     @setRuntimeSafety(true);
     const x: *const volatile [N]u8 = a;

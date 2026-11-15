@@ -1,5 +1,6 @@
 //! Single-owner containers and externally synchronized admission. No hidden growth.
 const std = @import("std");
+const assert = @import("assert.zig");
 const builtin = @import("builtin");
 const move = @import("move.zig");
 const diagnostics = builtin.optimize == .debug;
@@ -123,17 +124,14 @@ pub fn Ring(comptime T: type, comptime N: usize) type {
         /// Returns whether eviction occurred. Input/destination must be disjoint from live storage.
         pub fn overwrite(self: *Self, value: *T, evicted: *T) bool {
             const full = self.aegis_used == N;
-            // glint-ignore: Z026 -- a full nonzero ring has a live head.
-            if (full) self.pop(evicted) catch unreachable;
-            // glint-ignore: Z026 -- eviction or nonfull admission leaves one free slot.
-            self.push(value) catch unreachable;
+            if (full) self.pop(evicted) catch assert.never("a full nonzero ring has a live head");
+            self.push(value) catch assert.never("eviction or nonfull admission leaves one free slot");
             return full;
         }
         pub fn clear(self: *Self, comptime cleanup: fn (*T) void) void {
             while (self.aegis_used != 0) {
                 var value: T = undefined;
-                // glint-ignore: Z026 -- loop condition proves a live head.
-                self.pop(&value) catch unreachable;
+                self.pop(&value) catch assert.never("the loop's condition proves a live head");
                 cleanup(&value);
             }
         }
@@ -270,10 +268,8 @@ pub fn RingBuffer(comptime T: type) type {
         }
         pub fn overwrite(self: *Self, value: *T, evicted: *T) bool {
             const full = self.aegis_used == self.aegis_storage.len;
-            // glint-ignore: Z026 -- a full nonzero ring has a live head.
-            if (full) self.pop(evicted) catch unreachable;
-            // glint-ignore: Z026 -- eviction or nonfull admission leaves a free slot.
-            self.push(value) catch unreachable;
+            if (full) self.pop(evicted) catch assert.never("a full nonzero ring has a live head");
+            self.push(value) catch assert.never("eviction or nonfull admission leaves a free slot");
             return full;
         }
         /// OOM preserves owners, cursors and borrows. Successful reserve linearizes FIFO storage.
@@ -290,8 +286,7 @@ pub fn RingBuffer(comptime T: type) type {
         pub fn clear(self: *Self, comptime cleanup: fn (*T) void) void {
             while (self.aegis_used != 0) {
                 var value: T = undefined;
-                // glint-ignore: Z026 -- loop condition proves a live head.
-                self.pop(&value) catch unreachable;
+                self.pop(&value) catch assert.never("the loop's condition proves a live head");
                 cleanup(&value);
             }
         }

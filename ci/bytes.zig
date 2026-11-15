@@ -107,19 +107,20 @@ pub fn moveConsumer(comptime wrapped: bool, gpa: std.mem.Allocator, input: []con
 
 // Each adopts a whole allocation of its own, as an adoption must, initialized: `capacity`
 // bytes, which the owner wipes in full.
-pub fn adoptDead(comptime wrapped: bool, gpa: std.mem.Allocator, capacity: usize, live_len: usize) void {
-    if (live_len > capacity) return;
-    // glint-ignore: Z026 -- an allocation the fixture cannot make leaves nothing to adopt, and the case ends
-    const allocation = gpa.alloc(u8, capacity) catch return;
+/// Whether it adopted: an allocation the fixture cannot make leaves nothing to adopt.
+pub fn adoptDead(comptime wrapped: bool, gpa: std.mem.Allocator, capacity: usize, live_len: usize) bool {
+    if (live_len > capacity) return false;
+    const allocation = gpa.alloc(u8, capacity) catch return false;
     @memset(allocation, 0);
-    var owner = Owner(wrapped).adopt(allocation, live_len) catch unreachable; // glint-ignore: Z026 -- live_len is at most capacity, checked above
+    var owner = Owner(wrapped).adopt(allocation, live_len) catch aegis.assert.never("live_len is at most capacity, checked above");
     owner.deinit(gpa);
+    return true;
 }
 pub fn replaceConsumer(comptime wrapped: bool, gpa: std.mem.Allocator, capacity: usize, live_len: usize, input: []const u8) !usize {
     if (live_len > capacity) return error.InvalidLength;
     const allocation = try gpa.alloc(u8, capacity);
     @memset(allocation, 0);
-    var owner = Owner(wrapped).adopt(allocation, live_len) catch unreachable; // glint-ignore: Z026 -- live_len is at most capacity, checked above
+    var owner = Owner(wrapped).adopt(allocation, live_len) catch aegis.assert.never("live_len is at most capacity, checked above");
     defer owner.deinit(gpa);
     try owner.replace(input);
     return owner.len();

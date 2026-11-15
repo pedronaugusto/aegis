@@ -1,5 +1,6 @@
 //! Extracted acquire/release spin semantics from cloak's bounded service sections.
 const std = @import("std");
+const assert = @import("assert.zig");
 
 /// Couples data to one spin lock. After publication the owner address must remain stable.
 /// Infallible/noncancelable, with no fairness bound. Sections must be bounded: no blocking,
@@ -84,7 +85,7 @@ pub fn Guarded(comptime T: type) type {
         pub fn acquireYieldingUncancelable(owner: *Self, io: std.Io) Guard {
             const before = io.swapCancelProtection(.blocked);
             defer _ = io.swapCancelProtection(before);
-            return owner.acquireYielding(io) catch unreachable; // glint-ignore: Z026 -- cancellation is blocked for the wait
+            return owner.acquireYielding(io) catch assert.never("cancellation is blocked for the wait");
         }
 
         /// The data of an owner that no other task can reach: for the sole owner's teardown, where

@@ -789,7 +789,6 @@ pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
 
 /// A point in a caller-owned clock/epoch. No instant+instant or numerical clock cast.
 /// Use .real/.awake/.boot (std.Io.Clock tags) for checked Io timestamp adapters.
-// ziglint-ignore: Z023 clock/unit/repr is the consumer contract, matching Duration(unit, repr)
 pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: type) type {
     scalar.wholeByteInteger(Repr);
     return enum(Repr) {

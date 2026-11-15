@@ -1,6 +1,7 @@
 //! Byte-mask kernels. They compile for every target; the builds whose lowering
 //! `zig build check-choices` inspects are listed in profiles.zig (docs/design.md).
 const std = @import("std");
+const assert = @import("../assert.zig");
 const builtin = @import("builtin");
 const profiles = @import("profiles.zig");
 
@@ -132,8 +133,7 @@ fn auditedBuild() bool {
     if (std.options.side_channels_mitigations == .none) return false;
     @setEvalBranchQuota(100_000);
     for (profiles.all) |profile| {
-        // glint-ignore: Z026 -- every listed profile parses; the A5 test parses each one.
-        const query = std.Target.Query.parse(.{ .arch_os_abi = profile.target, .cpu_features = profile.cpu }) catch unreachable;
+        const query = std.Target.Query.parse(.{ .arch_os_abi = profile.target, .cpu_features = profile.cpu }) catch assert.never("every listed profile parses; the A5 test parses each one");
         const arch = query.cpu_arch.?;
         const os = query.os_tag.?;
         if (builtin.target.cpu.arch != arch or builtin.target.os.tag != os) continue;
