@@ -13,20 +13,19 @@ pub inline fn bit(v: u32) Bit {
 pub inline fn equal(a: []const u8, b: []const u8) error{LengthMismatch}!Bit {
     @setRuntimeSafety(true);
     if (a.len != b.len) return error.LengthMismatch;
+    return equalKernel(a, b);
+}
+/// `equal` of two arrays of one public length, which no length can fail: the shape `s.equal`
+/// takes, through the same kernel, as `s.equal` and `s.equalBytes` share theirs.
+pub inline fn equalFixed(comptime N: usize, a: *const [N]u8, b: *const [N]u8) Bit {
+    return equalKernel(a, b);
+}
+inline fn equalKernel(a: []const u8, b: []const u8) Bit {
+    @setRuntimeSafety(true);
     const x: [*]const volatile u8 = a.ptr;
     const y: [*]const volatile u8 = b.ptr;
     var acc: u32 = 0;
     for (0..a.len) |i| acc |= x[i] ^ y[i];
-    return bit(((barrier(u32, acc) -% 1) >> 8) & 1);
-}
-/// `equal` of two arrays of one public length, which no length can fail: the shape `s.equal`
-/// takes.
-pub inline fn equalFixed(comptime N: usize, a: *const [N]u8, b: *const [N]u8) Bit {
-    @setRuntimeSafety(true);
-    const x: [*]const volatile u8 = a;
-    const y: [*]const volatile u8 = b;
-    var acc: u32 = 0;
-    for (0..N) |i| acc |= x[i] ^ y[i];
     return bit(((barrier(u32, acc) -% 1) >> 8) & 1);
 }
 pub inline fn order(comptime N: usize, endian: std.lang.Endian, a: *const [N]u8, b: *const [N]u8) struct { lt: Bit, eq: Bit, gt: Bit } {
