@@ -305,6 +305,14 @@ test "A3 a duration reads as fractional seconds, the nearest float where its cou
     try t.expect(std.math.isNegativeInf(U.Duration(.day, i32).fromRaw(-1).toSeconds(f16)));
 }
 
+/// `result` as an error union, whether the call that made it can fail or not.
+fn settled(result: anytype) !(switch (@typeInfo(@TypeOf(result))) {
+    .error_union => |info| info.payload,
+    else => @TypeOf(result),
+}) {
+    return result;
+}
+
 test "A3 a duration is a C timespec: whole seconds toward negative infinity and the nanoseconds past them, checked where seconds may not fit" {
     const U = aegis.units;
     const Ms = U.Duration(.millisecond, i64);
@@ -312,12 +320,14 @@ test "A3 a duration is a C timespec: whole seconds toward negative infinity and 
     // fields are void, so a struct of its shape stands in and one contract holds on every target.
     const posix = std.posix.timespec;
     const Ts = if (@typeInfo(posix) == .@"struct" and @typeInfo(@FieldType(posix, "sec")) == .int) posix else extern struct { sec: isize, nsec: isize };
-    // nanosleep's argument: 1.5s.
-    const a = try Ms.fromRaw(1500).toTimespec(Ts);
+    // nanosleep's argument: 1.5s. Whether the target's `sec` may fail to hold a span is the
+    // target's (an `isize` is weighed at its portable width; FreeBSD's `time_t` is an `i64`, which
+    // holds every one), so the result is taken either way.
+    const a = try settled(Ms.fromRaw(1500).toTimespec(Ts));
     try t.expectEqual(@as(@FieldType(Ts, "sec"), 1), a.sec);
     try t.expectEqual(@as(@FieldType(Ts, "nsec"), 500_000_000), a.nsec);
     // A negative span keeps nsec in 0..999_999_999, as POSIX does.
-    const b = try Ms.fromRaw(-1).toTimespec(Ts);
+    const b = try settled(Ms.fromRaw(-1).toTimespec(Ts));
     try t.expectEqual(@as(@FieldType(Ts, "sec"), -1), b.sec);
     try t.expectEqual(@as(@FieldType(Ts, "nsec"), 999_000_000), b.nsec);
     const Wide = struct { sec: i64, nsec: i64 };

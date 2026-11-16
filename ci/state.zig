@@ -61,23 +61,19 @@ const handshake_table = [8][7]u8{
 
 /// The transition function of `Link` as a developer would write it by hand with a table.
 pub inline fn directLink(s: State, e: Event) ?State {
-    if (comptime builtin.optimize == .debug) {
-        const to = link_table[@backingInt(s)][@backingInt(e)];
-        return if (to == link_no) null else @fromBackingInt(to);
-    }
-    @setRuntimeSafety(false); // safe: valid enum values index the table, whose cells are states or the sentinel
-    const to = link_table[@backingInt(s)][@backingInt(e)];
+    @setRuntimeSafety(builtin.optimize == .debug); // safe: valid enum values index the table, whose cells are states or the sentinel
+    const row: usize = @backingInt(s);
+    const column: usize = @backingInt(e);
+    const to = link_table[row][column];
     return if (to == link_no) null else @fromBackingInt(to);
 }
 
 /// The transition function of `Handshake` with a table.
 pub inline fn directHandshake(s: Handshake.State, e: Handshake.Event) ?Handshake.State {
-    if (comptime builtin.optimize == .debug) {
-        const to = handshake_table[@backingInt(s)][@backingInt(e)];
-        return if (to == handshake_no) null else @fromBackingInt(to);
-    }
-    @setRuntimeSafety(false); // safe: valid enum values index the table, whose cells are states or the sentinel
-    const to = handshake_table[@backingInt(s)][@backingInt(e)];
+    @setRuntimeSafety(builtin.optimize == .debug); // safe: valid enum values index the table, whose cells are states or the sentinel
+    const row: usize = @backingInt(s);
+    const column: usize = @backingInt(e);
+    const to = handshake_table[row][column];
     return if (to == handshake_no) null else @fromBackingInt(to);
 }
 

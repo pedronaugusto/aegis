@@ -19,17 +19,15 @@ pub fn SecondaryMap(comptime Primary: type, comptime V: type) type {
         aegis_index: std.AutoHashMapUnmanaged(Key, usize) = .empty,
         /// Private: the region the entries grow on.
         aegis_region: Region,
-        /// Private: the first entry.
-        aegis_first: [*]Entry,
-        /// Private: the entries pushed so far.
-        aegis_room: usize = 0,
+        /// Private: the entries pushed so far, at the region's top.
+        aegis_entries: []Entry = &.{},
         aegis_free_head: usize = std.math.maxInt(usize),
         /// The map owns `entries` from here on; the index allocates from `gpa`.
         pub fn init(gpa: std.mem.Allocator, entries: Region) Self {
-            return .{ .gpa = gpa, .aegis_region = entries, .aegis_first = @ptrFromInt(std.mem.alignForward(usize, entries.top, @alignOf(Entry))) }; // safe: the entries start at the region's top, aligned as its pushes align them
+            return .{ .gpa = gpa, .aegis_region = entries };
         }
         fn storage(self: *const Self) []Entry {
-            return self.aegis_first[0..self.aegis_room];
+            return self.aegis_entries;
         }
         pub fn put(self: *Self, primary: *const Primary, key: Key, source: *V) PutError!void {
             if (!primary.contains(key)) return error.InvalidKey;
@@ -37,10 +35,9 @@ pub fn SecondaryMap(comptime Primary: type, comptime V: type) type {
             if (overlap.overlapsOwner(V, source, self) or overlap.overlaps(V, source, self.storage())) return error.AliasedStorage;
             try self.aegis_index.ensureUnusedCapacity(self.gpa, 1);
             if (self.aegis_free_head == std.math.maxInt(usize)) {
-                const entry = try self.aegis_region.create(Entry);
-                entry.* = .{ .key = undefined };
-                self.aegis_free_head = self.aegis_room;
-                self.aegis_room += 1;
+                self.aegis_entries = try self.aegis_region.extend(Entry, self.aegis_entries, 1);
+                self.aegis_entries[self.aegis_entries.len - 1] = .{ .key = undefined };
+                self.aegis_free_head = self.aegis_entries.len - 1;
             }
             const entries = self.storage();
             const position = self.aegis_free_head;
@@ -52,19 +49,19 @@ pub fn SecondaryMap(comptime Primary: type, comptime V: type) type {
         pub inline fn get(self: *Self, primary: *const Primary, key: Key) KeyError!*V {
             if (!primary.contains(key)) return error.InvalidKey;
             const position = self.aegis_index.get(key) orelse return error.Missing;
-            return &self.aegis_first[position].value;
+            return &self.aegis_entries[position].value;
         }
         pub inline fn getConst(self: *const Self, primary: *const Primary, key: Key) KeyError!*const V {
             if (!primary.contains(key)) return error.InvalidKey;
             const position = self.aegis_index.get(key) orelse return error.Missing;
-            return &self.aegis_first[position].value;
+            return &self.aegis_entries[position].value;
         }
         /// Removal needs no witness: stale associations still own values needing cleanup.
         pub fn remove(self: *Self, key: Key, destination: *V) KeyError!void {
             const position = self.aegis_index.get(key) orelse return error.Missing;
             if (overlap.overlapsOwner(V, destination, self) or overlap.overlaps(V, destination, self.storage())) return error.AliasedStorage;
             _ = self.aegis_index.remove(key);
-            const entry = &self.aegis_first[position];
+            const entry = &self.aegis_entries[position];
             move.intoPoisoning(V, &entry.value, destination);
             entry.live = false;
             entry.next = self.aegis_free_head;

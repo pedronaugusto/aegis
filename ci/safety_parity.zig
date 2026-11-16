@@ -9,9 +9,8 @@ pub const Key = Pool.Key;
 pub const Direct = struct {
     pub const Slot = struct { generation: u64 = 1, next: usize = std.math.maxInt(usize), state: enum { free, live, retired } = .free, value: u32 = undefined };
     region: region.Direct,
-    slots: [*]Slot,
+    slots: []Slot = &.{},
     instance: a.handle.Instance,
-    count: usize = 0,
     free_head: usize = std.math.maxInt(usize),
     used: usize = 0,
     retired: usize = 0,
@@ -42,7 +41,7 @@ comptime {
     std.debug.assert(@sizeOf(a.input.Untrusted([]const u8)) == @sizeOf([]const u8));
 }
 inline fn live(p: *const Direct, key: Key) bool {
-    if (p.instance.namespace != key.instance.namespace or p.instance.serial != key.instance.serial or key.index >= p.count) return false;
+    if (p.instance.namespace != key.instance.namespace or p.instance.serial != key.instance.serial or key.index >= p.slots.len) return false;
     const slot = &p.slots[key.index];
     return slot.state == .live and slot.generation == key.generation;
 }
@@ -61,18 +60,20 @@ inline fn overlap(value: *const u32, storage: anytype) bool {
     return if (x >= y) x - y < bytes else y - x < @sizeOf(u32);
 }
 fn slotsOf(p: *const Direct) []Direct.Slot {
-    return p.slots[0..p.count];
+    return p.slots;
 }
 inline fn alias(value: *const u32, p: *const Direct) bool {
     return overlap(value, @as([]const u8, std.mem.asBytes(p))) or overlap(value, slotsOf(p));
 }
 fn growDirect(p: *Direct) error{ OutOfMemory, LimitExceeded }!void {
     @branchHint(.unlikely);
+    // The slots as they stand, then one more slot's bytes after them.
+    const slots = p.slots;
     const at = try region.bump(&p.region, @sizeOf(Direct.Slot), @alignOf(Direct.Slot));
-    const slot: *Direct.Slot = @ptrFromInt(at); // safe: bump returned a committed slot's bytes, aligned
-    slot.* = .{};
-    p.free_head = p.count;
-    p.count += 1;
+    const first: [*]Direct.Slot = if (slots.len == 0) @ptrCast(@alignCast(p.region.memory.ptr + at)) else slots.ptr; // safe: bump returned a committed slot's bytes, aligned, after the slots
+    p.slots = first[0 .. slots.len + 1];
+    p.slots[slots.len] = .{};
+    p.free_head = slots.len;
 }
 inline fn insertDirect(p: *Direct, source: *u32) error{ AliasedStorage, OutOfMemory, LimitExceeded }!Key {
     if (overlap(source, @as([]const u8, std.mem.asBytes(p)))) return error.AliasedStorage;
@@ -166,8 +167,8 @@ pub export fn wrapperInputDiagnostics(bytes: [*]const u8, len: usize, limit: usi
 const Dense = a.handle.DenseSlotMap(u32, Tag);
 pub export fn baselineDenseSum(values: [*]const u32, len: usize) u32 {
     // Hand-written dense storage: the values and how many are live.
-    var d: struct { values: [*]const u32, used: usize } = undefined;
-    d.values = values;
+    var d: struct { values: []const u32, used: usize } = undefined;
+    d.values = values[0..len];
     d.used = len;
     var sum: u32 = 0;
     for (d.values[0..d.used]) |v| sum +%= v;
@@ -177,7 +178,7 @@ pub export fn wrapperDenseSum(values: [*]const u32, len: usize) u32 {
     // The owner descriptor is borrowed only for its live dense prefix.
     var d: Dense = undefined;
     // The parity check builds a Dense from its fields to measure the wrapper loop against the baseline; nothing else holds it
-    d.aegis_values = @constCast(values); // safe: only itemsConst is used; never writes
+    d.aegis_values = @constCast(values[0..len]); // safe: only itemsConst is used; never writes
     d.aegis_used = len;
     var sum: u32 = 0;
     for (d.itemsConst()) |v| sum +%= v;

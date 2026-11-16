@@ -45,7 +45,7 @@ const Slots = a.handle.SlotPool(u64, Tag, .{});
 const FlatRecord = struct { id: u32, size: u64, name: []const u8 };
 const PartsPair = struct { hash: []u32, window: []align(64) u8 };
 const PartsCopy = struct { x: []u16 };
-const DirectRegion = struct { base: [*]u8, top: usize, committed_end: usize, reservation_end: usize };
+const DirectRegion = struct { memory: []u8, top: usize, reservation_len: usize };
 
 pub const rows = [_]Row{
     .{ .module = "Secret", .label = "Secret([32]u8)", .aegis = a.Secret([32]u8), .direct = [32]u8, .equal = .every },
@@ -106,7 +106,7 @@ pub const rows = [_]Row{
     .{ .module = "Region", .label = "Region", .aegis = a.Region, .direct = DirectRegion, .equal = .unchecked },
     .{ .module = "Region", .label = "Region.Mark", .aegis = a.Region.Mark, .direct = usize, .equal = .unchecked },
     .{ .module = "Region", .label = "Region.Tail(u64)", .aegis = a.Region.Tail(u64), .direct = struct { region: *anyopaque, start: usize }, .equal = .unchecked },
-    .{ .module = "handle", .label = "handle.SlotPool(u64, Tag, .{})", .aegis = Slots, .direct = struct { region: DirectRegion, slots: [*]u64, count: u32, free_head: u32, used: u32 }, .equal = .unchecked },
+    .{ .module = "handle", .label = "handle.SlotPool(u64, Tag, .{})", .aegis = Slots, .direct = struct { region: DirectRegion, slots: []u64, free_head: u32, used: u32 }, .equal = .unchecked },
     .{ .module = "flat", .label = "flat.Flat(FlatRecord).View", .aegis = a.flat.Flat(FlatRecord).View, .direct = [*]const u8, .equal = .every },
     .{ .module = "flat", .label = "flat.Flat(FlatRecord).Builder", .aegis = a.flat.Flat(FlatRecord).Builder, .direct = struct { image: *anyopaque, at: usize, depth: usize, done: u64 }, .equal = .every },
     .{ .module = "flat", .label = "flat.Image", .aegis = a.flat.Image, .direct = struct { tail: *anyopaque, start: usize, open: usize, depth: usize }, .equal = .every },

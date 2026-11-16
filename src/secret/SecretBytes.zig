@@ -2,6 +2,7 @@
 //! allocator: the one that allocated it is passed to every call that allocates or frees (`init`,
 //! `reserve`, `appendSlice`, `Writer.init`, `deinit`), as std's unmanaged containers take theirs.
 const std = @import("std");
+const assert = @import("../assert.zig");
 const SecretBytes = @This();
 
 // Private by contract: never copy a live descriptor or truncate its allocation.
@@ -25,6 +26,15 @@ pub fn init(gpa: std.mem.Allocator, full_capacity: usize) InitError!SecretBytes 
     const allocation = try gpa.alloc(u8, full_capacity);
     @memset(allocation, 0);
     return .{ .aegis_allocation = allocation, .aegis_used_len = 0 };
+}
+
+/// Allocates and zeros `live_len` bytes, all of them live: an owner whose content the caller
+/// fills in place through `exposeMut`, with no resize between that could fail.
+/// Pair success immediately with defer/errdefer. No automatic cleanup on abort.
+pub fn initLength(gpa: std.mem.Allocator, live_len: usize) InitError!SecretBytes {
+    var owner = try init(gpa, live_len);
+    owner.aegis_used_len = live_len;
+    return owner;
 }
 
 /// Takes exclusive ownership of the full allocator-owned slice on success only.
@@ -57,6 +67,20 @@ pub fn expose(self: *const SecretBytes) []const u8 {
 /// Mutable live-prefix borrow; the caller must erase displaced material.
 pub fn exposeMut(self: *SecretBytes) []u8 {
     return self.aegis_allocation[0..self.aegis_used_len];
+}
+
+/// The capacity past the live prefix, writable in place, as `std.ArrayList`'s: a reader fills
+/// its start, then `commit` makes what it filled live. Bytes written here and never committed
+/// stay in slack, which is erased with the rest. Ends at reserve, move or cleanup.
+pub fn unusedCapacitySlice(self: *SecretBytes) []u8 {
+    return self.aegis_allocation[self.aegis_used_len..];
+}
+
+/// Makes the first `n` bytes of `unusedCapacitySlice` live: `n` fits in it, asserted in every
+/// build. Never allocates.
+pub fn commit(self: *SecretBytes, n: usize) void {
+    assert.invariant(n <= self.aegis_allocation.len - self.aegis_used_len, "a commit fits the unused capacity");
+    self.aegis_used_len += n;
 }
 
 /// Shrink erases removed live bytes immediately; grow zeros newly live bytes.

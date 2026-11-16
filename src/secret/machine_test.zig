@@ -32,6 +32,16 @@ test "scrubStack zeroes what a finished call left below the caller" {
     try std.testing.expect(residue(8192, 0x5c) < 8);
 }
 
+test "wipe erases lent memory in place and only it" {
+    var lent: [24]u8 = undefined;
+    @memset(&lent, 0xa5);
+    machine.wipe(lent[4..20]);
+    for (lent[0..4]) |byte| try std.testing.expectEqual(@as(u8, 0xa5), byte);
+    for (lent[4..20]) |byte| try std.testing.expectEqual(@as(u8, 0), byte);
+    for (lent[20..]) |byte| try std.testing.expectEqual(@as(u8, 0xa5), byte);
+    machine.wipe(lent[0..0]);
+}
+
 test "stackReach measures how deep a call writes" {
     const reach = machine.stackReach(16384, victim, .{0x11});
     try std.testing.expect(reach >= 2048);

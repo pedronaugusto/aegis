@@ -1,6 +1,5 @@
 //! Dense values with two-way slot links, each part on a region of its own, so growth moves
 //! nothing. Swap removal moves the last value into the hole, and invalidates that value's borrows.
-const std = @import("std");
 const assert = @import("../assert.zig");
 const Region = @import("../Region.zig");
 const Domain = @import("Domain.zig");
@@ -22,12 +21,9 @@ pub fn DenseSlotMap(comptime T: type, comptime Tag: type) type {
         /// Private: the regions the values and their keys grow on.
         aegis_value_region: Region,
         aegis_key_region: Region,
-        /// Private: the first value and the first value's key.
-        aegis_values: [*]T,
-        aegis_keys: [*]Key,
-        /// Private: the values and keys pushed so far.
-        aegis_value_room: usize = 0,
-        aegis_key_room: usize = 0,
+        /// Private: the values and the keys pushed so far, each at its region's top.
+        aegis_values: []T = &.{},
+        aegis_keys: []Key = &.{},
         /// Private: the live values, the first `used` of them.
         aegis_used: usize = 0,
         /// The map owns `regions` from here on.
@@ -36,8 +32,6 @@ pub fn DenseSlotMap(comptime T: type, comptime Tag: type) type {
                 .aegis_primary = try Primary.init(regions.slots, instance),
                 .aegis_value_region = regions.values,
                 .aegis_key_region = regions.keys,
-                .aegis_values = @ptrFromInt(std.mem.alignForward(usize, regions.values.top, @alignOf(T))), // safe: the values start at the region's top, aligned as its pushes align them
-                .aegis_keys = @ptrFromInt(std.mem.alignForward(usize, regions.keys.top, @alignOf(Key))), // safe: the keys start at the region's top, aligned as its pushes align them
             };
         }
         fn ignore(_: *usize) void {}
@@ -51,16 +45,10 @@ pub fn DenseSlotMap(comptime T: type, comptime Tag: type) type {
             return self.aegis_used;
         }
         pub fn insert(self: *Self, source: *T) InsertError!Key {
-            if (overlap.overlapsOwner(T, source, self) or overlap.overlaps(T, source, self.aegis_values[0..self.aegis_value_room])) return error.AliasedStorage;
+            if (overlap.overlapsOwner(T, source, self) or overlap.overlaps(T, source, self.aegis_values)) return error.AliasedStorage;
             // Room first, so a failure leaves the map as it was; room left over serves the next insert.
-            if (self.aegis_used == self.aegis_value_room) {
-                _ = try self.aegis_value_region.create(T);
-                self.aegis_value_room += 1;
-            }
-            if (self.aegis_used == self.aegis_key_room) {
-                _ = try self.aegis_key_region.create(Key);
-                self.aegis_key_room += 1;
-            }
+            if (self.aegis_used == self.aegis_values.len) self.aegis_values = try self.aegis_value_region.extend(T, self.aegis_values, 1);
+            if (self.aegis_used == self.aegis_keys.len) self.aegis_keys = try self.aegis_key_region.extend(Key, self.aegis_keys, 1);
             var position = self.aegis_used;
             const key = try self.aegis_primary.insert(&position);
             move.intoPoisoning(T, source, &self.aegis_values[self.aegis_used]);
@@ -81,7 +69,7 @@ pub fn DenseSlotMap(comptime T: type, comptime Tag: type) type {
         }
         pub fn remove(self: *Self, key: Key, destination: *T) KeyError!void {
             if (!self.contains(key)) return error.InvalidKey;
-            if (overlap.overlapsOwner(T, destination, self) or overlap.overlaps(T, destination, self.aegis_values[0..self.aegis_value_room])) return error.AliasedStorage;
+            if (overlap.overlapsOwner(T, destination, self) or overlap.overlaps(T, destination, self.aegis_values)) return error.AliasedStorage;
             var position: usize = undefined;
             try self.aegis_primary.remove(key, &position);
             move.intoPoisoning(T, &self.aegis_values[position], destination);

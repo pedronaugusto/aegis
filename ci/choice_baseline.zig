@@ -22,10 +22,10 @@ pub inline fn equalFixed(comptime N: usize, a: *const [N]u8, b: *const [N]u8) Bi
 }
 inline fn equalKernel(a: []const u8, b: []const u8) Bit {
     @setRuntimeSafety(true);
-    const x: [*]const volatile u8 = a.ptr;
-    const y: [*]const volatile u8 = b.ptr;
+    const x: []const volatile u8 = a;
+    const y: []const volatile u8 = b;
     var acc: u32 = 0;
-    for (0..a.len) |i| acc |= x[i] ^ y[i];
+    for (x, y) |xi, yi| acc |= xi ^ yi;
     return bit(((barrier(u32, acc) -% 1) >> 8) & 1);
 }
 pub inline fn order(comptime N: usize, endian: std.lang.Endian, a: *const [N]u8, b: *const [N]u8) struct { lt: Bit, eq: Bit, gt: Bit } {

@@ -139,7 +139,7 @@ fn Capability(comptime Base: type, comptime Context: type) type {
             return self.aegis_base.value();
         }
         pub fn deinit(self: *Self, io: std.Io) void {
-            if (diagnostics) self.aegis_context.pop(@ptrCast(self.aegis_base.aegis_owner)); // safe: ordered owner has base as its first/only field
+            if (diagnostics) self.aegis_context.pop(self.aegis_base.aegis_owner); // the ordered owner has the base as its first and only field, so the base's owner is the address pushed
             self.aegis_base.deinit(io);
         }
         /// The base guard's `wait`. Rank remains reserved throughout suspension; context cannot acquire

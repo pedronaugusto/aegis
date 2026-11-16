@@ -1,8 +1,8 @@
 //! The validated topology: one deterministic edge per state and event, every state reachable.
-const builtin = @import("builtin");
 const std = @import("std");
 const stage = @import("stage.zig");
 const runtime = @import("runtime.zig");
+const reads = @import("reads.zig");
 const carrying = @import("carrying.zig");
 const edge = @import("edge.zig");
 
@@ -137,17 +137,7 @@ pub fn Machine(comptime S: type, comptime E: type, comptime spec: Spec(S, E)) ty
         /// The state `event` leads to from `from`, or null when no edge is declared: one load from a table
         /// validated when the machine was analyzed, with no branch on the state or the event.
         pub inline fn next(from: S, event: E) ?S {
-            // Both positions come from valid enum values and the cell from the validated table, so the bounds
-            // and range checks cannot fail; Debug keeps them, so the one body is written once for each.
-            if (comptime builtin.optimize == .debug) {
-                const cell = cells[position(S, from)][position(E, event)];
-                if (cell == none) return null;
-                return if (comptime dense(S)) @fromBackingInt(@as(@typeInfo(S).@"enum".tag_type, @intCast(cell))) else members[cell];
-            }
-            @setRuntimeSafety(false); // safe: valid enum positions index the validated table, and a cell is a state's position
-            const cell = cells[position(S, from)][position(E, event)];
-            if (cell == none) return null;
-            return if (comptime dense(S)) @fromBackingInt(@as(@typeInfo(S).@"enum".tag_type, @intCast(cell))) else members[cell];
+            return reads.state(S, comptime dense(S), cells, members, position(S, from), position(E, event));
         }
 
         /// The state `event` leads to from `from`, known at comptime; an undeclared edge does not compile.
@@ -161,10 +151,7 @@ pub fn Machine(comptime S: type, comptime E: type, comptime spec: Spec(S, E)) ty
         pub inline fn isTerminal(value: S) bool {
             if (comptime spec.terminal.len == 0) return false;
             if (comptime spec.terminal.len == 1) return value == spec.terminal[0];
-            // The position comes from a valid enum value, so the bounds check cannot fail; Debug keeps it.
-            if (comptime builtin.optimize == .debug) return ends[position(S, value)];
-            @setRuntimeSafety(false); // safe: the position of a valid enum value indexes the terminal table
-            return ends[position(S, value)];
+            return reads.flag(ends, position(S, value));
         }
 
         /// A payload staged at `state`: the stage is part of the type, so a function that takes

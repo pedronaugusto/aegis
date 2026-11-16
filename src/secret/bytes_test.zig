@@ -70,6 +70,49 @@ test "A4 SecretBytes init zeros entire capacity and exposes only live bytes" {
     try std.testing.expectEqual(@as(usize, 0), observe.live);
 }
 
+test "A4 SecretBytes initLength zeros its bytes and makes all of them live" {
+    var observe: Observer = .{ .child = std.testing.allocator };
+    var owner = try SecretBytes.initLength(observe.allocator(), 48);
+    try std.testing.expectEqual(@as(usize, 48), owner.len());
+    try std.testing.expectEqual(@as(usize, 48), owner.capacity());
+    try std.testing.expectEqual(@as(usize, 48), owner.expose().len);
+    try zero(owner.expose());
+    @memset(owner.exposeMut(), 0x5b);
+    owner.deinit(observe.allocator());
+    try std.testing.expectEqual(@as(usize, 1), observe.frees);
+    try std.testing.expectEqual(@as(usize, 48), observe.bytes_freed);
+    try std.testing.expectEqual(@as(usize, 0), observe.live);
+
+    var none = try SecretBytes.initLength(observe.allocator(), 0);
+    try std.testing.expectEqual(@as(usize, 0), none.len());
+    none.deinit(observe.allocator());
+
+    var failing: std.testing.FailingAllocator = .init(std.testing.allocator, .{ .fail_index = 0 });
+    try std.testing.expectError(error.OutOfMemory, SecretBytes.initLength(failing.allocator(), 16));
+}
+
+test "A4 SecretBytes unusedCapacitySlice is filled in place and commit makes what was filled live" {
+    var observe: Observer = .{ .child = std.testing.allocator };
+    var owner = try SecretBytes.init(observe.allocator(), 32);
+    try owner.replace("head");
+    const unused = owner.unusedCapacitySlice();
+    try std.testing.expectEqual(@as(usize, 28), unused.len);
+    try std.testing.expectEqual(@intFromPtr(owner.expose().ptr) + 4, @intFromPtr(unused.ptr));
+    @memcpy(unused[0..6], "-tail!");
+    owner.commit(5);
+    try quietEqual("head-tail", owner.expose());
+    try std.testing.expectEqual(@as(usize, 32), owner.capacity());
+    // What was written and not committed stays in slack, erased with the rest.
+    try std.testing.expectEqual(@as(u8, '!'), owner.aegis_allocation[9]);
+    owner.commit(0);
+    try std.testing.expectEqual(@as(usize, 9), owner.len());
+    owner.commit(owner.unusedCapacitySlice().len);
+    try std.testing.expectEqual(@as(usize, 32), owner.len());
+    try std.testing.expectEqual(@as(usize, 0), owner.unusedCapacitySlice().len);
+    owner.deinit(observe.allocator());
+    try std.testing.expectEqual(@as(usize, 32), observe.bytes_freed);
+}
+
 test "A4 SecretBytes adopt ownership failure and nonzero or undefined slack" {
     var observe: Observer = .{ .child = std.testing.allocator };
     const gpa = observe.allocator();

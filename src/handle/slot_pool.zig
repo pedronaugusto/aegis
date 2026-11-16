@@ -45,10 +45,8 @@ fn Indexed(comptime T: type, comptime Tag: type) type {
 
         /// Private: the pool's own region; it is the region's only grower.
         aegis_region: Region,
-        /// Private: the first slot.
-        aegis_slots: [*]Slot,
-        /// Private: the slots pushed.
-        aegis_count: u32 = 0,
+        /// Private: the slots pushed, at the region's top.
+        aegis_slots: []Slot = &.{},
         /// Private: the newest freed slot, or none.
         aegis_free_head: u32 = none,
         /// Private: the slots holding a value.
@@ -56,7 +54,7 @@ fn Indexed(comptime T: type, comptime Tag: type) type {
 
         /// The pool owns `region` from here on.
         pub fn init(region: Region) Self {
-            return .{ .aegis_region = region, .aegis_slots = @ptrFromInt(std.mem.alignForward(usize, region.top, @alignOf(Slot))) }; // safe: the slots start at the region's top, aligned as its pushes align them
+            return .{ .aegis_region = region };
         }
         /// Returns the region; values in the slots are the caller's to have cleaned.
         pub fn deinit(p: *Self) void {
@@ -84,28 +82,32 @@ fn Indexed(comptime T: type, comptime Tag: type) type {
             return i;
         }
         fn grow(p: *Self) Error!u32 {
-            if (p.aegis_count == none) return error.LimitExceeded;
-            const slot = try p.aegis_region.create(Slot);
-            if (checked) slot.live = true;
-            p.aegis_count += 1;
+            const i = try p.push();
+            if (checked) p.aegis_slots[i].live = true;
             p.aegis_used += 1;
-            return p.aegis_count - 1;
+            return i;
+        }
+        /// One more slot at the end, uninitialized, and its position.
+        fn push(p: *Self) Error!u32 {
+            const i = p.aegis_slots.len;
+            if (i == none) return error.LimitExceeded;
+            p.aegis_slots = try p.aegis_region.extend(Slot, p.aegis_slots, 1);
+            return @intCast(i); // safe: fewer than `none` slots, a u32
         }
         /// Room for `n` more values: the next `n` allocs take freed slots and cannot fail.
         pub fn reserve(p: *Self, n: u32) Error!void {
-            while (p.aegis_count - p.aegis_used < n) {
-                if (p.aegis_count == none) return error.LimitExceeded;
-                const slot = try p.aegis_region.create(Slot);
+            while (p.aegis_slots.len - p.aegis_used < n) {
+                const i = try p.push();
+                const slot = &p.aegis_slots[i];
                 if (checked) slot.live = false;
                 slot.next = p.aegis_free_head;
-                p.aegis_free_head = p.aegis_count;
-                p.aegis_count += 1;
+                p.aegis_free_head = i;
             }
         }
         /// Out of range stops in every build. A freed slot's value stays until the slot is reused.
         pub fn free(p: *Self, h: Handle) void {
             const i = h.raw();
-            assert.invariant(i < p.aegis_count, "slot handle out of range");
+            assert.invariant(i < p.aegis_slots.len, "slot handle out of range");
             const slot = &p.aegis_slots[i];
             if (checked) {
                 if (!slot.live) @panic("slot freed twice");
@@ -119,13 +121,13 @@ fn Indexed(comptime T: type, comptime Tag: type) type {
         /// in every build.
         pub inline fn get(p: *const Self, h: Handle) *T {
             const i = h.raw();
-            assert.invariant(i < p.aegis_count, "slot handle out of range");
+            assert.invariant(i < p.aegis_slots.len, "slot handle out of range");
             return &p.aegis_slots[i].value;
         }
         /// The handle of a value in the pool; a pointer that is not one stops in every build.
         pub fn handleOf(p: *const Self, item: *const T) Handle {
-            const at = @intFromPtr(item) -% @intFromPtr(p.aegis_slots); // safe: compared against the pool's own extent only
-            assert.invariant(at < @as(usize, p.aegis_count) * @sizeOf(Slot) and at % @sizeOf(Slot) == @offsetOf(Slot, "value"), "pointer is not a value of this pool");
+            const at = @intFromPtr(item) -% @intFromPtr(p.aegis_slots.ptr); // safe: compared against the pool's own extent only
+            assert.invariant(at < p.aegis_slots.len * @sizeOf(Slot) and at % @sizeOf(Slot) == @offsetOf(Slot, "value"), "pointer is not a value of this pool");
             return @fromBackingInt(@intCast(at / @sizeOf(Slot)));
         }
         pub fn len(p: *const Self) usize {
@@ -133,8 +135,7 @@ fn Indexed(comptime T: type, comptime Tag: type) type {
         }
         /// Every slot back at once, pages kept committed; every earlier handle is out of range.
         pub fn recycleAll(p: *Self) void {
-            p.aegis_region.top = @intFromPtr(p.aegis_slots);
-            p.aegis_count = 0;
+            p.aegis_slots = p.aegis_region.truncate(Slot, p.aegis_slots, 0);
             p.aegis_free_head = none;
             p.aegis_used = 0;
         }
@@ -171,11 +172,9 @@ fn Keyed(comptime T: type, comptime Tag: type, comptime G: type) type {
 
         /// Private: the pool's own region; it is the region's only grower.
         aegis_region: Region,
-        /// Private: the first slot.
-        aegis_slots: [*]Slot,
+        /// Private: the slots pushed, at the region's top.
+        aegis_slots: []Slot = &.{},
         aegis_instance: Domain.Instance,
-        /// Private: the slots pushed.
-        aegis_count: usize = 0,
         /// Private: the newest freed slot, or none.
         aegis_free_head: usize = none,
         /// Private: the slots holding a value.
@@ -186,10 +185,10 @@ fn Keyed(comptime T: type, comptime Tag: type, comptime G: type) type {
         /// The pool owns `region` from here on.
         pub fn init(region: Region, instance: Domain.Instance) InitError!Self {
             if (instance.serial == 0) return error.InvalidInstance;
-            return .{ .aegis_region = region, .aegis_slots = @ptrFromInt(std.mem.alignForward(usize, region.top, @alignOf(Slot))), .aegis_instance = instance }; // safe: the slots start at the region's top, aligned as its pushes align them
+            return .{ .aegis_region = region, .aegis_instance = instance };
         }
         fn storage(self: *const Self) []Slot {
-            return self.aegis_slots[0..self.aegis_count];
+            return self.aegis_slots;
         }
         /// Moves `source` into the newest freed slot, else one more on the region.
         pub inline fn insert(self: *Self, source: *T) InsertError!Key {
@@ -206,13 +205,13 @@ fn Keyed(comptime T: type, comptime Tag: type, comptime G: type) type {
         }
         fn grow(self: *Self) Region.Error!void {
             @branchHint(.unlikely);
-            const slot = try self.aegis_region.create(Slot);
-            slot.* = .{};
-            self.aegis_free_head = self.aegis_count;
-            self.aegis_count += 1;
+            const i = self.aegis_slots.len;
+            self.aegis_slots = try self.aegis_region.extend(Slot, self.aegis_slots, 1);
+            self.aegis_slots[i] = .{};
+            self.aegis_free_head = i;
         }
         pub inline fn contains(self: *const Self, key: Key) bool {
-            if (self.aegis_instance.namespace != key.instance.namespace or self.aegis_instance.serial != key.instance.serial or key.index >= self.aegis_count) return false;
+            if (self.aegis_instance.namespace != key.instance.namespace or self.aegis_instance.serial != key.instance.serial or key.index >= self.aegis_slots.len) return false;
             const slot = &self.aegis_slots[key.index];
             return slot.state == .live and slot.generation == key.generation;
         }
@@ -227,8 +226,8 @@ fn Keyed(comptime T: type, comptime Tag: type, comptime G: type) type {
         }
         /// The key of a live value in the pool.
         pub fn handleOf(self: *const Self, item: *const T) KeyError!Key {
-            const at = @intFromPtr(item) -% @intFromPtr(self.aegis_slots); // safe: compared against the pool's own extent only
-            if (at >= self.aegis_count * @sizeOf(Slot) or at % @sizeOf(Slot) != @offsetOf(Slot, "value")) return error.InvalidKey;
+            const at = @intFromPtr(item) -% @intFromPtr(self.aegis_slots.ptr); // safe: compared against the pool's own extent only
+            if (at >= self.aegis_slots.len * @sizeOf(Slot) or at % @sizeOf(Slot) != @offsetOf(Slot, "value")) return error.InvalidKey;
             const i = at / @sizeOf(Slot);
             const slot = &self.aegis_slots[i];
             if (slot.state != .live) return error.InvalidKey;
@@ -258,7 +257,7 @@ fn Keyed(comptime T: type, comptime Tag: type, comptime G: type) type {
         }
         /// The slots pushed so far, live, free and retired.
         pub fn capacity(self: *const Self) usize {
-            return self.aegis_count;
+            return self.aegis_slots.len;
         }
         /// Ascending slot order. Cleanup sees detached values; reentry is forbidden.
         pub fn clear(self: *Self, comptime cleanup: fn (*T) void) void {

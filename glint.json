@@ -1,4 +1,41 @@
 {
+  "seams": [
+    {
+      "file": "src/pages.zig",
+      "rules": [
+        "P007"
+      ],
+      "reason": "the system's virtual memory: reserving, committing, decommitting and releasing whole pages of one reservation through mmap, mprotect and NtAllocateVirtualMemory, each call asserting that its pages are whole and inside the reservation"
+    },
+    {
+      "file": "src/view.zig",
+      "rules": [
+        "P007"
+      ],
+      "reason": "memory read as another type: bytes as items of a type, and an interface's opaque context as its implementation, each asserting the alignment and length that make the view hold"
+    },
+    {
+      "file": "src/flat/image.zig",
+      "rules": [
+        "P007"
+      ],
+      "reason": "flat's zero-copy reads: a view is one pointer into an image that verify checked or a builder wrote, so a read carries no length, as a hand-written reader's does; alignment is asserted where it matters"
+    },
+    {
+      "file": "src/secret/registers.zig",
+      "rules": [
+        "P007"
+      ],
+      "reason": "what secret computation asks of the machine below the language: AArch64's DIT register, the kernel's HWCAP word, the stack just below a frame, and an optimizer barrier"
+    },
+    {
+      "file": "src/state/reads.zig",
+      "rules": [
+        "P007"
+      ],
+      "reason": "a validated state machine's comptime tables read at run time: positions of valid enum values index them and every cell is a state's position or none, so the reads keep their checks in Debug and read as a hand-written table past it"
+    }
+  ],
   "disallowed": [
     {
       "source": "std",

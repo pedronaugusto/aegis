@@ -1,5 +1,6 @@
 //! Distinct ID domains. Import is not authentication or a uniqueness proof.
 const std = @import("std");
+const view = @import("view.zig");
 const scalar = @import("scalar.zig");
 const units = @import("units.zig");
 
@@ -61,7 +62,7 @@ fn Identity(comptime Tag: type, comptime Repr: type, comptime nonzero: bool) typ
         /// representation written back need not be an id of this domain (zero, for `NonZero`).
         pub inline fn raws(ids: []const Self) []const Repr {
             comptime if (@sizeOf(Self) != @sizeOf(Repr) or @alignOf(Self) != @alignOf(Repr)) @compileError("an id is laid out as its representation");
-            return @ptrCast(ids); // safe: an id is an enum(Repr), its representation's size and alignment
+            return view.sameLayout(Repr, ids);
         }
         pub inline fn eql(self: Self, other: Self) bool {
             return @backingInt(self) == @backingInt(other);

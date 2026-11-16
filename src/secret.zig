@@ -13,4 +13,5 @@ const machine = @import("secret/machine.zig");
 pub const scrubStack = machine.scrubStack;
 pub const stackReach = machine.stackReach;
 pub const scrubbed = machine.scrubbed;
+pub const wipe = machine.wipe;
 pub const Timing = machine.Timing;

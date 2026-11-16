@@ -78,9 +78,9 @@ pub const modules = [_]Module{
     .{
         .name = "secret.Timing",
         .required = .{ .block = "secret" },
-        .names = &.{ "secret.Timing", "secret.scrubStack", "secret.stackReach", "secret.scrubbed" },
+        .names = &.{ "secret.Timing", "secret.scrubStack", "secret.stackReach", "secret.scrubbed", "secret.wipe" },
         .release = "`Timing` is the mode it found, one `u64`",
-        .always = "data-independent timing set for the span where the processor has it, nothing where it has none; `scrubStack` zeroes its frame with volatile stores",
+        .always = "data-independent timing set for the span where the processor has it, nothing where it has none; `scrubStack` zeroes its frame and `wipe` the memory it is lent, with volatile stores",
         .kernels = &.{ "a11_timing_span", "a11_scrub_stack" },
         .example = "examples/timing.zig",
     },

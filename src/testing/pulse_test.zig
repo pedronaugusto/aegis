@@ -28,10 +28,12 @@ const PulseState = struct {
         bumper.await(io);
     }
 
-    /// Four waiters wait past one generation; one bump wakes them all.
+    /// Three waiters wait past one generation; one bump wakes them all. Three tell waking all from
+    /// waking one or two; the exhaustive search of every order is 1,548 runs with three and 71,570
+    /// with four, minutes under emulation for no case three does not have.
     fn manyWaiters(self: *PulseState, io: Io) !void {
         const seen = self.pulse.current();
-        var waiters: [4]Io.Future(Io.Cancelable!Generation) = undefined;
+        var waiters: [3]Io.Future(Io.Cancelable!Generation) = undefined;
         for (&waiters) |*waiter| waiter.* = try io.concurrent(waitPast, .{ self, io, seen });
         self.pulse.bump(io);
         for (&waiters) |*waiter| try t.expect(!(try waiter.await(io)).eql(seen));

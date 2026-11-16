@@ -21,10 +21,9 @@ pub fn RunPool(comptime T: type, comptime Tag: type) type {
 
         /// Private: the region the items grow on.
         aegis_region: Region,
-        /// Private: the first item.
-        aegis_items: [*]T,
-        /// Private: the items pushed so far; every run and free span lies below it.
-        aegis_end: u32 = 0,
+        /// Private: the items pushed so far, at the region's top; every run and free span lies in
+        /// them.
+        aegis_items: []T = &.{},
         /// Private: the free spans below `end`.
         aegis_free_spans: Spans,
         /// Private: the runs holding items. Free spans are separated by them, so there are never
@@ -36,7 +35,6 @@ pub fn RunPool(comptime T: type, comptime Tag: type) type {
         pub fn init(items: Region, nodes: Region) Self {
             return .{
                 .aegis_region = items,
-                .aegis_items = @ptrFromInt(std.mem.alignForward(usize, items.top, @alignOf(T))), // safe: the items start at the region's top, aligned as its pushes align them
                 .aegis_free_spans = .{ .nodes = .init(nodes) },
             };
         }
@@ -57,14 +55,17 @@ pub fn RunPool(comptime T: type, comptime Tag: type) type {
                 if (span.len == n) p.aegis_free_spans.remove(span.start) else p.aegis_free_spans.set(span.start, span.start + n, span.len - n);
                 return .{ .start = @fromBackingInt(span.start), .len = n };
             }
-            const start = p.aegis_end;
+            const start = p.end();
             try p.grow(n);
             return .{ .start = @fromBackingInt(start), .len = n };
         }
         fn grow(p: *Self, n: u32) Error!void {
-            const end = std.math.add(u32, p.aegis_end, n) catch return error.LimitExceeded;
-            _ = try p.aegis_region.push(T, n);
-            p.aegis_end = end;
+            _ = std.math.add(u32, p.end(), n) catch return error.LimitExceeded;
+            p.aegis_items = try p.aegis_region.extend(T, p.aegis_items, n);
+        }
+        /// One past the last item pushed: at most a u32's range, as `grow` holds it.
+        inline fn end(p: *const Self) u32 {
+            return @intCast(p.aegis_items.len); // safe: grow keeps the items within a u32's count
         }
         /// The run at `n` items: in place when it shrinks, when the span after it is free and
         /// long enough, or when it ends the pool; else a new run with the items copied and the old
@@ -83,7 +84,7 @@ pub fn RunPool(comptime T: type, comptime Tag: type) type {
             }
             const more = n - run.len;
             const after = start + run.len;
-            if (after == p.aegis_end) {
+            if (after == p.end()) {
                 try p.grow(more);
                 return .{ .start = run.start, .len = n };
             }
@@ -121,19 +122,18 @@ pub fn RunPool(comptime T: type, comptime Tag: type) type {
                 const b = before.?;
                 merged = .{ .start = b.start, .len = b.len + merged.len };
             }
-            if (merged.start + merged.len == p.aegis_end) {
+            if (merged.start + merged.len == p.end()) {
                 // The pool's last items: the end comes back to the span's start.
                 if (joins_before) spans.remove(merged.start);
-                p.aegis_end = merged.start;
-                p.aegis_region.top = @intFromPtr(p.aegis_items + merged.start);
+                p.aegis_items = p.aegis_region.truncate(T, p.aegis_items, merged.start);
             } else if (joins_before) {
                 spans.set(merged.start, merged.start, merged.len);
             } else {
                 spans.insert(merged);
             }
         }
-        fn check(p: *const Self, run: Run) void {
-            assert.invariant(run.len <= p.aegis_end and run.start.raw() <= p.aegis_end - run.len, "run outside its pool");
+        inline fn check(p: *const Self, run: Run) void {
+            assert.invariant(run.len <= p.aegis_items.len and run.start.raw() <= p.aegis_items.len - run.len, "run outside its pool");
         }
         /// The run's items, valid until it is freed or the pool ends, whatever else is allocated.
         pub fn slice(p: *const Self, run: Run) []T {
@@ -143,13 +143,12 @@ pub fn RunPool(comptime T: type, comptime Tag: type) type {
         /// Every run back at once, pages kept committed; every earlier run is outside the pool.
         pub fn recycleAll(p: *Self) void {
             p.aegis_free_spans.clear();
-            p.aegis_end = 0;
+            p.aegis_items = p.aegis_region.truncate(T, p.aegis_items, 0);
             p.aegis_runs = 0;
-            p.aegis_region.top = @intFromPtr(p.aegis_items);
         }
         /// The items in runs: pushed and not free.
         pub fn used(p: *const Self) usize {
-            return p.aegis_end - p.aegis_free_spans.total;
+            return p.end() - p.aegis_free_spans.total;
         }
     };
 }

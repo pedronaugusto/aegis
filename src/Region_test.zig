@@ -134,7 +134,7 @@ fn trace(_: void, case: *shake.Case) anyerror!void {
                 const n = shake.gen.intRange(case.source, usize, 0, 300);
                 const at = std.mem.alignForward(usize, model.bytes.items.len, 2);
                 if (r.push(u16, n)) |items| {
-                    try t.expectEqual(at, @intFromPtr(items.ptr) - @intFromPtr(r.base));
+                    try t.expectEqual(at, @intFromPtr(items.ptr) - @intFromPtr(r.memory.ptr));
                     @memset(items, @as(u16, stamp) * 0x101);
                     try pad(&model, 2);
                     try model.bytes.appendNTimes(gpa, stamp, n * 2);
@@ -169,7 +169,7 @@ fn trace(_: void, case: *shake.Case) anyerror!void {
         try t.expectEqual(model.bytes.items.len, r.used().raw());
         try t.expect(r.committed().raw() >= r.used().raw());
         // Every live byte written is still where it was written; the model's zeros are alignment gaps.
-        for (model.bytes.items, r.base[0..model.bytes.items.len]) |expected, actual| {
+        for (model.bytes.items, r.memory[0..model.bytes.items.len]) |expected, actual| {
             if (expected != 0) try t.expectEqual(expected, actual);
         }
     }

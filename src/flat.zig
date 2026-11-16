@@ -11,6 +11,7 @@
 //! laid-out type with offsets ever exists outside the image: reads go through `View`.
 const builtin = @import("builtin");
 const std = @import("std");
+const image_bytes = @import("flat/image.zig");
 const Region = @import("Region.zig");
 const measure = @import("measure.zig");
 const bounded = @import("bounded.zig");
@@ -64,7 +65,7 @@ pub const Image = struct {
     /// The image written so far; every builder ended.
     pub fn finish(image: *Image) []align(max_align) const u8 {
         assert.invariant(image.open == 0, "Flat image finished with a builder open");
-        return @alignCast(image.tail.items()[image.start..]); // safe: the image starts aligned to max_align
+        return image_bytes.aligned(max_align, image.tail.items()[image.start..]);
     }
     fn bytes(image: *const Image) []u8 {
         return image.tail.items()[image.start..];
@@ -106,7 +107,7 @@ pub fn Flat(comptime T: type) type {
         /// A `T` in an image: a pointer to its payload.
         pub const View = struct {
             /// Private.
-            ptr: [*]const u8,
+            ptr: image_bytes.At,
 
             /// A field of a struct, or the active variant of a union (another variant stops in
             /// every build). A scalar or fixed part is its value; a slice of bytes, and of wider
@@ -115,10 +116,10 @@ pub fn Flat(comptime T: type) type {
             pub fn get(v: View, comptime field: std.meta.FieldEnum(T)) Read(@FieldType(T, @tagName(field))) {
                 const i = @backingInt(field);
                 switch (@typeInfo(T)) {
-                    .@"struct" => return readInline(@FieldType(T, @tagName(field)), v.ptr + headOffsets(T)[i]),
+                    .@"struct" => return readInline(@FieldType(T, @tagName(field)), image_bytes.past(v.ptr, headOffsets(T)[i])),
                     .@"union" => {
                         assert.invariant(v.tag() == @field(std.meta.Tag(T), @tagName(field)), "Flat union read as a variant it does not hold");
-                        return readInline(@FieldType(T, @tagName(field)), v.ptr + variantOffset(T, @FieldType(T, @tagName(field))));
+                        return readInline(@FieldType(T, @tagName(field)), image_bytes.past(v.ptr, variantOffset(T, @FieldType(T, @tagName(field)))));
                     },
                     else => @compileError("get reads a struct's field or a union's variant"),
                 }
@@ -139,7 +140,7 @@ pub fn Flat(comptime T: type) type {
             /// An element; past the length stops in every build.
             pub fn at(v: View, i: usize) Read(Element(T)) {
                 assert.invariant(i < v.len(), "Flat element past its slice");
-                return readInline(Element(T), v.ptr + elementsOffset(T) + i * inlineSize(Element(T)));
+                return readInline(Element(T), image_bytes.past(v.ptr, elementsOffset(T) + i * inlineSize(Element(T))));
             }
             /// A plain `T`, its slices allocated from `gpa`. Parts made before an allocation fails
             /// are left to `gpa`: pass an arena.
@@ -492,8 +493,8 @@ inline fn variantOffset(comptime F: type, comptime V: type) usize {
 fn writeInt(comptime I: type, out: *[@sizeOf(I)]u8, value: I) void {
     std.mem.writeInt(I, out, value, .little);
 }
-fn readInt(comptime I: type, at: [*]const u8) I {
-    return std.mem.readInt(I, at[0..@sizeOf(I)], .little);
+fn readInt(comptime I: type, at: image_bytes.At) I {
+    return image_bytes.int(I, at);
 }
 
 fn writeOffset(out: []u8, slot: Pos, target: Pos) void {
@@ -594,70 +595,69 @@ fn Read(comptime F: type) type {
     return Flat(F).View;
 }
 
-fn readInline(comptime F: type, at: [*]const u8) Read(F) {
+fn readInline(comptime F: type, at: image_bytes.At) Read(F) {
     if (variable(F)) {
         const offset = readInt(u32, at);
         if (@typeInfo(F) == .optional) {
             if (offset == 0) return null;
-            return readPayload(Payload(F), at + offset);
+            return readPayload(Payload(F), image_bytes.past(at, offset));
         }
-        return readPayload(F, at + offset);
+        return readPayload(F, image_bytes.past(at, offset));
     }
     return switch (@typeInfo(F)) {
         .void => {},
         .int => @intCast(readInt(Repr(F), at)),
         .float => @bitCast(readInt(Repr(F), at)),
-        .bool => at[0] != 0,
+        .bool => image_bytes.int(u8, at) != 0,
         .@"enum" => @fromBackingInt(@intCast(readInt(Repr(F), at))),
         .array => |a| blk: {
             var out: F = undefined;
-            for (&out, 0..) |*item, i| item.* = readInline(a.child, at + i * inlineSize(a.child));
+            for (&out, 0..) |*item, i| item.* = readInline(a.child, image_bytes.past(at, i * inlineSize(a.child)));
             break :blk out;
         },
-        .optional => |o| if (at[0] == 0) null else readInline(o.child, at + std.mem.alignForward(usize, 1, inlineAlign(o.child))),
+        .optional => |o| if (image_bytes.int(u8, at) == 0) null else readInline(o.child, image_bytes.past(at, std.mem.alignForward(usize, 1, inlineAlign(o.child)))),
         .@"struct" => |s| blk: {
             var out: F = undefined;
-            inline for (s.field_names, 0..) |name, i| @field(out, name) = readInline(s.field_types[i], at + headOffsets(F)[i]);
+            inline for (s.field_names, 0..) |name, i| @field(out, name) = readInline(s.field_types[i], image_bytes.past(at, headOffsets(F)[i]));
             break :blk out;
         },
         else => unreachable,
     };
 }
 
-fn readPayload(comptime F: type, at: [*]const u8) Read(F) {
+fn readPayload(comptime F: type, at: image_bytes.At) Read(F) {
     if (@typeInfo(F) == .pointer and direct(Element(F))) {
         const E = Element(F);
-        const items: [*]const E = @ptrCast(@alignCast(at + elementsOffset(F))); // safe: elements lie aligned in an aligned image, as written or verified
-        return items[0..readInt(u32, at)];
+        return image_bytes.elements(E, image_bytes.past(at, elementsOffset(F)), readInt(u32, at));
     }
     return .{ .ptr = at };
 }
 
-fn materializeInline(comptime F: type, at: [*]const u8, gpa: std.mem.Allocator) error{OutOfMemory}!F {
+fn materializeInline(comptime F: type, at: image_bytes.At, gpa: std.mem.Allocator) error{OutOfMemory}!F {
     if (!variable(F)) return readInline(F, at);
     const offset = readInt(u32, at);
     if (@typeInfo(F) == .optional) {
         if (offset == 0) return null;
-        return try materializePayload(Payload(F), at + offset, gpa);
+        return try materializePayload(Payload(F), image_bytes.past(at, offset), gpa);
     }
-    return materializePayload(F, at + offset, gpa);
+    return materializePayload(F, image_bytes.past(at, offset), gpa);
 }
 
-fn materializePayload(comptime F: type, at: [*]const u8, gpa: std.mem.Allocator) error{OutOfMemory}!F {
+fn materializePayload(comptime F: type, at: image_bytes.At, gpa: std.mem.Allocator) error{OutOfMemory}!F {
     switch (@typeInfo(F)) {
         .@"struct" => |s| {
             var out: F = undefined;
-            inline for (s.field_names, 0..) |name, i| @field(out, name) = try materializeInline(s.field_types[i], at + headOffsets(F)[i], gpa);
+            inline for (s.field_names, 0..) |name, i| @field(out, name) = try materializeInline(s.field_types[i], image_bytes.past(at, headOffsets(F)[i]), gpa);
             return out;
         },
         .pointer => |p| {
             const items = try gpa.alloc(p.child, readInt(u32, at));
-            for (items, 0..) |*item, i| item.* = try materializeInline(p.child, at + elementsOffset(F) + i * inlineSize(p.child), gpa);
+            for (items, 0..) |*item, i| item.* = try materializeInline(p.child, image_bytes.past(at, elementsOffset(F) + i * inlineSize(p.child)), gpa);
             return items;
         },
         .array => |a| {
             var out: F = undefined;
-            for (&out, 0..) |*item, i| item.* = try materializeInline(a.child, at + i * inlineSize(a.child), gpa);
+            for (&out, 0..) |*item, i| item.* = try materializeInline(a.child, image_bytes.past(at, i * inlineSize(a.child)), gpa);
             return out;
         },
         .@"union" => |u| {
@@ -665,7 +665,7 @@ fn materializePayload(comptime F: type, at: [*]const u8, gpa: std.mem.Allocator)
             switch (t) {
                 inline else => |known| {
                     const V = u.field_types[@backingInt(known)];
-                    return @unionInit(F, @tagName(known), try materializeInline(V, at + variantOffset(F, V), gpa));
+                    return @unionInit(F, @tagName(known), try materializeInline(V, image_bytes.past(at, variantOffset(F, V)), gpa));
                 },
             }
         },
@@ -693,16 +693,16 @@ const Checker = struct {
     /// part's payload.
     fn inlinePart(c: *const Checker, comptime F: type, at: usize, depth: usize) VerifyError!void {
         if (variable(F)) {
-            const offset = readInt(u32, c.bytes.ptr + at);
+            const offset = readInt(u32, c.bytes[at..].ptr);
             if (offset == 0) return if (@typeInfo(F) == .optional) {} else error.BadOffset;
             return c.payload(Payload(F), std.math.add(usize, at, offset) catch return error.Truncated, depth + 1);
         }
         switch (@typeInfo(F)) {
             .void, .float => {},
-            .int => if (std.math.cast(F, readInt(Repr(F), c.bytes.ptr + at)) == null) return error.BadValue,
+            .int => if (std.math.cast(F, readInt(Repr(F), c.bytes[at..].ptr)) == null) return error.BadValue,
             .bool => if (c.bytes[at] > 1) return error.BadValue,
             .@"enum" => |e| {
-                const raw = readInt(Repr(F), c.bytes.ptr + at);
+                const raw = readInt(Repr(F), c.bytes[at..].ptr);
                 if (e.mode == .nonexhaustive) {
                     if (std.math.cast(e.tag_type, raw) == null) return error.BadValue;
                     return;
@@ -732,7 +732,7 @@ const Checker = struct {
             .@"struct" => |s| inline for (s.field_types, 0..) |ft, i| try c.inlinePart(ft, at + headOffsets(F)[i], depth),
             .array => |a| for (0..a.len) |i| try c.inlinePart(a.child, at + i * inlineSize(a.child), depth),
             .pointer => |p| {
-                const n: usize = readInt(u32, c.bytes.ptr + at);
+                const n: usize = readInt(u32, c.bytes[at..].ptr);
                 const first = at + elementsOffset(F);
                 const stride = inlineSize(p.child);
                 if (stride != 0) {
@@ -745,7 +745,7 @@ const Checker = struct {
             .@"union" => |u| {
                 const Tag = std.meta.Tag(F);
                 try c.inlinePart(Tag, at, depth);
-                const t = readInline(Tag, c.bytes.ptr + at);
+                const t = readInline(Tag, c.bytes[at..].ptr);
                 switch (t) {
                     inline else => |known| {
                         const V = u.field_types[@backingInt(known)];

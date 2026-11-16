@@ -23,7 +23,7 @@ fn filled(comptime wrapped: bool, slots: []Owner(wrapped).Slot) Owner(wrapped) {
     var owner: Owner(wrapped) = if (wrapped)
         c.Pool.init(.fixed(bytes), instance) catch |e| @panic(@errorName(e))
     else
-        .{ .region = .{ .base = bytes.ptr, .top = @intFromPtr(bytes.ptr), .committed_end = @intFromPtr(bytes.ptr) + bytes.len, .reservation_end = 0 }, .slots = slots.ptr, .instance = instance };
+        .{ .region = .{ .memory = bytes, .top = 0, .reservation_len = 0 }, .instance = instance };
     for (0..slots.len) |i| {
         var value: u32 = @intCast(i); // safe: benchmark capacity is 256
         const generation = if (wrapped) c.wrapperHandleInsert(&owner, &value) else c.baselineHandleInsert(&owner, &value);

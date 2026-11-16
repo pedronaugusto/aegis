@@ -2,6 +2,7 @@
 //! processor's timing guarantee.
 const std = @import("std");
 const builtin = @import("builtin");
+const registers = @import("registers.zig");
 
 /// Overwrites `bytes` of stack below the caller's frame with zeros: the frames the calls it
 /// made used, which hold whatever the compiler spilled or copied there (temporaries no owner
@@ -12,6 +13,13 @@ const builtin = @import("builtin");
 pub noinline fn scrubStack(comptime bytes: usize) void {
     var area: [bytes]u8 = undefined;
     std.crypto.secureZero(u8, &area);
+}
+
+/// Erases `bytes` in place, as the owners erase theirs, where no owner can hold them: memory
+/// the caller was lent (a scratch buffer its own caller passed in). Memory a caller allocates
+/// for a secret is a `SecretBytes` or a `Secret`, which erase it when they end.
+pub fn wipe(bytes: []u8) void {
+    std.crypto.secureZero(u8, bytes);
 }
 
 /// Runs `function(args)` as one secret computation: in a frame of its own, under `Timing`,
@@ -33,10 +41,9 @@ pub noinline fn stackReach(comptime bytes: usize, comptime function: anytype, ar
     // The measurement is of the stack the call wrote, success or not; the caller runs the call
     // for real elsewhere. The result is kept until here, so the call is not taken away.
     std.mem.doNotOptimizeAway(result);
-    const top = @frameAddress();
-    const window: [*]const volatile u8 = @ptrFromInt(top - bytes);
-    for (0..bytes) |i| {
-        if (window[i] != pattern) return bytes - i;
+    const window = registers.stackBelow(bytes);
+    for (window, 0..) |byte, i| {
+        if (byte != pattern) return bytes - i;
     }
     return 0;
 }
@@ -81,15 +88,9 @@ pub const Timing = struct {
         // architecture's assembler, which an unoptimized build would otherwise give them.
         if (comptime !available) return .{ .previous = untouched };
         if (!supported()) return .{ .previous = untouched };
-        // DIT is S3_3_C4_C2_5, its bit 24 the mode; spelled as the register number so no
-        // assembler feature is needed beyond what the target already has.
-        const previous = asm volatile ("mrs %[value], s3_3_c4_c2_5"
-            : [value] "=r" (-> u64),
-        );
-        asm volatile ("msr s3_3_c4_c2_5, %[value]"
-            :
-            : [value] "r" (previous | (1 << 24)),
-            : .{ .memory = true });
+        // DIT's bit 24 is the mode.
+        const previous = registers.readDit();
+        registers.writeDit(previous | (1 << 24));
         return .{ .previous = previous };
     }
 
@@ -97,20 +98,14 @@ pub const Timing = struct {
     pub inline fn end(timing: Timing) void {
         if (comptime !available) return;
         if (timing.previous == untouched) return;
-        asm volatile ("msr s3_3_c4_c2_5, %[value]"
-            :
-            : [value] "r" (timing.previous),
-            : .{ .memory = true });
+        registers.writeDit(timing.previous);
     }
 
     /// Whether the mode is on now (false where the processor has none).
     pub fn active() bool {
         if (comptime !available) return false;
         if (!supported()) return false;
-        const value = asm volatile ("mrs %[value], s3_3_c4_c2_5"
-            : [value] "=r" (-> u64),
-        );
-        return value & (1 << 24) != 0;
+        return registers.readDit() & (1 << 24) != 0;
     }
 
     /// The kernel's answer, asked once per process: 0 not yet asked, 1 absent, 2 present. Racing
@@ -123,8 +118,7 @@ pub const Timing = struct {
             2 => return true,
             else => {},
         }
-        const hwcap = if (builtin.link_libc) std.c.getauxval(std.elf.AT.HWCAP) else std.os.linux.getauxval(std.elf.AT.HWCAP);
-        const present = hwcap & std.os.linux.HWCAP.DIT != 0;
+        const present = registers.hwcap() & registers.hwcap_dit != 0;
         detection.store(if (present) 2 else 1, .monotonic);
         return present;
     }

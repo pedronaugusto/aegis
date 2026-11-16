@@ -27,6 +27,7 @@ const std = @import("std");
 const assert = @import("assert.zig");
 const units = @import("units.zig");
 const measure = @import("measure.zig");
+const view = @import("view.zig");
 const Allocator = std.mem.Allocator;
 
 /// How a nested struct of parts lies: one part after another, or all at its start.
@@ -350,7 +351,8 @@ inline fn take(comptime mode: Mode, comptime T: type, comptime a: usize, memory:
     const start = alignUp(mode, at.*, a);
     at.* = advance(mode, start, n, @sizeOf(T));
     if (mode == .measure) return else {
-        const items = memory[start..at.*];
-        return @as([*]align(a) T, @ptrCast(@alignCast(items.ptr)))[0..n]; // safe: the block starts at its parts' greatest alignment and `start` is aligned to `a`; `items` is n of T's size, inside the block its plan measured
+        // The block starts at its parts' greatest alignment and `start` is aligned to `a`; the
+        // bytes are n of T's size, inside the block its plan measured.
+        return view.alignedItems(T, a, memory[start..at.*], n);
     }
 }

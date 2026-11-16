@@ -4,6 +4,7 @@ const std = @import("std");
 const assert = @import("../assert.zig");
 const builtin = @import("builtin");
 const profiles = @import("profiles.zig");
+const registers = @import("registers.zig");
 
 /// Copyable one-bit decision. Explicit casts can bypass this API in Zig.
 pub const Choice = packed struct(u1) {
@@ -84,10 +85,10 @@ pub inline fn equalBytes(a: []const u8, b: []const u8) CompareError!Choice {
 }
 inline fn equalKernel(a: []const u8, b: []const u8) Choice {
     @setRuntimeSafety(true);
-    const x: [*]const volatile u8 = a.ptr;
-    const y: [*]const volatile u8 = b.ptr;
+    const x: []const volatile u8 = a;
+    const y: []const volatile u8 = b;
     var difference: u32 = 0;
-    for (0..a.len) |i| difference |= @as(u32, x[i] ^ y[i]);
+    for (x, y) |xi, yi| difference |= @as(u32, xi ^ yi);
     // difference is 0..255; wrapping subtract has high byte set only at zero.
     return fromKernel(((barrier(u32, difference) -% 1) >> 8) & 1);
 }
@@ -112,14 +113,7 @@ pub inline fn compareUnsigned(comptime N: usize, endian: std.lang.Endian, a: *co
 inline fn fromKernel(bit: u32) Choice {
     return .{ .aegis_bit = @truncate(barrier(u32, bit)) }; // safe: kernels establish 0/1; truncation never branches
 }
-inline fn barrier(comptime T: type, value: T) T {
-    // The tied register is opaque to LLVM; it emits no instruction on enabled ISAs.
-    // This is a compiler barrier, not a hardware timing guarantee.
-    return asm volatile (""
-        : [out] "=r" (-> T),
-        : [in] "0" (value),
-    );
-}
+const barrier = registers.barrier;
 inline fn partialOverlap(comptime N: usize, out: *[N]u8, source: *const [N]u8) bool {
     const d = @intFromPtr(out); // safe: live address used only for public extent validation
     const s = @intFromPtr(source); // safe: live address used only for public extent validation

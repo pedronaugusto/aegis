@@ -3,10 +3,11 @@
 const Region = @This();
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = @import("assert.zig");
 const bounded = @import("bounded.zig");
+const pages = @import("pages.zig");
 const units = @import("units.zig");
-const posix = std.posix;
-const windows = std.os.windows;
+const view = @import("view.zig");
 
 /// The order and tail checks follow Zig's runtime safety: on in Debug and ReleaseSafe, absent from
 /// ReleaseFast and ReleaseSmall.
@@ -20,15 +21,14 @@ pub const can_reserve = builtin.os.tag == .windows or builtin.os.tag == .linux o
 const min_step = 64 * 1024;
 const max_step = 4 * 1024 * 1024;
 
-/// Private: the first byte.
-base: [*]u8,
-/// Private: one past the live memory, as an address.
+/// Private: the committed bytes, whole pages from the reservation's start; the caller's whole
+/// buffer, for a fixed region. Every position below is an offset into it.
+memory: []u8,
+/// Private: one past the live memory.
 top: usize,
-/// Private: one past the committed memory, on a page for a reservation; the buffer's end, for a
-/// fixed region.
-committed_end: usize,
-/// Private: one past the reservation, on a page; zero for a fixed region, which has none.
-reservation_end: usize,
+/// Private: the reservation's length, a whole number of pages; zero for a fixed region, which has
+/// none.
+reservation_len: usize,
 /// Private: checked builds' record of the open marks and the open tail.
 state: State = .{},
 
@@ -57,21 +57,22 @@ pub fn reserve(limit: bounded.Limit(usize)) error{OutOfMemory}!Region {
     const page = std.heap.pageSize();
     if (limit.aegis_maximum > std.math.maxInt(usize) - page) return error.OutOfMemory;
     const length = std.mem.alignForward(usize, @max(limit.aegis_maximum, 1), page);
-    const base = try map(length);
-    const start = @intFromPtr(base);
-    return .{ .base = base, .top = start, .committed_end = start, .reservation_end = start + length };
+    // Nothing committed yet: the reservation's start, with no bytes. (A slice cut with
+    // comptime-known bounds would be a zero-length array's, which has no address.)
+    var none: []u8 = try pages.reserve(length);
+    none.len = 0;
+    return .{ .memory = none, .top = 0, .reservation_len = length };
 }
 
 /// The caller's memory, which the region never commits, moves or frees: wasm, freestanding, or a
 /// bound known in advance. Past its end is `LimitExceeded`.
 pub fn fixed(buffer: []u8) Region {
-    const start = @intFromPtr(buffer.ptr);
-    return .{ .base = buffer.ptr, .top = start, .committed_end = start + buffer.len, .reservation_end = 0 };
+    return .{ .memory = buffer, .top = 0, .reservation_len = 0 };
 }
 
 /// Returns a reservation to the system; a fixed region forgets its buffer.
 pub fn deinit(r: *Region) void {
-    if (can_reserve and r.reservation_end != 0) unmap(@alignCast(r.base[0 .. r.reservation_end - @intFromPtr(r.base)])); // safe: a reservation starts on a page
+    if (can_reserve and r.reservation_len != 0) pages.release(r.memory, r.reservation_len);
     r.* = undefined;
 }
 
@@ -81,13 +82,36 @@ pub inline fn push(r: *Region, comptime T: type, n: usize) Error![]T {
     r.single();
     const len = std.math.mul(usize, n, @sizeOf(T)) catch return error.LimitExceeded;
     const start = try r.bump(len, @alignOf(T));
-    return @as([*]T, @ptrFromInt(start))[0..n]; // safe: bump returned bytes aligned for T and inside the committed live memory
+    return view.items(T, r.memory[start..][0..len], n);
 }
 
 /// One `T`, aligned and uninitialized.
 pub inline fn create(r: *Region, comptime T: type) Error!*T {
+    return &(try r.push(T, 1))[0];
+}
+
+/// `items`, the newest push at the top, grown in place by `n` uninitialized items: they never
+/// move. An empty `items` is a fresh push. Items that do not end at the top stop the program in
+/// the builds that check safety, as a slice past its end does.
+pub fn extend(r: *Region, comptime T: type, items: []T, n: usize) Error![]T {
     r.single();
-    return @ptrFromInt(try r.bump(@sizeOf(T), @alignOf(T))); // safe: bump returned bytes aligned for T and inside the committed live memory
+    const more = std.math.mul(usize, n, @sizeOf(T)) catch return error.LimitExceeded;
+    // Aligned as a push is, the new items start where `items` end when they end at the top.
+    const at = try r.bump(more, @alignOf(T));
+    if (std.debug.runtime_safety) assert.invariant(items.len == 0 or at == r.offset(std.mem.sliceAsBytes(items)) + items.len * @sizeOf(T), "a region extends only the items at its top");
+    // Where the items start: fresh at `at`, or where they already are.
+    const first = if (items.len == 0) view.items(T, r.memory[at..at], 0) else items;
+    return view.grown(T, first, items.len + n);
+}
+
+/// The first `n` of `items`, the newest push at the top, with the rest given back to the region.
+/// Items that do not end at the top, or an `n` past them, stop the program in every build.
+pub fn truncate(r: *Region, comptime T: type, items: []T, n: usize) []T {
+    if (items.len == 0) return items;
+    const start = r.offset(std.mem.sliceAsBytes(items));
+    assert.invariant(start + items.len * @sizeOf(T) == r.top and n <= items.len, "a region truncates only the items at its top, within them");
+    r.top = start + n * @sizeOf(T);
+    return items[0..n];
 }
 
 /// A copy of `items`.
@@ -127,28 +151,33 @@ pub fn release(r: *Region, m: Mark) void {
 
 /// Decommits whole pages above the top; the reservation stays. A fixed region keeps its buffer.
 pub fn trim(r: *Region) void {
-    if (can_reserve and r.reservation_end != 0) r.trimReserved();
+    if (can_reserve and r.reservation_len != 0) r.trimReserved();
 }
 
 fn trimReserved(r: *Region) void {
     const keep = std.mem.alignForward(usize, r.top, std.heap.pageSize());
-    if (keep >= r.committed_end) return;
-    if (decommit(keep, r.committed_end - keep)) r.committed_end = keep;
+    if (keep >= r.memory.len) return;
+    if (pages.decommit(r.memory, keep)) r.memory = r.memory[0..keep];
 }
 
 /// The bytes below the top.
 pub fn used(r: *const Region) units.Bytes(usize) {
-    return .fromRaw(r.top - @intFromPtr(r.base));
+    return .fromRaw(r.top);
 }
 
 /// The bytes the system has committed: the whole buffer, for a fixed region.
 pub fn committed(r: *const Region) units.Bytes(usize) {
-    return .fromRaw(r.committed_end - @intFromPtr(r.base));
+    return .fromRaw(r.memory.len);
 }
 
 /// The bytes the region may hold: its reservation, or its buffer's length.
 pub fn capacity(r: *const Region) units.Bytes(usize) {
-    return .fromRaw(@max(r.reservation_end, r.committed_end) - @intFromPtr(r.base));
+    return .fromRaw(@max(r.reservation_len, r.memory.len));
+}
+
+/// The live bytes: everything pushed and not released, from the region's first byte.
+pub fn live(r: *const Region) []u8 {
+    return r.memory[0..r.top];
 }
 
 /// The region's one growing value, at the top: its items never move as it grows, and nothing else
@@ -167,7 +196,7 @@ pub fn Tail(comptime T: type) type {
         const Self = @This();
         /// Private: the region it grows on.
         region: *Region,
-        /// Private: the address of the first item.
+        /// Private: the offset of the first item.
         start: usize,
         /// Private: checked builds' identity of the tail.
         id: if (checked) u64 else void,
@@ -182,9 +211,9 @@ pub fn Tail(comptime T: type) type {
             const bytes = std.math.mul(usize, n, @sizeOf(T)) catch return error.LimitExceeded;
             const at = r.top;
             const next = std.math.add(usize, at, bytes) catch return error.LimitExceeded;
-            if (next > r.committed_end) try r.commit(next);
+            if (next > r.memory.len) try r.commit(next);
             r.top = next;
-            return @as([*]T, @ptrFromInt(at))[0..n]; // safe: the tail starts aligned for T and grows by whole items, inside the committed live memory
+            return view.items(T, r.memory[at..][0..bytes], n);
         }
         /// The pointer stays valid as the tail grows.
         pub inline fn append(t: *Self, value: T) Error!*T {
@@ -202,7 +231,7 @@ pub fn Tail(comptime T: type) type {
             return (t.region.top - t.start) / @sizeOf(T);
         }
         pub fn items(t: *const Self) []T {
-            return @as([*]T, @ptrFromInt(t.start))[0..t.len()]; // safe: the tail starts aligned for T and holds whole items below the top
+            return view.items(T, t.region.memory[t.start..t.region.top], t.len());
         }
         /// Drops the items from `n` on; `n` is at most `len`, in every build.
         pub fn shrink(t: *Self, n: usize) void {
@@ -229,18 +258,19 @@ pub fn allocator(r: *Region) std.mem.Allocator {
 const vtable: std.mem.Allocator.VTable = .{ .alloc = alloc, .resize = resize, .remap = remap, .free = free };
 
 fn alloc(context: *anyopaque, len: usize, alignment: std.mem.Alignment, _: usize) ?[*]u8 {
-    const r: *Region = @ptrCast(@alignCast(context)); // safe: an allocator made by `allocator` carries its region
+    const r = view.context(Region, context);
     r.single();
-    return @ptrFromInt(r.bump(len, alignment.toByteUnits()) catch return null); // safe: bump returned bytes aligned as asked and inside the committed live memory
+    const start = r.bump(len, alignment.toByteUnits()) catch return null;
+    return r.memory[start..].ptr;
 }
 
 fn resize(context: *anyopaque, memory: []u8, _: std.mem.Alignment, new_len: usize, _: usize) bool {
-    const r: *Region = @ptrCast(@alignCast(context)); // safe: an allocator made by `allocator` carries its region
-    const start = @intFromPtr(memory.ptr);
+    const r = view.context(Region, context);
+    const start = r.offset(memory);
     if (start + memory.len != r.top) return new_len <= memory.len;
     r.single();
     const next = std.math.add(usize, start, new_len) catch return false;
-    if (next > r.committed_end) r.commit(next) catch return false;
+    if (next > r.memory.len) r.commit(next) catch return false;
     r.top = next;
     return true;
 }
@@ -250,8 +280,8 @@ fn remap(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_le
 }
 
 fn free(context: *anyopaque, memory: []u8, _: std.mem.Alignment, _: usize) void {
-    const r: *Region = @ptrCast(@alignCast(context)); // safe: an allocator made by `allocator` carries its region
-    const start = @intFromPtr(memory.ptr);
+    const r = view.context(Region, context);
+    const start = r.offset(memory);
     if (start + memory.len != r.top) return;
     r.single();
     r.top = start;
@@ -262,90 +292,38 @@ inline fn single(r: *const Region) void {
     if (checked and r.state.tail != 0) @panic("region pushed while a tail is open");
 }
 
+/// Where `memory`, an allocation the region made, starts.
+inline fn offset(r: *const Region, memory: []u8) usize {
+    return @intFromPtr(memory.ptr) - @intFromPtr(r.memory.ptr);
+}
+
 /// Moves the top past `len` bytes aligned to `alignment`, and returns where they start.
 inline fn bump(r: *Region, len: usize, alignment: usize) Error!usize {
-    const start = std.mem.alignForward(usize, r.top, alignment);
+    const base = @intFromPtr(r.memory.ptr);
+    const start = std.mem.alignForward(usize, base + r.top, alignment) - base;
     const next = std.math.add(usize, start, len) catch return error.LimitExceeded;
-    if (next > r.committed_end) try r.commit(next);
+    if (next > r.memory.len) try r.commit(next);
     r.top = next;
     return start;
 }
 
-/// Commits at least up to `needed`, past `committed_end`, or fails with the region unchanged. A
-/// fixed region's whole buffer is committed and its reservation end is zero, so it only ever
+/// Commits at least up to `needed`, past the committed bytes, or fails with the region unchanged.
+/// A fixed region's whole buffer is committed and its reservation length is zero, so it only ever
 /// reaches its end here.
-fn commit(r: *Region, needed: usize) Error!void {
+noinline fn commit(r: *Region, needed: usize) Error!void {
     @branchHint(.unlikely);
-    if (can_reserve and needed <= r.reservation_end) return r.commitReserved(needed);
+    if (can_reserve and needed <= r.reservation_len) return r.commitReserved(needed);
     return error.LimitExceeded;
 }
 
-/// Pages are committed whole, from `committed_end` (on a page) to a page at or past `needed`,
+/// Pages are committed whole, from the committed end (on a page) to a page at or past `needed`,
 /// never past the reservation, so the one compare of a push also holds the limit.
 fn commitReserved(r: *Region, needed: usize) Error!void {
     const page = std.heap.pageSize();
-    const step = std.math.clamp(r.committed_end - @intFromPtr(r.base), min_step, max_step);
-    const wanted = @max(needed, r.committed_end +| step);
-    const next = @min(r.reservation_end, std.mem.alignForward(usize, @min(wanted, std.math.maxInt(usize) - page), page));
+    const step = std.math.clamp(r.memory.len, min_step, max_step);
+    const wanted = @max(needed, r.memory.len +| step);
+    const next = @min(r.reservation_len, std.mem.alignForward(usize, @min(wanted, std.math.maxInt(usize) - page), page));
     if (builtin.is_test and testing.refuse_commit) return error.OutOfMemory;
-    try commitPages(r.committed_end, next - r.committed_end);
-    r.committed_end = next;
-}
-
-fn map(length: usize) error{OutOfMemory}![*]u8 {
-    if (builtin.os.tag == .windows) {
-        var base: ?*anyopaque = null;
-        var size: windows.SIZE_T = length;
-        const status = windows.ntdll.NtAllocateVirtualMemory(windows.GetCurrentProcess(), @ptrCast(&base), 0, &size, .{ .RESERVE = true }, .{ .NOACCESS = true }); // safe: NtAllocateVirtualMemory writes the base through a PVOID pointer
-        if (status != .SUCCESS) return error.OutOfMemory;
-        return @ptrCast(base); // safe: the reservation the system made
-    }
-    const memory = posix.mmap(null, length, .{}, reservation, -1, 0) catch return error.OutOfMemory;
-    return memory.ptr;
-}
-
-/// Private, anonymous, and charged to nobody until committed, where the system has the flag.
-const reservation: posix.MAP = flags: {
-    var flags: posix.MAP = .{ .TYPE = .PRIVATE, .ANONYMOUS = true };
-    if (@hasField(posix.MAP, "NORESERVE")) flags.NORESERVE = true;
-    break :flags flags;
-};
-
-fn unmap(memory: []align(std.heap.page_size_min) u8) void {
-    if (builtin.os.tag == .windows) {
-        var base: ?*anyopaque = memory.ptr;
-        var size: windows.SIZE_T = 0;
-        _ = windows.ntdll.NtFreeVirtualMemory(windows.GetCurrentProcess(), @ptrCast(&base), &size, .{ .RELEASE = true }); // safe: NtFreeVirtualMemory reads the base through a PVOID pointer
-        return;
-    }
-    posix.munmap(memory);
-}
-
-fn commitPages(start: usize, len: usize) error{OutOfMemory}!void {
-    if (builtin.os.tag == .windows) {
-        var base: ?*anyopaque = @ptrFromInt(start); // safe: a page inside the reservation
-        var size: windows.SIZE_T = len;
-        const status = windows.ntdll.NtAllocateVirtualMemory(windows.GetCurrentProcess(), @ptrCast(&base), 0, &size, .{ .COMMIT = true }, .{ .READWRITE = true }); // safe: NtAllocateVirtualMemory reads the base through a PVOID pointer
-        if (status != .SUCCESS) return error.OutOfMemory;
-        return;
-    }
-    const pages: [*]align(std.heap.page_size_min) u8 = @ptrFromInt(start); // safe: committed ends on a page inside the reservation
-    switch (posix.errno(posix.system.mprotect(@ptrCast(pages), len, .{ .READ = true, .WRITE = true }))) { // safe: the system call takes the same page address untyped
-        .SUCCESS => {},
-        else => return error.OutOfMemory,
-    }
-}
-
-/// Gives pages back: a fresh inaccessible mapping over them on POSIX, which drops their contents
-/// and their charge, and a decommit on Windows. False when the system refused.
-fn decommit(start: usize, len: usize) bool {
-    if (builtin.os.tag == .windows) {
-        var base: ?*anyopaque = @ptrFromInt(start); // safe: a page inside the reservation
-        var size: windows.SIZE_T = len;
-        return windows.ntdll.NtFreeVirtualMemory(windows.GetCurrentProcess(), @ptrCast(&base), &size, .{ .DECOMMIT = true }) == .SUCCESS; // safe: NtFreeVirtualMemory reads the base through a PVOID pointer
-    }
-    var flags = reservation;
-    flags.FIXED = true;
-    _ = posix.mmap(@ptrFromInt(start), len, .{}, flags, -1, 0) catch return false; // safe: a page inside the reservation, mapped over in place
-    return true;
+    try pages.commit(r.memory, r.reservation_len, next);
+    r.memory = r.memory.ptr[0..next];
 }
