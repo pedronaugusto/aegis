@@ -48,6 +48,7 @@ const made = .{
     .{ "units.Instant", aegis.units.Instant(.awake, .nanosecond, i96) },
     .{ "own.Owned", aegis.own.Owned(u32, noop) },
     .{ "own.OwnedIo", aegis.own.OwnedIo(u32, noopIo) },
+    .{ "SharedIo", aegis.SharedIo(u32, noopIo) },
     .{ "own.Unowned", aegis.own.Unowned(std.Io.File) },
     .{ "own.MustUse", aegis.own.MustUse(u32, "x") },
     .{ "state.Edge", aegis.state.Edge(States, Events) },

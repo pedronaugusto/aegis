@@ -292,6 +292,34 @@ test "A6 Shared cleans once at the last release and frees the block" {
     try t.expectEqual(@as(u32, 1), cleaned.load(.monotonic));
 }
 
+/// A shared value holding what an Io closes: which Io the last release passed, and how often.
+const Segment = struct {
+    closed: *u32,
+    io_seen: *?*anyopaque,
+    fn close(self: *Segment, io: std.Io) void {
+        self.closed.* += 1;
+        self.io_seen.* = io.userdata;
+    }
+};
+const SharedSegment = a.SharedIo(Segment, Segment.close);
+
+test "A6 SharedIo cleans once, at the last release, through the Io that release passes" {
+    var clock: shake.Clock = .init(t.io, .{});
+    const last_io = clock.io();
+    var closed: u32 = 0;
+    var io_seen: ?*anyopaque = null;
+    var writer = try SharedSegment.create(t.allocator, .{ .closed = &closed, .io_seen = &io_seen });
+    var snapshot = writer.retain();
+    try t.expect(writer.get() == snapshot.get());
+    // An earlier release closes nothing, whatever Io it passes.
+    writer.release(t.io);
+    try t.expectEqual(@as(u32, 0), closed);
+    try t.expectEqual(@as(?*anyopaque, null), io_seen);
+    snapshot.release(last_io);
+    try t.expectEqual(@as(u32, 1), closed);
+    try t.expectEqual(last_io.userdata, io_seen);
+}
+
 fn sharedAllocation(gpa: std.mem.Allocator) !void {
     var cleaned: std.atomic.Value(u32) = .init(0);
     var source: Payload = .{ .gpa = gpa, .bytes = try gpa.alloc(u8, 4), .cleaned = &cleaned };

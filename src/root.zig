@@ -41,6 +41,8 @@ pub const Pulse = sync.Pulse;
 pub const Atomic = sync.Atomic;
 /// Counted shared ownership of one allocated value, cleaned by the last release.
 pub const Shared = sync.Shared;
+/// `Shared` whose last `release(io)` runs a cleanup that takes the `Io`, as `own.OwnedIo` does.
+pub const SharedIo = sync.SharedIo;
 /// Explicit logical-task initializer stack; zero-sized in release.
 pub const InitContext = sync.InitContext;
 /// Comptime partial rank relation with Debug logical-task diagnostics.

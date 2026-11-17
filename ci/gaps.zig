@@ -17,6 +17,7 @@ pub const DirectBlock = struct { count: std.atomic.Value(usize) = .init(1), gpa:
 pub const handle_limit = std.math.maxInt(usize) / 2;
 const Counted = a.Shared(u64, drop);
 pub const Handle = Counted;
+pub const IoHandle = a.SharedIo(u64, dropIo);
 pub const Payload = struct { output: *u64, value: u64 };
 const Held = a.own.Owned(Payload, release);
 
@@ -24,6 +25,11 @@ const Held = a.own.Owned(Payload, release);
 fn drop(value: *u64) void {
     std.mem.doNotOptimizeAway(value);
     value.* = 0;
+}
+/// `drop` that reads the Io it is given, so the Io is really passed.
+fn dropIo(value: *u64, io: Io) void {
+    std.mem.doNotOptimizeAway(io.userdata);
+    drop(value);
 }
 fn release(payload: *Payload) void {
     payload.output.* +%= payload.value;
@@ -100,6 +106,18 @@ pub fn sharedRelease(comptime wrapped: bool, owner: if (wrapped) *Handle else *D
     if (block.count.fetchSub(1, .release) != 1) return;
     _ = block.count.load(.acquire);
     drop(&block.data);
+    const gpa = block.gpa;
+    gpa.destroy(block);
+}
+
+pub fn sharedIoRelease(comptime wrapped: bool, io: *const Io, owner: if (wrapped) *IoHandle else *DirectHandle) void {
+    // The Io is a value the releaser passes, read before the release on both sides.
+    const given = io.*;
+    if (wrapped) return owner.release(given);
+    const block = owner.block;
+    if (block.count.fetchSub(1, .release) != 1) return;
+    _ = block.count.load(.acquire);
+    dropIo(&block.data, given);
     const gpa = block.gpa;
     gpa.destroy(block);
 }

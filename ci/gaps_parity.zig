@@ -51,6 +51,12 @@ export fn baselineGapsSharedRelease(owner: *c.DirectHandle) void {
 export fn wrapperGapsSharedRelease(owner: *c.Handle) void {
     c.sharedRelease(true, owner);
 }
+export fn baselineGapsSharedIoRelease(io: *const std.Io, owner: *c.DirectHandle) void {
+    c.sharedIoRelease(false, io, owner);
+}
+export fn wrapperGapsSharedIoRelease(io: *const std.Io, owner: *c.IoHandle) void {
+    c.sharedIoRelease(true, io, owner);
+}
 export fn baselineGapsOwnedFrom(source: *c.Payload, fail: bool) void {
     c.ownedFrom(false, source, fail);
 }

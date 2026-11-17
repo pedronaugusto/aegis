@@ -200,11 +200,11 @@ pub const modules = [_]Module{
     .{
         .name = "Shared",
         .required = .{ .rule = "A007" },
-        .names = &.{"Shared"},
+        .names = &.{ "Shared", "SharedIo" },
         .release = "one pointer",
         .always = "the static cleanup runs once, at the last release; a count past its limit stops",
         .debug = "a handle released twice stops",
-        .kernels = &.{ "gaps_shared_retain", "gaps_shared_get", "gaps_shared_release" },
+        .kernels = &.{ "gaps_shared_retain", "gaps_shared_get", "gaps_shared_release", "gaps_shared_io_release" },
         .example = "examples/shared.zig",
     },
     .{

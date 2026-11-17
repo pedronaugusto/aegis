@@ -12,6 +12,7 @@ pub const Lazy = @import("Lazy.zig").Lazy;
 pub const Signal = @import("Signal.zig").Signal;
 pub const Pulse = @import("Pulse.zig").Pulse;
 pub const Shared = @import("Shared.zig").Shared;
+pub const SharedIo = @import("Shared.zig").SharedIo;
 pub const Order = @import("Order.zig").Order;
 const confined = @import("Confined.zig");
 pub const Confined = confined.Confined;

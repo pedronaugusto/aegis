@@ -11,6 +11,18 @@ const diagnostics = builtin.optimize == .debug;
 /// of `retain` is a caller bug (Debug diagnoses a handle released twice). A `T` that declares
 /// `pub const interior_lock = true` is handed out mutable; any other is const.
 pub fn Shared(comptime T: type, comptime cleanup: fn (*T) void) type {
+    return Counted(T, false, cleanup);
+}
+
+/// `Shared` for a value released through `Io`, such as one that holds an open file: the last
+/// `release(io)` runs `cleanup(&value, io)`. The block stores no `Io`; the task that releases last
+/// passes its own, as `own.OwnedIo` does. Cleanup is still static, infallible and run once, so a
+/// close that can fail belongs in an explicit finish first. Everything else is `Shared`'s.
+pub fn SharedIo(comptime T: type, comptime cleanup: fn (*T, std.Io) void) type {
+    return Counted(T, true, cleanup);
+}
+
+fn Counted(comptime T: type, comptime with_io: bool, comptime cleanup: if (with_io) fn (*T, std.Io) void else fn (*T) void) type {
     return struct {
         const Self = @This();
         const Block = struct {
@@ -98,18 +110,34 @@ pub fn Shared(comptime T: type, comptime cleanup: fn (*T) void) type {
         }
 
         /// Gives this handle up; the last one runs cleanup and frees the block. The handle is consumed.
-        pub fn release(self: *Self) void {
+        /// `SharedIo`'s takes the `Io` its cleanup runs on: `release(io)`.
+        pub const release = if (with_io) releaseIo else releasePlain;
+
+        fn releasePlain(self: *Self) void {
+            const block = self.last() orelse return;
+            cleanup(&block.data);
+            const gpa = block.gpa;
+            gpa.destroy(block);
+        }
+
+        fn releaseIo(self: *Self, io: std.Io) void {
+            const block = self.last() orelse return;
+            cleanup(&block.data, io);
+            const gpa = block.gpa;
+            gpa.destroy(block);
+        }
+
+        /// Consumes this handle: the block when it was the last, which the caller cleans and frees.
+        inline fn last(self: *Self) ?*Block {
             if (diagnostics) {
                 std.debug.assert(self.aegis_live);
                 self.aegis_live = false;
             }
             const block = self.aegis_block;
-            if (block.count.fetchSub(1, .release) != 1) return;
+            if (block.count.fetchSub(1, .release) != 1) return null;
             // Acquire what every earlier release published before the value is cleaned.
             _ = block.count.load(.acquire);
-            cleanup(&block.data);
-            const gpa = block.gpa;
-            gpa.destroy(block);
+            return block;
         }
     };
 }
