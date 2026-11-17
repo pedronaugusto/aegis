@@ -159,7 +159,9 @@ pub const ReadFileError = std.Io.File.OpenError || std.Io.File.StatError || std.
 /// them with `gpa`. It opens the file (a symbolic link at `sub_path` followed) and reads it as
 /// `readOpened` does. A caller that opens otherwise, such as git's in-tree `.gitignore`, which a link
 /// may not stand for (`.follow_symlinks = false`, refused by the open itself), opens the file and
-/// calls `readOpened`.
+/// calls `readOpened`. That refusal is named as the system names it: `SymLinkLoop` on Linux and macOS
+/// (ELOOP); on FreeBSD, whose open says EMLINK for a link under O_NOFOLLOW, std 0.17 returns
+/// `Unexpected`.
 pub fn readFile(io: std.Io, dir: std.Io.Dir, sub_path: []const u8, gpa: std.mem.Allocator, limit: units.Bytes(u64)) ReadFileError![]u8 {
     var file = try dir.openFile(io, sub_path, .{ .allow_directory = builtin.os.tag != .windows });
     defer file.close(io);

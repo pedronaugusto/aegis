@@ -1047,7 +1047,15 @@ test "A7 an in-tree .gitignore a symbolic link stands for is refused by the open
     try tmp.dir.writeFile(t.io, .{ .sub_path = "elsewhere", .data = "*.o\n" });
     try tmp.dir.symLink(t.io, "elsewhere", ".gitignore", .{});
     try tmp.dir.writeFile(t.io, .{ .sub_path = "kept", .data = "build/\n" });
-    try t.expectError(error.SymLinkLoop, tmp.dir.openFile(t.io, ".gitignore", .{ .follow_symlinks = false }));
+    // The open refuses the link on every target; the refusal's name is the system's. Linux and macOS say
+    // ELOOP, which std names SymLinkLoop. FreeBSD's open says EMLINK for a link under O_NOFOLLOW (open(2)),
+    // whatever file system holds it, and std 0.17 leaves that errno unnamed (Unexpected), so the open is
+    // made as std makes it and the system's answer read.
+    if (builtin.os.tag == .freebsd) {
+        const refused = std.c.openat(tmp.dir.handle, ".gitignore", .{ .NOFOLLOW = true, .CLOEXEC = true });
+        try t.expectEqual(@as(c_int, -1), refused);
+        try t.expectEqual(std.c.E.MLINK, std.c.errno(refused));
+    } else try t.expectError(error.SymLinkLoop, tmp.dir.openFile(t.io, ".gitignore", .{ .follow_symlinks = false }));
     var file = try tmp.dir.openFile(t.io, "kept", .{ .follow_symlinks = false });
     defer file.close(t.io);
     const read = try a.own.readOpened(t.io, file, t.allocator, .fromRaw(64));
