@@ -338,9 +338,18 @@ test "A3 a duration is a C timespec: whole seconds toward negative infinity and 
     try t.expectEqual(Wide{ .sec = -9_223_372_037, .nsec = 145_224_192 }, U.Duration(.nanosecond, i64).fromRaw(std.math.minInt(i64)).toTimespec(Wide));
     // No error where every span fits: a 32-bit millisecond count into a 64-bit sec.
     comptime std.debug.assert(@TypeOf(U.Duration(.millisecond, i32).fromRaw(1).toTimespec(Wide)) == Wide);
-    // An isize or c_long sec counts as 32 bits, so a millisecond i64 may overflow on some target; a narrow
-    // sec does here.
-    comptime std.debug.assert(Ms.ToTimespecError(Ts) == error{Overflow});
+    // The rule: Overflow exactly where some span's whole seconds may not fit sec on a supported target, an
+    // isize or c_long sec counting as 32 bits there and any other integer as itself. The target's own timespec
+    // is held to that rule, not to one platform's answer: its time_t is an isize or c_long on Linux and macOS
+    // and an i64 on FreeBSD.
+    const Sec = @FieldType(Ts, "sec");
+    const Narrowest = if (Sec == isize or Sec == c_long) i32 else if (Sec == usize or Sec == c_ulong) u32 else Sec;
+    const fits = @divFloor(std.math.minInt(i64), 1000) >= std.math.minInt(Narrowest) and @divFloor(std.math.maxInt(i64), 1000) <= std.math.maxInt(Narrowest);
+    comptime std.debug.assert(Ms.ToTimespecError(Ts) == if (fits) error{} else error{Overflow});
+    // Both sides of it on every target: a 64-bit sec holds every millisecond i64's seconds, and an isize or
+    // c_long sec may not.
+    comptime std.debug.assert(Ms.ToTimespecError(Wide) == error{});
+    comptime std.debug.assert(Ms.ToTimespecError(struct { sec: isize, nsec: isize }) == error{Overflow});
     comptime std.debug.assert(Ms.ToTimespecError(struct { sec: c_long, nsec: c_long }) == error{Overflow});
     const Narrow = struct { sec: i8, nsec: i32 };
     try t.expectEqual(Narrow{ .sec = 127, .nsec = 999_000_000 }, try Ms.fromRaw(127_999).toTimespec(Narrow));
