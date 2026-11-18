@@ -59,9 +59,9 @@ fn Counted(comptime T: type, comptime with_io: bool, comptime cleanup: if (with_
             return .{ .aegis_block = block };
         }
 
-        /// What `createWith` fails with: `init_fn`'s errors, or the block's allocation. An `init_fn`
+        /// What `createInPlace` fails with: `init_fn`'s errors, or the block's allocation. An `init_fn`
         /// that cannot fail adds none.
-        pub fn CreateWithError(comptime init_fn: anytype) type {
+        pub fn CreateInPlaceError(comptime init_fn: anytype) type {
             const Return = @typeInfo(@TypeOf(init_fn)).@"fn".return_type.?;
             return switch (@typeInfo(Return)) {
                 .error_union => |info| info.error_set || std.mem.Allocator.Error,
@@ -75,7 +75,7 @@ fn Counted(comptime T: type, comptime with_io: bool, comptime cleanup: if (with_
         /// since the value was never whole: what a half-run `init_fn` wrote there is gone with it.
         /// Releasing what `init_fn` itself acquired before it failed is `init_fn`'s own (its
         /// `errdefer`).
-        pub fn createWith(gpa: std.mem.Allocator, context: anytype, comptime init_fn: anytype) CreateWithError(init_fn)!Self {
+        pub fn createInPlace(gpa: std.mem.Allocator, context: anytype, comptime init_fn: anytype) CreateInPlaceError(init_fn)!Self {
             const block = try gpa.create(Block);
             block.gpa = gpa;
             block.count = .init(1);

@@ -367,28 +367,28 @@ const Erased = struct {
     }
 };
 
-test "A6 Shared createWith builds the value in its block, and erases a block whose init failed after writing" {
+test "A6 Shared createInPlace builds the value in its block, and erases a block whose init failed after writing" {
     var erased: Erased = .{ .child = t.allocator };
     const gpa = erased.allocator();
-    var owner = try SharedKeyed.createWith(t.allocator, @as(u8, 7), Keyed.fill);
+    var owner = try SharedKeyed.createInPlace(t.allocator, @as(u8, 7), Keyed.fill);
     try t.expectEqualSlices(u8, &@as([32]u8, @splat(7)), &owner.get().key);
     owner.release();
     // The init writes the key, then fails: the block it wrote is erased before its free.
-    try t.expectError(error.Late, SharedKeyed.createWith(gpa, @as(u8, 0x5a), Keyed.fill));
+    try t.expectError(error.Late, SharedKeyed.createInPlace(gpa, @as(u8, 0x5a), Keyed.fill));
     try t.expectEqual(@as(usize, 1), erased.frees);
     // An init that cannot fail: the block's allocation is the only error.
-    comptime std.debug.assert(SharedKeyed.CreateWithError(Keyed.set) == std.mem.Allocator.Error);
-    var plain = try SharedKeyed.createWith(t.allocator, @as(u8, 9), Keyed.set);
+    comptime std.debug.assert(SharedKeyed.CreateInPlaceError(Keyed.set) == std.mem.Allocator.Error);
+    var plain = try SharedKeyed.createInPlace(t.allocator, @as(u8, 9), Keyed.set);
     try t.expectEqualSlices(u8, &@as([32]u8, @splat(9)), &plain.get().key);
     plain.release();
 }
 
 fn sharedWithAllocation(gpa: std.mem.Allocator) !void {
-    var owner = try SharedKeyed.createWith(gpa, @as(u8, 3), Keyed.fill);
+    var owner = try SharedKeyed.createInPlace(gpa, @as(u8, 3), Keyed.fill);
     owner.release();
 }
 
-test "A6 Shared createWith fails without effect on every allocation" {
+test "A6 Shared createInPlace fails without effect on every allocation" {
     try t.checkAllAllocationFailures(t.allocator, sharedWithAllocation, .{});
 }
 

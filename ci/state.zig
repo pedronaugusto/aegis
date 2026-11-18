@@ -274,9 +274,9 @@ fn derive(epoch: u32, source: *Key, target: *Session) error{Refused}!void {
     target.epoch = epoch;
 }
 
-pub fn transitionWith(comptime wrapped: bool, source: if (wrapped) *Dialing else *Key, destination: if (wrapped) *Open else *Session, epoch: u32) bool {
+pub fn transitionPrepared(comptime wrapped: bool, source: if (wrapped) *Dialing else *Key, destination: if (wrapped) *Open else *Session, epoch: u32) bool {
     if (wrapped) {
-        source.transitionWith(.up, destination, epoch, derive) catch return false;
+        source.transitionPrepared(.up, destination, epoch, derive) catch return false;
     } else derive(epoch, source, destination) catch return false;
     return true;
 }

@@ -51,10 +51,10 @@ export fn wrapperStateTransition(source: *c.Idle, destination: *c.Dialing) void 
     c.transition(true, source, destination);
 }
 export fn baselineStateTransitionWith(source: *c.Key, destination: *c.Session, epoch: u32) bool {
-    return c.transitionWith(false, source, destination, epoch);
+    return c.transitionPrepared(false, source, destination, epoch);
 }
 export fn wrapperStateTransitionWith(source: *c.Dialing, destination: *c.Open, epoch: u32) bool {
-    return c.transitionWith(true, source, destination, epoch);
+    return c.transitionPrepared(true, source, destination, epoch);
 }
 export fn baselineStateTake(source: *c.Key, destination: *c.Key) void {
     c.take(false, source, destination);

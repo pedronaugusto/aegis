@@ -28,8 +28,8 @@ fn send(session: *Authenticated, message: []const u8) usize {
 pub fn main() !void {
     var pending = Pending.init(.{ .token = 42 });
     var authenticated: Authenticated = undefined;
-    if (pending.transitionWith(.verify, &authenticated, @as(u64, 41), verify)) |_| unreachable else |err| aegis.assert.invariant(err == error.BadToken, "a wrong token is refused");
-    try pending.transitionWith(.verify, &authenticated, @as(u64, 42), verify); // consumes `pending`
+    if (pending.transitionPrepared(.verify, &authenticated, @as(u64, 41), verify)) |_| unreachable else |err| aegis.assert.invariant(err == error.BadToken, "a wrong token is refused");
+    try pending.transitionPrepared(.verify, &authenticated, @as(u64, 42), verify); // consumes `pending`
     aegis.assert.invariant(send(&authenticated, "hello") == 12, "a message is sent on the authenticated stage");
 
     // Events from a peer arrive at run time: an undeclared one is an error, never a state change.

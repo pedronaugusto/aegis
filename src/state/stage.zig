@@ -106,7 +106,7 @@ pub fn At(comptime M: type, comptime P: type, comptime s: M.State) type {
         /// is untouched and still at its state and the destination stays uninitialized, so a failed
         /// preparation leaves nothing half done. On success it must have moved out of the source whatever
         /// the target now owns, and this stage is consumed.
-        pub fn transitionWith(self: *Self, comptime event: M.Event, destination: anytype, context: anytype, comptime prepare: anytype) Prepared(prepare) {
+        pub fn transitionPrepared(self: *Self, comptime event: M.Event, destination: anytype, context: anytype, comptime prepare: anytype) Prepared(prepare) {
             const D = Destination(M, @TypeOf(destination), M.after(s, event));
             self.check();
             self.apart(destination);

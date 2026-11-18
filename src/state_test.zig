@@ -120,11 +120,11 @@ test "A10 a refused preparation leaves the source staged and the destination unw
     idle.transition(.dial, &dialing);
     var open: Link.At(.open, u64) = undefined;
     open.aegis_payload = 0x5eed; // marker in the uninitialized destination
-    try t.expectError(error.Refused, dialing.transitionWith(.up, &open, @as(u32, 5), upgrade));
+    try t.expectError(error.Refused, dialing.transitionPrepared(.up, &open, @as(u32, 5), upgrade));
     try t.expectEqual(@as(u32, 0), dialing.get().value);
     try t.expectEqual(@as(u64, 0x5eed), open.aegis_payload);
     dialing.get().value = 9;
-    try dialing.transitionWith(.up, &open, @as(u32, 5), upgrade);
+    try dialing.transitionPrepared(.up, &open, @as(u32, 5), upgrade);
     try t.expectEqual(@as(u64, 14), open.get().*);
     try t.expectEqual(@as(u32, 0), dialing.aegis_payload.value);
 }
@@ -136,7 +136,7 @@ fn infallible(_: void, source: *u8, target: *u16) void {
 test "A10 an infallible preparation has no error set" {
     var idle = Link.At(.idle, u8).init(21);
     var dialing: Link.At(.dialing, u16) = undefined;
-    idle.transitionWith(.dial, &dialing, {}, infallible);
+    idle.transitionPrepared(.dial, &dialing, {}, infallible);
     try t.expectEqual(@as(u16, 42), dialing.getConst().*);
 }
 
