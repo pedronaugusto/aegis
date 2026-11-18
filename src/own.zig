@@ -38,6 +38,30 @@ pub fn OwnedIo(comptime T: type, comptime cleanup: fn (*T, std.Io) void) type {
     return Owner(T, true, cleanup);
 }
 
+/// An open file, closed once by `deinit(io)`. std's I/O handles have one owner type each, declared here,
+/// so a handle one package opens passes to another as the same type: an `OwnedIo` each package made with
+/// its own close function would be a different type for the same handle.
+pub const File = OwnedIo(std.Io.File, closeFile);
+/// An open directory, closed once by `deinit(io)`.
+pub const Dir = OwnedIo(std.Io.Dir, closeDir);
+/// A connected stream, closed once by `deinit(io)`.
+pub const Stream = OwnedIo(std.Io.net.Stream, closeStream);
+/// A listening server, closed once by `deinit(io)`.
+pub const Server = OwnedIo(std.Io.net.Server, closeServer);
+
+fn closeFile(file: *std.Io.File, io: std.Io) void {
+    file.close(io);
+}
+fn closeDir(dir: *std.Io.Dir, io: std.Io) void {
+    dir.close(io);
+}
+fn closeStream(stream: *std.Io.net.Stream, io: std.Io) void {
+    stream.close(io);
+}
+fn closeServer(server: *std.Io.net.Server, io: std.Io) void {
+    server.deinit(io);
+}
+
 /// A handle held without ownership: a file, a directory, a stream, a server or a child process its holder
 /// uses and never releases, because someone else opened it and closes it: a caller's own standard stream
 /// handed to a proxy, a file lent for a spawn, a view of a handle a terminal keeps. Where `OwnedIo` says
@@ -250,6 +274,39 @@ pub fn MustUse(comptime T: type, comptime obligation: []const u8) type {
             }
         }
     };
+}
+
+test "a file and a directory are owned as own.File and own.Dir, each closed once by its deinit" {
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDir(io, "sub", .default_dir);
+    var dir = Dir.init(try tmp.dir.openDir(io, "sub", .{}));
+    var file = File.init(try dir.borrow().createFile(io, "owned", .{}));
+    try file.borrow().writeStreamingAll(io, "held once");
+    file.deinit(io);
+    dir.deinit(io);
+    const bytes = try readFile(io, tmp.dir, "sub/owned", std.testing.allocator, .fromRaw(64));
+    defer std.testing.allocator.free(bytes);
+    try std.testing.expectEqualStrings("held once", bytes);
+}
+
+test "a server and its streams are owned as own.Server and own.Stream, each closed once by its deinit" {
+    const io = std.testing.io;
+    const loopback: std.Io.net.IpAddress = try .parse("127.0.0.1", 0);
+    var server = Server.init(try loopback.listen(io, .{}));
+    const bound = server.borrow().socket.address;
+    var client = Stream.init(try bound.connect(io, .{ .mode = .stream }));
+    var accepted = Stream.init(try server.borrowMut().accept(io));
+    var buffer: [16]u8 = undefined;
+    var writer = client.borrow().writer(io, &buffer);
+    try writer.interface.writeAll("held once");
+    try writer.interface.flush();
+    client.deinit(io);
+    var reader = accepted.borrow().reader(io, &buffer);
+    try std.testing.expectEqualStrings("held once", try reader.interface.take(9));
+    accepted.deinit(io);
+    server.deinit(io);
 }
 
 test "an unowned handle names its owner's handle and hands it back, the same size as the handle" {

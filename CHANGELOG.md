@@ -30,6 +30,7 @@ One release of the breaking cleanups an independent review (2026-10-28) asked fo
 
 ### Added
 
+- `own.File`, `own.Dir`, `own.Stream` and `own.Server`: the owners of std's `Io.File`, `Io.Dir`, `Io.net.Stream` and `Io.net.Server`, each closed once by `deinit(io)`, declared once so a handle one package opens passes to another as the same type (each package made its own `OwnedIo` before, a different type for the same handle).
 - `SharedIo(T, cleanup)`: `Shared` for a value released through `Io`, whose last `release(io)` runs `cleanup(&value, io)`, as `own.OwnedIo` is `Owned`'s. The block stores no `Io`; the task that releases last passes its own. probe's reader shares segments that each hold their file open between the writer and its snapshots, and kept the Io each was opened on in a field to close it with. Its parity kernel (`gaps_shared_io_release`) holds it to the hand-written release on x86_64 and aarch64 in ReleaseFast and ReleaseSafe.
 - `SecretBytes.initLength(gpa, len)`: an owner of `len` zeroed bytes, all live, for a caller that fills them in place; `init` then `resizeWithinCapacity` left a `CapacityExceeded` that could not happen to assert away.
 - `SecretBytes.unusedCapacitySlice()` and `SecretBytes.commit(n)`, `std.ArrayList`'s shape: a reader fills the capacity past the live prefix in place, then makes what it filled live, with no resize between that could fail; `commit` asserts `n` fits, in every build.
