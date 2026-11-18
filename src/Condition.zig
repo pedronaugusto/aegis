@@ -13,7 +13,8 @@ aegis_first: ?*Waiter = null,
 aegis_count: usize = 0,
 /// Private: selected cap, no zero-as-unlimited convention.
 aegis_limit: usize = 65535,
-const Waiter = struct { next: ?*Waiter, notified: std.atomic.Value(u32) = .init(0) };
+/// A wait's place on the condition's stack, made and linked only by `Condition`: its fields are internal.
+pub const Waiter = struct { aegis_next: ?*Waiter, aegis_notified: std.atomic.Value(u32) = .init(0) };
 pub const WaitError = Io.Cancelable || Io.Timeout.Error || error{WaiterLimit};
 /// What a wait that cancellation cannot interrupt can still end with.
 pub const UncancelableWaitError = Io.Timeout.Error || error{WaiterLimit};
@@ -50,7 +51,7 @@ pub fn waitMutex(self: *Condition, io: Io, owner_mutex: *Io.Mutex, timeout: Io.T
         self.aegis_mutex.unlock(io);
         return error.WaiterLimit;
     }
-    var waiter: Waiter = .{ .next = self.aegis_first };
+    var waiter: Waiter = .{ .aegis_next = self.aegis_first };
     self.aegis_first = &waiter;
     self.aegis_count += 1;
     owner_mutex.unlock(io);
@@ -61,10 +62,10 @@ pub fn waitMutex(self: *Condition, io: Io, owner_mutex: *Io.Mutex, timeout: Io.T
     defer {
         self.aegis_mutex.lockUncancelable(io);
         var link = &self.aegis_first;
-        while (link.* != &waiter) link = &link.*.?.next;
-        link.* = waiter.next;
+        while (link.* != &waiter) link = &link.*.?.aegis_next;
+        link.* = waiter.aegis_next;
         self.aegis_count -= 1;
-        if (canceled and waiter.notified.load(.acquire) != 0) self.notifyOne(io);
+        if (canceled and waiter.aegis_notified.load(.acquire) != 0) self.notifyOne(io);
         self.aegis_mutex.unlock(io);
         owner_mutex.lockUncancelable(io);
     }
@@ -74,7 +75,7 @@ pub fn waitMutex(self: *Condition, io: Io, owner_mutex: *Io.Mutex, timeout: Io.T
             canceled = true;
             return error.Canceled;
         };
-        io.futexWaitTimeout(u32, &waiter.notified.raw, 0, deadline) catch {
+        io.futexWaitTimeout(u32, &waiter.aegis_notified.raw, 0, deadline) catch {
             canceled = true;
             return error.Canceled;
         };
@@ -85,7 +86,7 @@ pub fn waitMutex(self: *Condition, io: Io, owner_mutex: *Io.Mutex, timeout: Io.T
             canceled = true;
             return error.Canceled;
         };
-        if (waiter.notified.load(.acquire) != 0) return;
+        if (waiter.aegis_notified.load(.acquire) != 0) return;
         switch (deadline) {
             .none => {},
             .deadline => |d| if (d.untilNow(io).raw.nanoseconds >= 0) return error.Timeout,
@@ -96,10 +97,10 @@ pub fn waitMutex(self: *Condition, io: Io, owner_mutex: *Io.Mutex, timeout: Io.T
 }
 fn notifyOne(self: *Condition, io: Io) void {
     var item = self.aegis_first;
-    while (item) |waiter| : (item = waiter.next) {
-        if (waiter.notified.load(.monotonic) == 0) {
-            waiter.notified.store(1, .release);
-            io.futexWake(u32, &waiter.notified.raw, 1);
+    while (item) |waiter| : (item = waiter.aegis_next) {
+        if (waiter.aegis_notified.load(.monotonic) == 0) {
+            waiter.aegis_notified.store(1, .release);
+            io.futexWake(u32, &waiter.aegis_notified.raw, 1);
             return;
         }
     }
@@ -115,10 +116,10 @@ pub fn broadcast(self: *Condition, io: Io) void {
     self.aegis_mutex.lockUncancelable(io);
     defer self.aegis_mutex.unlock(io);
     var item = self.aegis_first;
-    while (item) |waiter| : (item = waiter.next) {
-        if (waiter.notified.load(.monotonic) == 0) {
-            waiter.notified.store(1, .release);
-            io.futexWake(u32, &waiter.notified.raw, 1);
+    while (item) |waiter| : (item = waiter.aegis_next) {
+        if (waiter.aegis_notified.load(.monotonic) == 0) {
+            waiter.aegis_notified.store(1, .release);
+            io.futexWake(u32, &waiter.aegis_notified.raw, 1);
         }
     }
 }

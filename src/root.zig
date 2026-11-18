@@ -118,6 +118,7 @@ pub const lint_rules = .{
         .{ .type = .{ .generic = SpinRwGuarded, .member = .ReadGuard }, .internal = .{.aegis_owner} },
         .{ .type = .{ .generic = SpinRwGuarded, .member = .WriteGuard }, .internal = .{.aegis_owner} },
         .{ .type = Condition, .internal = .{ .aegis_mutex, .aegis_associated, .aegis_first, .aegis_count, .aegis_limit } },
+        .{ .type = Condition.Waiter, .internal = .{ .aegis_next, .aegis_notified } },
         .{ .type = Once, .internal = .{ .aegis_state, .aegis_mutex, .aegis_changed, .aegis_data } },
         .{ .type = Lazy, .internal = .{ .aegis_state, .aegis_mutex, .aegis_data } },
         .{ .type = Signal, .internal = .{ .aegis_state, .aegis_value } },
