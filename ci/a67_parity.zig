@@ -61,7 +61,7 @@ export fn baselineA67Budget(owner: *c.DirectBudget, amount: u64, release: u64) b
 export fn wrapperA67Budget(owner: *a.bounded.Budget(u64), amount: u64, release: u64) bool {
     return c.budget(true, owner, amount, release);
 }
-export fn baselineA67Owned(owner: *c.Payload, fail: bool) void {
+export fn baselineA67Owned(owner: *c.DirectOwned, fail: bool) void {
     return c.owned(false, owner, fail);
 }
 export fn wrapperA67Owned(owner: *c.Owned, fail: bool) void {
@@ -106,8 +106,8 @@ comptime {
     std.debug.assert(@alignOf(c.DirectBuffer) == @alignOf(a.bounded.Buffer(u64)));
     std.debug.assert(@sizeOf(c.DirectBudget) == @sizeOf(a.bounded.Budget(u64)));
     std.debug.assert(@alignOf(c.DirectBudget) == @alignOf(a.bounded.Budget(u64)));
-    std.debug.assert(@sizeOf(c.Payload) == @sizeOf(c.Owned));
-    std.debug.assert(@alignOf(c.Payload) == @alignOf(c.Owned));
+    std.debug.assert(@sizeOf(c.DirectOwned) == @sizeOf(c.Owned));
+    std.debug.assert(@alignOf(c.DirectOwned) == @alignOf(c.Owned));
     std.debug.assert(@sizeOf(u64) == @sizeOf(c.MustUse));
     std.debug.assert(@alignOf(u64) == @alignOf(c.MustUse));
     std.debug.assert(@sizeOf(c.DirectConfined) == @sizeOf(a.Confined(u64)));

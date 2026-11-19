@@ -37,6 +37,9 @@ pub fn cleanup(payload: *Payload) void {
     payload.output.* +%= payload.value;
 }
 pub const Owned = a.own.Owned(Payload, cleanup);
+/// The owner written by hand: its payload, and in Debug and ReleaseSafe the live flag that stops a
+/// second release or a use after one, as `own.Owned` keeps it.
+pub const DirectOwned = struct { payload: Payload, live: if (checked) bool else void };
 pub const MustUse = a.own.MustUse(u64, "inspect result");
 pub const Policy = a.Order(&.{.{ .name = "root" }});
 pub const Ordered = Policy.Ordered(a.BlockingGuarded(u64), 0);
@@ -182,15 +185,20 @@ pub fn budget(comptime wrapped: bool, owner: if (wrapped) *a.bounded.Budget(u64)
     owner.used -= release;
     return true;
 }
-pub fn owned(comptime wrapped: bool, owner: if (wrapped) *Owned else *Payload, fail: bool) void {
+pub fn owned(comptime wrapped: bool, owner: if (wrapped) *Owned else *DirectOwned, fail: bool) void {
     if (wrapped) {
         defer owner.deinit();
         if (fail) return;
         owner.borrowMut().value +%= 1;
     } else {
-        defer cleanup(owner);
+        defer {
+            if (checked and !owner.live) @panic("own: an owner used after its release");
+            if (checked) owner.live = false;
+            cleanup(&owner.payload);
+        }
         if (fail) return;
-        owner.value +%= 1;
+        if (checked and !owner.live) @panic("own: an owner used after its release");
+        owner.payload.value +%= 1;
     }
 }
 pub fn mustUse(comptime wrapped: bool, owner: if (wrapped) *MustUse else *u64, destination: *u64) void {

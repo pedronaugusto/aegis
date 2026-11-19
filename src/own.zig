@@ -3,26 +3,36 @@ const builtin = @import("builtin");
 const std = @import("std");
 const moves = @import("move.zig");
 const units = @import("units.zig");
+/// Debug's diagnostics: the owner's address, which catches a copy made after it was bound.
 const diagnostics = builtin.optimize == .debug;
+/// The ownership check that follows Zig's runtime safety (Debug and ReleaseSafe): a live flag, which
+/// stops a second release and any use after one. A double release of a handle owner closes a
+/// descriptor the system may already have given to another file.
+const checked = std.debug.runtime_safety;
 /// The owner's address is bound once, at its first use, and only read after: read-only borrows may run
 /// on several tasks at once, so the bind is one compare-and-swap from unbound (0), never a store per borrow.
-const State = if (diagnostics) struct { live: bool = true, address: std.atomic.Value(usize) = .init(0) } else struct {};
+/// ReleaseFast and ReleaseSmall keep neither field: the owner is exactly its payload.
+const State = struct {
+    live: if (checked) bool else void = if (checked) true else {},
+    address: if (diagnostics) std.atomic.Value(usize) else void = if (diagnostics) .init(0) else {},
+};
 
 fn bind(state: *State, address: *const anyopaque) void {
+    if (checked and !state.live) @panic("own: an owner used after its release");
     if (diagnostics) {
-        std.debug.assert(state.live);
         const wanted = @intFromPtr(address);
         const bound = state.address.load(.monotonic);
         if (bound == 0) {
-            if (state.address.cmpxchgStrong(0, wanted, .monotonic, .monotonic)) |other| std.debug.assert(other == wanted);
-        } else std.debug.assert(bound == wanted);
+            if (state.address.cmpxchgStrong(0, wanted, .monotonic, .monotonic)) |other| if (other != wanted) @panic("own: an owner copied after it was bound");
+        } else if (bound != wanted) @panic("own: an owner copied after it was bound");
     }
 }
 fn consume(state: *State) void {
-    if (diagnostics) state.live = false;
+    if (checked) state.live = false;
 }
 
-/// Never copy a bound owner. Borrows end on mutation, transfer or cleanup.
+/// Never copy a bound owner. Borrows end on mutation, transfer or cleanup. Debug and ReleaseSafe stop a
+/// second release and any use after one; Debug also stops a copy made after the owner was bound.
 /// This cannot detect pre-binding copies, reflection or omitted deinit.
 /// Blocking/fallible teardown requires the consumer's explicit finish/join first.
 pub fn Owned(comptime T: type, comptime cleanup: fn (*T) void) type {
@@ -100,7 +110,7 @@ fn Owner(comptime T: type, comptime with_io: bool, comptime cleanup: if (with_io
         const Self = @This();
         /// Private: access only through a live owner.
         aegis_data: T,
-        /// Private: Debug-only live/address witness.
+        /// Private: the live flag where runtime safety is on, and Debug's address witness.
         aegis_state: State = .{},
         pub fn init(value: T) Self {
             return .{ .aegis_data = value };
@@ -129,7 +139,7 @@ fn Owner(comptime T: type, comptime with_io: bool, comptime cleanup: if (with_io
         /// Transfers into uninitialized disjoint wrapper storage; destination binds on first use.
         pub fn moveInto(self: *Self, destination: *Self) void {
             bind(&self.aegis_state, self);
-            std.debug.assert(self != destination);
+            if (checked and self == destination) @panic("own: an owner moved into itself");
             destination.* = .{ .aegis_data = undefined };
             moves.into(T, &self.aegis_data, &destination.aegis_data);
             consume(&self.aegis_state);
@@ -251,8 +261,8 @@ pub fn MustUse(comptime T: type, comptime obligation: []const u8) type {
         }
         fn check(self: *Self) void {
             if (diagnostics) {
-                std.debug.assert(self.aegis_live);
-                std.debug.assert(self.aegis_pending);
+                if (!self.aegis_live) @panic("own: a MustUse used after its release");
+                if (!self.aegis_pending) @panic("own: a MustUse discharged twice");
             }
         }
         pub fn take(self: *Self, destination: *T) void {
@@ -268,7 +278,7 @@ pub fn MustUse(comptime T: type, comptime obligation: []const u8) type {
         }
         pub fn deinit(self: *Self) void {
             if (diagnostics) {
-                std.debug.assert(self.aegis_live);
+                if (!self.aegis_live) @panic("own: a MustUse released twice");
                 if (self.aegis_pending) @panic(obligation);
                 self.aegis_live = false;
             }

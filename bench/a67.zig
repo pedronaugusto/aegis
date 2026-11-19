@@ -122,7 +122,7 @@ fn operation(comptime name: []const u8, comptime wrapped: bool) Operation {
                     var owner = c.Owned.init(payload);
                     c.owned(true, &owner, input % 2 == 0);
                 } else {
-                    var owner = payload;
+                    var owner: c.DirectOwned = .{ .payload = payload, .live = if (c.checked) true else {} };
                     c.owned(false, &owner, input % 2 == 0);
                 }
                 return state.output;

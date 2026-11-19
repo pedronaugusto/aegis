@@ -40,7 +40,8 @@ pub const cases = [_]Case{
     .{ .module = "Confined", .name = "confined-access", .when = .checked, .message = "Confined accessed", .run = confinedAccess },
     .{ .module = "Confined", .name = "confined-handoff", .when = .checked, .message = "Confined accessed", .run = confinedHandoff },
     .{ .module = "bounded", .name = "budget-underflow", .when = .always, .message = "budget reservation underflow", .run = budgetUnderflow },
-    .{ .module = "own", .name = "owned-twice", .when = .debug, .message = "reached unreachable code", .run = ownedTwice },
+    .{ .module = "own", .name = "owner-released-twice", .when = .checked, .message = "own: an owner used after its release", .run = ownerReleasedTwice },
+    .{ .module = "own", .name = "owner-copied-after-bind", .when = .debug, .message = "own: an owner copied after it was bound", .run = ownerCopiedAfterBind },
     .{ .module = "own", .name = "must-use", .when = .debug, .message = "required outcome inspection", .run = mustUse },
     .{ .module = "state", .name = "stage-reuse", .when = .debug, .message = "state stage used after its payload moved on", .run = stageReuse },
     .{ .module = "state", .name = "take-twice", .when = .debug, .message = "state stage used after its payload moved on", .run = takeTwice },
@@ -218,10 +219,17 @@ fn budgetUnderflow(_: std.process.Init) !void {
     reservation.release();
 }
 
-fn ownedTwice(_: std.process.Init) !void {
+fn ownerReleasedTwice(_: std.process.Init) !void {
     var owner = a.own.Owned(u64, cleanup).init(1);
     owner.deinit();
     owner.deinit();
+}
+
+fn ownerCopiedAfterBind(_: std.process.Init) !void {
+    var owner = a.own.Owned(u64, cleanup).init(1);
+    _ = owner.borrow();
+    var copy = owner;
+    std.mem.doNotOptimizeAway(copy.borrow());
 }
 
 fn mustUse(_: std.process.Init) !void {

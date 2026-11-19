@@ -28,6 +28,10 @@ One release of the breaking cleanups an independent review (2026-10-28) asked fo
 - The shift's checked amount: `int.Checked(Repr).shl`, `int.Saturating(Repr).shl` and `int.Ranged(Repr, min, max).shl` take a `std.math.Log2Int(Repr)` (see Breaking); `int.Checked(Repr).ShlError` has no `InvalidShift`, and `int.Saturating(Repr).ShlError` is gone.
 - `Condition.wait` and `Condition.waitUncancelable`, which took any guard: a wait is the guard's (see Breaking).
 
+### Changed
+
+- An owner (`own.Owned`, `own.OwnedIo`, and so `own.File`, `own.Dir`, `own.Stream` and `own.Server`) keeps its live flag in ReleaseSafe as well as Debug, as Zig's runtime safety does: a second `deinit`, and any `borrow`, `take` or `moveInto` after a release, stops in both, where ReleaseSafe went on and a double release of a handle owner closed a descriptor the system had given to another file. The address witness that stops a copy after binding stays Debug's; ReleaseFast and ReleaseSmall are exactly `T`, as before. Each stop says what happened (`own: an owner used after its release`, `own: an owner copied after it was bound`, `own: an owner moved into itself`, and `MustUse`'s), where it was a bare assertion. The mode matrix holds both: "owner released twice" stops in Debug and ReleaseSafe, "owner copied after bind" in Debug.
+
 ### Added
 
 - `units.Duration(unit, Repr).text_form` and `units.Bytes(Repr).text_form`, `.{ .max_len = max_text_len }`: the declaration a format reads and writes a scalar as text by (strand's text form), through their existing `parse` and `format`, `format` being the signature std's `{f}` calls. A plain literal: aegis imports nothing for it. Neither names a JSON Schema format (Schema's `duration` is ISO 8601's, not this text). Tests: the declarations against `max_text_len` and the two signatures, and the documented examples read as documented.
