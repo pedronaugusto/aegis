@@ -152,6 +152,32 @@ test "A3 max_text_len bounds the text format writes, so a buffer of it holds any
     try t.expectEqual(@as(usize, 1 + 20 + 3), U.Bytes(u64).max_text_len);
 }
 
+test "A3 text_form declares the text a format reads and writes: max_len is max_text_len, no JSON Schema format, std's format signature" {
+    inline for (spans ++ sizes) |T| {
+        try t.expectEqual(T.max_text_len, T.text_form.max_len);
+        try t.expect(!@hasField(@TypeOf(T.text_form), "schema_format"));
+        comptime std.debug.assert(@TypeOf(T.parse) == fn ([]const u8) T.ParseError!T);
+        comptime std.debug.assert(@TypeOf(T.format) == fn (T, *std.Io.Writer) std.Io.Writer.Error!void);
+    }
+    // Each one's documented examples read as documented.
+    const D = U.Duration(.millisecond, i64);
+    try expectRead(D, "30s", 30_000, "30s");
+    try expectRead(D, "1m30s", 90_000, "1m30s");
+    try expectRead(D, "250ms", 250, "250ms");
+    try expectRead(D, "1.5h", 5_400_000, "1h30m");
+    try expectRead(D, "2d12h", 216_000_000, "2d12h");
+    const B = U.Bytes(u64);
+    try expectRead(B, "4096", 4096, "4KiB");
+    try expectRead(B, "4096B", 4096, "4KiB");
+    try expectRead(B, "64MiB", 64 << 20, "64MiB");
+    try expectRead(B, "1.5GB", 1_500_000_000, "1500MB");
+    // What std's {f} prints is the text form.
+    var buffer: [64]u8 = undefined;
+    var w: std.Io.Writer = .fixed(&buffer);
+    try w.print("{f}", .{D.fromRaw(90_000)});
+    try t.expectEqualStrings("1m30s", w.buffered());
+}
+
 test "A3 parse reads back what format writes, for every unit and width" {
     inline for (spans ++ sizes) |T| {
         const R = T.Representation;

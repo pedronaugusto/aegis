@@ -483,6 +483,11 @@ pub fn Bytes(comptime Repr: type) type {
         pub const ParseError = TextError;
         /// The most bytes `format` writes, for a buffer that holds any size of this type.
         pub const max_text_len: usize = 1 + decimalDigits(magnitudeLimit(Repr)) + "YiB".len;
+        /// The size read and written as text by a format that honors the declaration (strand's), through
+        /// `parse` and `format`: text past `max_len` is refused unread. Everything `format` writes fits;
+        /// `parse` alone also reads longer spellings (leading zeros, trailing fraction digits). No JSON
+        /// Schema format names this text.
+        pub const text_form = .{ .max_len = max_text_len };
         /// Reads a size: a decimal number and a unit, or a number of bytes alone (`4096`, `4096B`, `64MiB`,
         /// `1.5GB`). Binary units are powers of 1024 (`KiB`, `MiB`, `GiB`, `TiB`, `PiB`, `EiB`, `ZiB`, `YiB`)
         /// and decimal ones powers of 1000 (`kB`, `MB`, `GB`, `TB`, `PB`, `EB`, `ZB`, `YB`), spelled exactly
@@ -709,6 +714,11 @@ pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
         pub const ParseError = TextError;
         /// The most bytes `format` writes, for a buffer that holds any duration of this type.
         pub const max_text_len: usize = spanTextCapacity(Repr, unit);
+        /// The duration read and written as text by a format that honors the declaration (strand's),
+        /// through `parse` and `format`: text past `max_len` is refused unread. Everything `format` writes
+        /// fits; `parse` alone also reads longer spellings (leading zeros, trailing fraction digits). It
+        /// names no JSON Schema format: Schema's `duration` is ISO 8601's (`PT1M30S`), not this text.
+        pub const text_form = .{ .max_len = max_text_len };
         /// Reads a duration: one or more components, each a decimal number and a unit, from the coarsest unit
         /// to the finest and each unit at most once (`30s`, `1m30s`, `250ms`, `1.5h`, `2d12h`). The units are
         /// `d` (86400 seconds), `h`, `m`, `s`, `ms`, `us` (or `µs`) and `ns`. A leading `-` negates, and `0`
