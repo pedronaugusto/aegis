@@ -30,6 +30,7 @@ One release of the breaking cleanups an independent review (2026-10-28) asked fo
 
 ### Changed
 
+- aegis's own development holds it to the family's policy: `"policy": "family"` in ci/preflight.json and `"hardened": true` in ci/workflow.json, so its release tier runs the hardened profile (on shakedown's quarantine), its fuzz campaign and its ThreadSanitizer run, which it planned none of, and refuses a rule set below its default. The hardened and hardened-tsan legs pass on 2ab0d5c.
 - An owner (`own.Owned`, `own.OwnedIo`, and so `own.File`, `own.Dir`, `own.Stream` and `own.Server`) keeps its live flag in ReleaseSafe as well as Debug, as Zig's runtime safety does: a second `deinit`, and any `borrow`, `take` or `moveInto` after a release, stops in both, where ReleaseSafe went on and a double release of a handle owner closed a descriptor the system had given to another file. The address witness that stops a copy after binding stays Debug's; ReleaseFast and ReleaseSmall are exactly `T`, as before. Each stop says what happened (`own: an owner used after its release`, `own: an owner copied after it was bound`, `own: an owner moved into itself`, and `MustUse`'s), where it was a bare assertion. The mode matrix holds both: "owner released twice" stops in Debug and ReleaseSafe, "owner copied after bind" in Debug.
 
 ### Added
