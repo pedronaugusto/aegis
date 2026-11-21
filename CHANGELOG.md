@@ -4,6 +4,8 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-21
+
 ### Breaking
 
 - `Signal.set` returns `bool`, true when this call set the signal, where a second set was `error.AlreadySet`: `Signal.SetError` (also `aegis.Signal.SetError`) is gone. A second set returns false and keeps the first value, as before. For a single owner a second set is a contract break, written `aegis.assert.invariant(signal.set(io, v), ...)`; for sides racing to set it, losing is the normal answer, and they branch on the bool. Neither is a failure to recover from, so there is no error set. A caller that wrote `try signal.set(io, v)` writes one of those two.
