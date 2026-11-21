@@ -1,5 +1,5 @@
 //! A shutdown that one side decides and every worker waits for: the reason travels with the
-//! signal, and a second decision is refused rather than overwriting the first.
+//! signal, and a second decision is answered false rather than overwriting the first.
 const std = @import("std");
 const aegis = @import("aegis");
 
@@ -16,10 +16,9 @@ pub fn main(init: std.process.Init) !void {
     var group: std.Io.Group = .init;
     defer group.cancel(init.io);
     for (0..4) |_| try group.concurrent(init.io, worker, .{ init.io, &stop, &seen });
-    try stop.set(init.io, .drained);
+    aegis.assert.invariant(stop.set(init.io, .drained), "the first decision sets the signal");
     // Whoever comes second learns it lost; the reason stays the first one.
-    const second = if (stop.set(init.io, .canceled)) |_| false else |err| err == error.AlreadySet;
-    aegis.assert.invariant(second, "a signal is set once");
+    aegis.assert.invariant(!stop.set(init.io, .canceled), "a signal is set once");
     try group.await(init.io);
     aegis.assert.invariant(seen.load(.acquire) == .drained, "every worker saw the first reason");
 }

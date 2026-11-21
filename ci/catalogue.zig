@@ -157,7 +157,7 @@ pub const modules = [_]Module{
         .required = .{ .rule = "A007" },
         .names = &.{"Signal"},
         .release = "a state word and `T`",
-        .always = "set once and published by a release store; a second set is `AlreadySet`, the first value kept",
+        .always = "set once and published by a release store; `set` returns whether this call set it; a second set is false, the first value kept",
         .kernels = &.{ "gaps_signal_get", "gaps_signal_set" },
         .example = "examples/signal.zig",
     },

@@ -8,8 +8,10 @@ const Atomic = @import("Atomic.zig").Atomic;
 /// demand: the value comes from whichever side sets it.
 ///
 /// `set` writes the value, then publishes it with release ordering and wakes every waiter, so a waiter never sees a
-/// half-written value. A second `set` is refused with `error.AlreadySet` and changes nothing: two sides racing to
-/// set it is a fact the loser learns, never a value silently overwritten. There is no reset. A new round is a new
+/// half-written value. `set` answers whether this call set it: a second `set` returns false and changes nothing, the
+/// first value kept, never silently overwritten. For a single owner a second set is a contract break, so it writes
+/// `aegis.assert.invariant(signal.set(io, v), ...)`; for sides racing to set it, losing is the normal answer, and
+/// they branch on the bool. Neither is a failure to recover from, so there is no error. There is no reset. A new round is a new
 /// Signal, as resetting a signal while a waiter is still on it is the race `std.Io.Event` leaves to its caller.
 ///
 /// Ownership: the Signal belongs to whoever made it, which keeps it in place (never moved or copied once another
@@ -26,21 +28,21 @@ pub fn Signal(comptime T: type) type {
         /// Private: written once, by the setter that claimed the state, before the state is set.
         aegis_value: T = undefined,
 
-        pub const SetError = error{AlreadySet};
         pub const WaitTimeoutError = error{Timeout} || Io.Cancelable;
 
         pub fn init() Self {
             return .{};
         }
 
-        /// Sets the signal to `value` and wakes every waiter; `error.AlreadySet` if any side set it first, the
-        /// value it set kept.
-        pub fn set(self: *Self, io: Io, value: T) SetError!void {
-            if (self.aegis_state.cmpxchgStrong(.unset, .setting, .monotonic, .monotonic) != null) return error.AlreadySet;
+        /// Sets the signal to `value` and wakes every waiter, and returns true; returns false when any side set it
+        /// first, the value it set kept and nobody woken again.
+        pub fn set(self: *Self, io: Io, value: T) bool {
+            if (self.aegis_state.cmpxchgStrong(.unset, .setting, .monotonic, .monotonic) != null) return false;
             self.aegis_value = value;
             self.aegis_state.store(.set, .release);
             // Once per Signal: whoever waits on `unset` or `setting` is woken, whenever it began to wait.
             self.aegis_state.wake(io, std.math.maxInt(u32));
+            return true;
         }
 
         /// The value the signal was set with, or null while it is not set. Never waits.
@@ -81,12 +83,15 @@ pub fn Signal(comptime T: type) type {
 }
 
 const t = std.testing;
+const invariant = @import("assert.zig").invariant;
 
-test "a signal set once hands its value to every waiter; a second set is refused and changes nothing" {
+test "a single owner's set is asserted to be the one that set it; a second set returns false and changes nothing" {
     var signal: Signal(u64) = .init();
     try t.expect(signal.get() == null);
-    try signal.set(t.io, 42);
-    try t.expectError(error.AlreadySet, signal.set(t.io, 7));
+    // The single owner's use: its one set is the one, by contract.
+    invariant(signal.set(t.io, 42), "the owner sets the signal once");
+    // A second set is answered, not refused: false, the first value kept.
+    try t.expect(!signal.set(t.io, 7));
     try t.expectEqual(@as(u64, 42), signal.get().?.*);
     try t.expectEqual(@as(u64, 42), (try signal.wait(t.io)).*);
     try t.expectEqual(@as(u64, 42), signal.waitUncancelable(t.io).*);
@@ -96,6 +101,6 @@ test "a signal set once hands its value to every waiter; a second set is refused
 test "a bare signal waits for its set; an unset one times out" {
     var bare: Signal(void) = .init();
     try t.expectError(error.Timeout, bare.waitTimeout(t.io, .{ .duration = .{ .raw = .fromMilliseconds(1), .clock = .awake } }));
-    try bare.set(t.io, {});
+    try t.expect(bare.set(t.io, {}));
     _ = try bare.wait(t.io);
 }

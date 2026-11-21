@@ -550,7 +550,7 @@ test "Atomic's futex methods take any provider of std.Io's futex methods, the wo
 const SignalWords = struct { a: u64, b: u64, c: u64, d: u64 };
 const SignalRace = struct {
     signal: a.Signal(SignalWords) = .init(),
-    fn setter(self: *SignalRace, io: Io, word: u64) a.Signal(SignalWords).SetError!void {
+    fn setter(self: *SignalRace, io: Io, word: u64) bool {
         return self.signal.set(io, .{ .a = word, .b = word, .c = word, .d = word });
     }
     fn waiter(self: *SignalRace, io: Io) Io.Cancelable!SignalWords {
@@ -561,24 +561,19 @@ const SignalRace = struct {
         var second_waiter = try io.concurrent(waiter, .{ self, io });
         var one = try io.concurrent(setter, .{ self, io, 1 });
         var two = try io.concurrent(setter, .{ self, io, 2 });
-        const results = [_]a.Signal(SignalWords).SetError!void{ one.await(io), two.await(io) };
-        // Exactly one side wins; the other learns it lost.
-        var won: usize = 0;
-        for (results) |result| {
-            if (result) |_| {
-                won += 1;
-            } else |err| try t.expectEqual(error.AlreadySet, err);
-        }
-        try t.expectEqual(@as(usize, 1), won);
+        const one_set = one.await(io);
+        const two_set = two.await(io);
+        // The racers' use: exactly one side's set is true, and the other branches on its false.
+        try t.expect(one_set != two_set);
         const winner = self.signal.get().?.a;
-        try t.expect(winner == 1 or winner == 2);
+        try t.expectEqual(@as(u64, if (one_set) 1 else 2), winner);
         // Every waiter sees the winner's value, whole.
         for ([_]SignalWords{ try first_waiter.await(io), try second_waiter.await(io) }) |seen| {
             try t.expectEqual(SignalWords{ .a = winner, .b = winner, .c = winner, .d = winner }, seen);
         }
     }
 };
-test "signal: two sides setting at once, exactly one wins, the other gets AlreadySet, every waiter sees the winner's value" {
+test "signal: two sides setting at once, exactly one set returns true, the other false, every waiter sees the winner's value" {
     for (0..16) |seed| {
         const sim = try shake.Sim.init(t.allocator, .{ .executor = .threads, .seed = seed, .yield_per_million = 250000, .spurious_wake_per_million = 300000 });
         defer sim.deinit();
@@ -598,7 +593,7 @@ const SignalCancel = struct {
         try t.expectError(error.Canceled, waiting.cancel(io));
         // The canceled wait leaves the signal as it was: unset, and set later as usual.
         try t.expect(self.signal.get() == null);
-        try self.signal.set(io, 5);
+        try t.expect(self.signal.set(io, 5));
         try t.expectEqual(@as(u32, 5), (try self.signal.wait(io)).*);
     }
 };
@@ -613,9 +608,9 @@ test "signal: a waiter canceled while unset returns Canceled and leaves the sign
 
 const SignalWake = struct {
     signal: a.Signal(u32) = .init(),
-    fn setLater(self: *SignalWake, io: Io) (a.Signal(u32).SetError || Io.Cancelable)!void {
+    fn setLater(self: *SignalWake, io: Io) Io.Cancelable!void {
         try io.sleep(.fromNanoseconds(1), .awake);
-        try self.signal.set(io, 9);
+        a.assert.invariant(self.signal.set(io, 9), "the one setter sets the signal");
     }
     fn main(self: *SignalWake, io: Io) !void {
         var setting = try io.concurrent(setLater, .{ self, io });

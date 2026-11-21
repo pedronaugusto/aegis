@@ -399,10 +399,7 @@ pub fn signalGet(comptime wrapped: bool, owner: if (wrapped) *const a.Signal(u64
     return if (owner.state.load(.acquire) == .set) &owner.value else null;
 }
 pub fn signalSet(comptime wrapped: bool, io: Io, owner: if (wrapped) *a.Signal(u64) else *DirectSignal, value: u64) bool {
-    if (wrapped) {
-        owner.set(io, value) catch return false;
-        return true;
-    }
+    if (wrapped) return owner.set(io, value);
     if (owner.state.cmpxchgStrong(.unset, .setting, .monotonic, .monotonic) != null) return false;
     owner.value = value;
     owner.state.store(.set, .release);
