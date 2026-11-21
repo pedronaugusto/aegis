@@ -35,7 +35,7 @@ One release of the breaking cleanups an independent review (2026-10-28) asked fo
 
 ### Added
 
-- `units.Duration(unit, Repr).text_form` and `units.Bytes(Repr).text_form`, `.{ .max_len = max_text_len }`: the declaration a format reads and writes a scalar as text by (strand's text form), through their existing `parse` and `format`, `format` being the signature std's `{f}` calls. A plain literal: aegis imports nothing for it. Neither names a JSON Schema format (Schema's `duration` is ISO 8601's, not this text). Tests: the declarations against `max_text_len` and the two signatures, and the documented examples read as documented.
+- `units.Duration(unit, Repr).text_form` and `units.Bytes(Repr).text_form`, `.{ .max_len = 128 }`: the declaration a format reads and writes a scalar as text by (strand's text form), through their existing `parse` and `format`, `format` being the signature std's `{f}` calls. `max_len` bounds the read, the longest text strand hands to `parse`: the same 128 bytes for every duration and size, past every `max_text_len`, so `parse` still reads the longer spellings it takes (leading zeros, trailing fraction digits) and refuses what overflows or is inexact itself. A plain literal with that one field: aegis imports nothing for it. Neither names a JSON Schema format (Schema's `duration` is ISO 8601's, not this text).
 - `Condition.Waiter`, public: the type of the condition's internal waiter stack, whose fields are internal (`aegis_next`, `aegis_notified`), where a public field held a private type.
 - `own.File`, `own.Dir`, `own.Stream` and `own.Server`: the owners of std's `Io.File`, `Io.Dir`, `Io.net.Stream` and `Io.net.Server`, each closed once by `deinit(io)`, declared once so a handle one package opens passes to another as the same type (each package made its own `OwnedIo` before, a different type for the same handle).
 - `SharedIo(T, cleanup)`: `Shared` for a value released through `Io`, whose last `release(io)` runs `cleanup(&value, io)`, as `own.OwnedIo` is `Owned`'s. The block stores no `Io`; the task that releases last passes its own. probe's reader shares segments that each hold their file open between the writer and its snapshots, and kept the Io each was opened on in a field to close it with. Its parity kernel (`gaps_shared_io_release`) holds it to the hand-written release on x86_64 and aarch64 in ReleaseFast and ReleaseSafe.
@@ -67,6 +67,10 @@ One release of the breaking cleanups an independent review (2026-10-28) asked fo
 - `units.Count.rem(rhs)`: a count's remainder by a plain divisor, with the count's sign, as `@rem`: the slot a round robin's turn falls on (`turn.rem(servers).raw()`, uplink's DNS servers and reactor's round robins, which took it through `raw()`). `RemError` is `DivisionByZero`; a signed minimum by -1 is zero.
 - `units.Bytes.divTrunc(rhs)`, a share of a size rounded toward zero, and `Bytes.ratio(other)`, how many times one size fits in another, each checked (`DivisionByZero`, and a signed minimum by -1 `Overflow`). relic divided a batch budget through `raw()` for want of it.
 - The design page documents lending by `borrow` and recovering a callback's context through the interface field with `@fieldParentPtr`, which glint reads as clean, so no erase-and-recover helper is needed (docs/design.md, "Lending, one way" and "Recovering a callback's context").
+
+### Fixed
+
+- `max_text_len` is exact, the longest text `format` writes for the type and no more. An unsigned `Duration` or `Bytes` counted a `-` it never writes. `Bytes` counted its longest number with `YiB`, where the longest text is an odd size in bytes, its digits and `B` (`Bytes(u64)` is 21, was 24). A `Duration` counted every component at its largest at once, which no value under the limit may write. Tests: every value of the 8- and 16-bit widths against it, and a value of each type from 8 to 128 bits that writes exactly that many bytes.
 
 ### Changed
 

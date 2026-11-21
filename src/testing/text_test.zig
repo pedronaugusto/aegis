@@ -148,33 +148,52 @@ fn roundTrip(_: void, c: *shake.Case) !void {
 test "A3 max_text_len bounds the text format writes, so a buffer of it holds any value" {
     // `-`, 106751991167300 days (2^63 seconds), and at most 23h59m59s below them.
     try t.expectEqual(@as(usize, 1 + 15 + 1 + 9), U.Duration(.second, i64).max_text_len);
-    // 20 digits and the longest unit.
-    try t.expectEqual(@as(usize, 1 + 20 + 3), U.Bytes(u64).max_text_len);
+    // 20 digits and `B`, no sign: an odd size divides by no unit, and an unsigned one is never negative.
+    try t.expectEqual(@as(usize, 20 + 1), U.Bytes(u64).max_text_len);
+    try t.expectEqual(@as(usize, 1 + 19 + 1), U.Bytes(i64).max_text_len);
 }
 
-test "A3 text_form declares the text a format reads and writes: max_len is max_text_len, no JSON Schema format, std's format signature" {
-    inline for (spans ++ sizes) |T| {
-        try t.expectEqual(T.max_text_len, T.text_form.max_len);
-        try t.expect(!@hasField(@TypeOf(T.text_form), "schema_format"));
+/// The longest text `format` writes for any value of `T`, a narrow type.
+fn longestWritten(comptime T: type) usize {
+    const R = T.Representation;
+    var buffer: [T.max_text_len]u8 = undefined;
+    var longest: usize = 0;
+    var raw: R = std.math.minInt(R);
+    while (true) : (raw += 1) {
+        var w: std.Io.Writer = .fixed(&buffer);
+        T.fromRaw(raw).format(&w) catch unreachable; // unreachable: A3 holds that max_text_len fits every value's text
+        longest = @max(longest, w.buffered().len);
+        if (raw == std.math.maxInt(R)) return longest;
+    }
+}
+
+test "A3 max_text_len is exact: the longest text format writes, over every value of the narrow widths" {
+    inline for (.{ u8, i8, u16, i16 }) |R| {
+        try t.expectEqual(U.Bytes(R).max_text_len, longestWritten(U.Bytes(R)));
+        inline for (.{ .nanosecond, .microsecond, .millisecond, .second, .minute, .hour, .day }) |unit| {
+            const T = U.Duration(unit, R);
+            t.expectEqual(T.max_text_len, longestWritten(T)) catch |err| {
+                std.debug.print("{s}\n", .{@typeName(T)});
+                return err;
+            };
+        }
+    }
+}
+
+test "A3 text_form declares the text a format reads and writes: max_len alone, a read bound past max_text_len, std's format signature" {
+    inline for (spans ++ sizes ++ .{ U.Duration(.nanosecond, u128), U.Bytes(i128) }) |T| {
+        const names = @typeInfo(@TypeOf(T.text_form)).@"struct".field_names;
+        try t.expectEqual(1, names.len);
+        try t.expectEqualStrings("max_len", names[0]);
+        try t.expectEqual(128, T.text_form.max_len);
+        try t.expect(T.max_text_len <= T.text_form.max_len);
         comptime std.debug.assert(@TypeOf(T.parse) == fn ([]const u8) T.ParseError!T);
         comptime std.debug.assert(@TypeOf(T.format) == fn (T, *std.Io.Writer) std.Io.Writer.Error!void);
     }
-    // Each one's documented examples read as documented.
-    const D = U.Duration(.millisecond, i64);
-    try expectRead(D, "30s", 30_000, "30s");
-    try expectRead(D, "1m30s", 90_000, "1m30s");
-    try expectRead(D, "250ms", 250, "250ms");
-    try expectRead(D, "1.5h", 5_400_000, "1h30m");
-    try expectRead(D, "2d12h", 216_000_000, "2d12h");
-    const B = U.Bytes(u64);
-    try expectRead(B, "4096", 4096, "4KiB");
-    try expectRead(B, "4096B", 4096, "4KiB");
-    try expectRead(B, "64MiB", 64 << 20, "64MiB");
-    try expectRead(B, "1.5GB", 1_500_000_000, "1500MB");
     // What std's {f} prints is the text form.
     var buffer: [64]u8 = undefined;
     var w: std.Io.Writer = .fixed(&buffer);
-    try w.print("{f}", .{D.fromRaw(90_000)});
+    try w.print("{f}", .{U.Duration(.millisecond, i64).fromRaw(90_000)});
     try t.expectEqualStrings("1m30s", w.buffered());
 }
 

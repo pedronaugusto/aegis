@@ -37,5 +37,6 @@ test {
     _ = @import("testing/gaps_test.zig");
     _ = @import("testing/rounds_test.zig");
     _ = @import("testing/text_test.zig");
+    _ = @import("units.zig");
     _ = @import("testing/instances_test.zig");
 }

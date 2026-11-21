@@ -302,20 +302,45 @@ fn decimalDigits(comptime value: anytype) usize {
     return len;
 }
 
-/// The most bytes `formatSpan` writes for a span of `unit` and `Repr`: a sign, then each component at its
-/// largest, which below the coarsest is one short of the unit above it, and none finer than `unit`.
+/// The most bytes `formatSpan` writes for a span of `unit` and `Repr`, exactly: a sign where `Repr` is
+/// signed (a negative span reaches the magnitude limit), then the longest components of a magnitude up to it.
 fn spanTextCapacity(comptime Repr: type, comptime unit: Unit) usize {
-    const most = magnitudeLimit(Repr) * unit.nanoseconds();
-    var len: usize = 1;
-    var above: ?u64 = null;
-    for (span_units) |entry| {
-        const step = entry.unit.nanoseconds();
-        if (step < unit.nanoseconds()) break;
-        const largest = if (above) |coarser| @min(most / step, coarser / step - 1) else most / step;
-        if (largest != 0) len += decimalDigits(largest) + entry.symbols[0].len;
-        above = step;
-    }
-    return len;
+    const sign: usize = @intFromBool(@typeInfo(Repr).int.signedness == .signed);
+    return @max("0s".len, sign + spanLongest(Repr, unit).len);
+}
+
+/// The longest components `formatSpan` writes for a magnitude of `unit` and `Repr`, and a magnitude, in `unit`,
+/// that writes them.
+fn spanLongest(comptime Repr: type, comptime unit: Unit) SpanText {
+    @setEvalBranchQuota(1_000_000);
+    const finest: comptime_int = unit.nanoseconds();
+    const longest = longestComponents(@as(comptime_int, magnitudeLimit(Repr)) * finest, finest, 0);
+    return .{ .len = longest.len, .magnitude = longest.nanoseconds / finest };
+}
+const SpanText = struct { len: usize, magnitude: comptime_int };
+const Components = struct { len: usize, nanoseconds: comptime_int };
+
+/// The longest components, from `span_units[first]` down to `finest`, of a span of at most `most`
+/// nanoseconds, `most` a multiple of `finest`. A component is either its largest, with what is left below it,
+/// or one less, with everything below free: any smaller value of it writes no more digits.
+fn longestComponents(comptime most: comptime_int, comptime finest: comptime_int, comptime first: usize) Components {
+    if (first == span_units.len or span_units[first].unit.nanoseconds() < finest) return .{ .len = 0, .nanoseconds = 0 };
+    const step: comptime_int = span_units[first].unit.nanoseconds();
+    const symbol = span_units[first].symbols[0].len;
+    const top = most / step;
+    const rest = longestComponents(most % step, finest, first + 1);
+    const largest: Components = .{ .len = componentLen(top, symbol) + rest.len, .nanoseconds = top * step + rest.nanoseconds };
+    if (top == 0) return largest;
+    const free = longestComponents(step - finest, finest, first + 1);
+    const less: Components = .{ .len = componentLen(top - 1, symbol) + free.len, .nanoseconds = (top - 1) * step + free.nanoseconds };
+    return if (less.len > largest.len) less else largest;
+}
+/// The longest text a duration's or a size's `text_form` lets a format hand to `parse`.
+const text_read_len: usize = 128;
+
+/// A component's bytes: none for zero, which `formatSpan` leaves out.
+fn componentLen(comptime count: comptime_int, comptime symbol: usize) usize {
+    return if (count == 0) 0 else decimalDigits(count) + symbol;
 }
 
 /// The units a size's text names, largest first: each binary unit (1024^n) above its decimal one (1000^n).
@@ -481,13 +506,17 @@ pub fn Bytes(comptime Repr: type) type {
         /// `Malformed` for text that is no size, `Overflow` for one this representation cannot hold,
         /// `Inexact` for one that leaves part of a byte.
         pub const ParseError = TextError;
-        /// The most bytes `format` writes, for a buffer that holds any size of this type.
-        pub const max_text_len: usize = 1 + decimalDigits(magnitudeLimit(Repr)) + "YiB".len;
+        /// The most bytes `format` writes, exactly, for a buffer that holds any size of this type: a sign
+        /// where `Repr` is signed, the digits of the largest magnitude and `B`. A size written in a larger
+        /// unit is shorter: dividing by 1000 or more takes three digits off, and no symbol is longer.
+        pub const max_text_len: usize = @intFromBool(@typeInfo(Repr).int.signedness == .signed) + decimalDigits(magnitudeLimit(Repr)) + "B".len;
         /// The size read and written as text by a format that honors the declaration (strand's), through
-        /// `parse` and `format`: text past `max_len` is refused unread. Everything `format` writes fits;
-        /// `parse` alone also reads longer spellings (leading zeros, trailing fraction digits). No JSON
-        /// Schema format names this text.
-        pub const text_form = .{ .max_len = max_text_len };
+        /// `parse` and `format`. `max_len` bounds the read: it is the longest text strand hands to `parse`,
+        /// 128 bytes for every duration and size, past every `max_text_len`, and text past it is refused
+        /// unread. Within it `parse` reads longer spellings than `format` writes (leading zeros, trailing
+        /// fraction digits) and refuses what overflows or is inexact as it always does. No JSON Schema
+        /// format names this text.
+        pub const text_form = .{ .max_len = text_read_len };
         /// Reads a size: a decimal number and a unit, or a number of bytes alone (`4096`, `4096B`, `64MiB`,
         /// `1.5GB`). Binary units are powers of 1024 (`KiB`, `MiB`, `GiB`, `TiB`, `PiB`, `EiB`, `ZiB`, `YiB`)
         /// and decimal ones powers of 1000 (`kB`, `MB`, `GB`, `TB`, `PB`, `EB`, `ZB`, `YB`), spelled exactly
@@ -712,13 +741,15 @@ pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
         /// `Malformed` for text that is no duration, `Overflow` for one this representation cannot hold,
         /// `Inexact` for one finer than `Scale`.
         pub const ParseError = TextError;
-        /// The most bytes `format` writes, for a buffer that holds any duration of this type.
+        /// The most bytes `format` writes, exactly, for a buffer that holds any duration of this type.
         pub const max_text_len: usize = spanTextCapacity(Repr, unit);
         /// The duration read and written as text by a format that honors the declaration (strand's),
-        /// through `parse` and `format`: text past `max_len` is refused unread. Everything `format` writes
-        /// fits; `parse` alone also reads longer spellings (leading zeros, trailing fraction digits). It
-        /// names no JSON Schema format: Schema's `duration` is ISO 8601's (`PT1M30S`), not this text.
-        pub const text_form = .{ .max_len = max_text_len };
+        /// through `parse` and `format`. `max_len` bounds the read: it is the longest text strand hands to
+        /// `parse`, 128 bytes for every duration and size, past every `max_text_len`, and text past it is
+        /// refused unread. Within it `parse` reads longer spellings than `format` writes (leading zeros,
+        /// trailing fraction digits) and refuses what overflows or is inexact as it always does. It names no
+        /// JSON Schema format: Schema's `duration` is ISO 8601's (`PT1M30S`), not this text.
+        pub const text_form = .{ .max_len = text_read_len };
         /// Reads a duration: one or more components, each a decimal number and a unit, from the coarsest unit
         /// to the finest and each unit at most once (`30s`, `1m30s`, `250ms`, `1.5h`, `2d12h`). The units are
         /// `d` (86400 seconds), `h`, `m`, `s`, `ms`, `us` (or `µs`) and `ns`. A leading `-` negates, and `0`
@@ -939,4 +970,29 @@ fn Portable(comptime Int: type) type {
     if (Int == c_long) return i32;
     if (Int == c_ulong) return u32;
     return Int;
+}
+
+test "max_text_len is attained: a value of each type writes exactly that many bytes" {
+    const widths = .{ u8, i8, u16, i16, u32, i32, u64, i64, i96, u128, i128 };
+    inline for (widths) |Repr| {
+        inline for (span_units) |entry| {
+            const T = Duration(entry.unit, Repr);
+            const magnitude = spanLongest(Repr, entry.unit).magnitude;
+            const value: Repr = if (@typeInfo(Repr).int.signedness == .signed) -magnitude else magnitude;
+            try expectWrites(T, .fromRaw(value), T.max_text_len);
+        }
+        if (comptime std.math.isPowerOfTwo(@bitSizeOf(Repr))) {
+            const T = Bytes(Repr);
+            // An odd size divides by no unit: written in bytes, with every digit of the largest magnitude.
+            const longest: Repr = if (@typeInfo(Repr).int.signedness == .signed) std.math.minInt(Repr) + 1 else std.math.maxInt(Repr);
+            try expectWrites(T, .fromRaw(longest), T.max_text_len);
+        }
+    }
+}
+
+fn expectWrites(comptime T: type, value: T, len: usize) !void {
+    var buffer: [text_read_len]u8 = undefined;
+    var w: std.Io.Writer = .fixed(&buffer);
+    try value.format(&w);
+    try std.testing.expectEqual(len, w.buffered().len);
 }
