@@ -8,7 +8,9 @@ comptime {
     if (builtin.optimize == .fast or builtin.optimize == .small) {
         std.debug.assert(@sizeOf(a.scope.Ref(Request, *u32)) == @sizeOf(*u32));
         std.debug.assert(@sizeOf(a.scope.Ref(Request, []u8)) == @sizeOf([]u8));
-        std.debug.assert(@sizeOf(Slots) == 0 and @sizeOf(Slots.Slot) == 0 and @sizeOf(Slots.Scope) == 0);
+        std.debug.assert(@sizeOf(Slots) == 0);
+        std.debug.assert(@sizeOf(Slots.Slot) == 0);
+        std.debug.assert(@sizeOf(Slots.Scope) == 0);
     }
 }
 export fn pure(seed: u32) u32 {

@@ -308,11 +308,15 @@ test "A3 every scalar publishes the parameters it was made from and which scalar
     comptime std.debug.assert(Jobs.maximum == 256);
     const default: Jobs = .literal(8);
     try t.expectEqual(@as(u16, 8), default.raw());
-    comptime std.debug.assert(U.Duration(.millisecond, u64).Scale == .millisecond);
+    comptime std.debug.assert(U.Duration(.millisecond, u64).scale == .millisecond);
+    comptime std.debug.assert(U.Instant(.awake, .millisecond, i64).scale == .millisecond);
+    comptime std.debug.assert(U.Instant(.awake, .millisecond, i64).clock == .awake);
     comptime std.debug.assert(U.Count(Tag, u8).Domain == Tag);
     comptime std.debug.assert(a.id.Counter(Tag, u32).Domain == Tag);
     // The declaration states the parameters too.
-    comptime std.debug.assert(Jobs.aegis_scalar.representation == u16 and Jobs.aegis_scalar.minimum == 1 and Jobs.aegis_scalar.maximum == 256);
+    comptime std.debug.assert(Jobs.aegis_scalar.representation == u16);
+    comptime std.debug.assert(Jobs.aegis_scalar.minimum == 1);
+    comptime std.debug.assert(Jobs.aegis_scalar.maximum == 256);
     comptime std.debug.assert(U.Duration(.millisecond, u64).aegis_scalar.unit == .millisecond);
     comptime std.debug.assert(U.Instant(.awake, .second, i64).aegis_scalar.clock == .awake);
     comptime std.debug.assert(U.Count(Tag, u8).aegis_scalar.domain == Tag);

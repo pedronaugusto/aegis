@@ -4,6 +4,10 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+### Breaking
+
+- A unit's parameters that are values are named in snake case, as Zig names a value: `units.Duration().scale` and `units.Instant().scale` (a `units.Unit`) and `units.Instant().clock` (a `std.Io.Clock` tag), where they were `units.Duration().Scale`, `units.Instant().Scale` and `units.Instant().Clock`.
+
 ### Added
 
 - `Context` and `ArrayContext` on every `id.Id` and `id.NonZero` type: a `std.HashMap` or a std array hash map keyed by ids hashes and compares them through the id's own `hash` and `eql`, never by reading its representation (`std.HashMapUnmanaged(Id, V, Id.Context, ...)`, `std.array_hash_map.Custom(Id, V, Id.ArrayContext, store_hash)`).

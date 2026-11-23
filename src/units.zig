@@ -610,7 +610,7 @@ pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
     return enum(Repr) {
         const Self = @This();
         /// The unit one step of the representation is.
-        pub const Scale = unit;
+        pub const scale = unit;
         /// The integer the span is held in.
         pub const Representation = Repr;
         /// This scalar as generic code built on any aegis version reads it (README, "Generic code").
@@ -739,7 +739,7 @@ pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
             return Duration(target, Target).fromRaw(try converted);
         }
         /// `Malformed` for text that is no duration, `Overflow` for one this representation cannot hold,
-        /// `Inexact` for one finer than `Scale`.
+        /// `Inexact` for one finer than `scale`.
         pub const ParseError = TextError;
         /// The most bytes `format` writes, exactly, for a buffer that holds any duration of this type.
         pub const max_text_len: usize = spanTextCapacity(Repr, unit);
@@ -753,7 +753,7 @@ pub fn Duration(comptime unit: Unit, comptime Repr: type) type {
         /// Reads a duration: one or more components, each a decimal number and a unit, from the coarsest unit
         /// to the finest and each unit at most once (`30s`, `1m30s`, `250ms`, `1.5h`, `2d12h`). The units are
         /// `d` (86400 seconds), `h`, `m`, `s`, `ms`, `us` (or `µs`) and `ns`. A leading `-` negates, and `0`
-        /// alone is zero. The value is exact: `Inexact` where it is finer than `Scale` (`1.5s` as whole
+        /// alone is zero. The value is exact: `Inexact` where it is finer than `scale` (`1.5s` as whole
         /// seconds, `1m30s` as whole minutes), `Overflow` where the representation cannot hold it (any negative
         /// one in an unsigned representation), `Malformed` for anything else, spaces included.
         pub fn parse(text: []const u8) ParseError!Self {
@@ -835,9 +835,9 @@ pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: t
     return enum(Repr) {
         const Self = @This();
         /// The clock the instant is read from.
-        pub const Clock = ClockTag;
+        pub const clock = ClockTag;
         /// The unit one step of the representation is.
-        pub const Scale = unit;
+        pub const scale = unit;
         /// The integer the instant is held in.
         pub const Representation = Repr;
         /// This scalar as generic code built on any aegis version reads it (README, "Generic code").
@@ -917,7 +917,7 @@ pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: t
         /// Convert scale/representation explicitly before providing the correspondence.
         pub inline fn correspond(self: Self, source_sample: Self, target_sample: anytype) CorrespondError!@TypeOf(target_sample) {
             const Target = @TypeOf(target_sample);
-            if (Target != Instant(Target.Clock, unit, Repr)) @compileError("clock correspondence requires matching scale and representation");
+            if (Target != Instant(Target.clock, unit, Repr)) @compileError("clock correspondence requires matching scale and representation");
             const offset = try source_sample.durationTo(self);
             return target_sample.add(offset);
         }
@@ -937,13 +937,13 @@ pub fn Instant(comptime ClockTag: anytype, comptime unit: Unit, comptime Repr: t
         }
         /// The instant as a timestamp tagged with this type's clock.
         pub inline fn toIoTimestamp(self: Self) Wrapped(ToIoTimestampError, std.Io.Clock.Timestamp) {
-            const clock: std.Io.Clock = ClockTag;
-            if (comptime ToTimestampError == error{}) return self.toTimestamp().withClock(clock);
-            return (try self.toTimestamp()).withClock(clock);
+            const tag: std.Io.Clock = clock;
+            if (comptime ToTimestampError == error{}) return self.toTimestamp().withClock(tag);
+            return (try self.toTimestamp()).withClock(tag);
         }
         pub inline fn fromIoTimestamp(value: std.Io.Clock.Timestamp, comptime rounding: Rounding) (ErrorOf(Converted(i96, Repr, 1, unit.nanoseconds(), rounding)) || error{ClockMismatch})!Self {
-            const clock: std.Io.Clock = ClockTag;
-            if (value.clock != clock) return error.ClockMismatch;
+            const tag: std.Io.Clock = clock;
+            if (value.clock != tag) return error.ClockMismatch;
             if (comptime ErrorOf(Converted(i96, Repr, 1, unit.nanoseconds(), rounding)) == error{}) return fromTimestamp(value.raw, rounding);
             return try fromTimestamp(value.raw, rounding);
         }

@@ -181,11 +181,14 @@ test "A3 durations and instants hold std's i96 nanoseconds exactly" {
     const U = a.units;
     const D = U.Duration(.nanosecond, i96);
     const T = U.Instant(.awake, .nanosecond, i96);
-    comptime std.debug.assert(D.ToIoDurationError == error{} and D.FromIoDurationError == error{});
-    comptime std.debug.assert(T.ToTimestampError == error{} and T.FromTimestampError == error{});
+    comptime std.debug.assert(D.ToIoDurationError == error{});
+    comptime std.debug.assert(D.FromIoDurationError == error{});
+    comptime std.debug.assert(T.ToTimestampError == error{});
+    comptime std.debug.assert(T.FromTimestampError == error{});
     comptime std.debug.assert(@TypeOf(D.fromIoDuration(.zero, .exact)) == D);
     comptime std.debug.assert(@TypeOf(D.fromRaw(0).toIoDuration()) == Io.Duration);
-    comptime std.debug.assert(@sizeOf(D) == @sizeOf(i96) and @alignOf(D) == @alignOf(i96));
+    comptime std.debug.assert(@sizeOf(D) == @sizeOf(i96));
+    comptime std.debug.assert(@alignOf(D) == @alignOf(i96));
     for ([_]i96{ std.math.minInt(i96), -1, 0, 1, std.math.maxInt(i96) }) |nanoseconds| {
         const span = D.fromIoDuration(.fromNanoseconds(nanoseconds), .exact);
         try t.expectEqual(nanoseconds, span.raw());
@@ -788,7 +791,8 @@ const Ticket = a.id.Id(struct {}, u32);
 
 test "A6 Atomic holds a distinct scalar whole and exchanges it without the backing integer" {
     const Cell = a.Atomic(Phase);
-    comptime std.debug.assert(@sizeOf(Cell) == @sizeOf(u8) and @alignOf(Cell) == @alignOf(u8));
+    comptime std.debug.assert(@sizeOf(Cell) == @sizeOf(u8));
+    comptime std.debug.assert(@alignOf(Cell) == @alignOf(u8));
     comptime std.debug.assert(@sizeOf(a.Atomic(Ticket)) == @sizeOf(u32));
     comptime std.debug.assert(@sizeOf(a.Atomic(a.units.Instant(.awake, .nanosecond, u64))) == @sizeOf(u64));
     var cell: Cell = .init(.idle);

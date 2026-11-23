@@ -44,5 +44,6 @@ comptime {
     std.debug.assert(@sizeOf(c.Mark) == @sizeOf(c.DirectMark));
     std.debug.assert(@sizeOf(c.Tail) == @sizeOf(c.DirectTail));
     std.debug.assert(@offsetOf(c.Region, "top") == @offsetOf(c.Direct, "top"));
-    std.debug.assert(@offsetOf(c.Region, "memory") == @offsetOf(c.Direct, "memory") and @offsetOf(c.Region, "reservation_len") == @offsetOf(c.Direct, "reservation_len"));
+    std.debug.assert(@offsetOf(c.Region, "memory") == @offsetOf(c.Direct, "memory"));
+    std.debug.assert(@offsetOf(c.Region, "reservation_len") == @offsetOf(c.Direct, "reservation_len"));
 }
