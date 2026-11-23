@@ -109,6 +109,25 @@ fn Identity(comptime Tag: type, comptime Repr: type, comptime nonzero: bool) typ
         pub inline fn hash(self: Self) u64 {
             return std.hash.Wyhash.hash(0, &self.toBytes(.little));
         }
+        /// A `std.HashMap` keyed by these ids hashes and compares them as the id does:
+        /// `std.HashMapUnmanaged(Self, V, Self.Context, std.hash_map.default_max_load_percentage)`.
+        pub const Context = struct {
+            pub fn hash(_: Context, id: Self) u64 {
+                return id.hash();
+            }
+            pub fn eql(_: Context, x: Self, y: Self) bool {
+                return x.eql(y);
+            }
+        };
+        /// The same for std's array hash maps: `std.array_hash_map.Custom(Self, V, Self.ArrayContext, store_hash)`.
+        pub const ArrayContext = struct {
+            pub fn hash(_: ArrayContext, id: Self) u32 {
+                return @truncate(id.hash());
+            }
+            pub fn eql(_: ArrayContext, x: Self, y: Self, _: usize) bool {
+                return x.eql(y);
+            }
+        };
         pub inline fn toBytes(self: Self, endian: std.lang.Endian) scalar.Bytes(Repr) {
             return scalar.encode(Repr, @backingInt(self), endian);
         }

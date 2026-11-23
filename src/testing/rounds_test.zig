@@ -353,6 +353,29 @@ test "A3 ids step, advance, retreat and measure distance without wrapping" {
     try t.expectEqual(@as(u64, std.math.maxInt(u64)), (try first.distanceTo(last)).raw());
 }
 
+test "A3 an id keys std's hash maps and array hash maps by its own hash and equality" {
+    const Key = a.id.Id(struct {}, u32);
+    var map: std.HashMapUnmanaged(Key, u8, Key.Context, std.hash_map.default_max_load_percentage) = .empty;
+    defer map.deinit(t.allocator);
+    var array: std.array_hash_map.Custom(Key, u8, Key.ArrayContext, true) = .empty;
+    defer array.deinit(t.allocator);
+    for (0..300) |i| {
+        try map.put(t.allocator, .fromRaw(@intCast(i)), @truncate(i));
+        try array.put(t.allocator, .fromRaw(@intCast(i)), @truncate(i));
+    }
+    try t.expectEqual(@as(?u8, 44), map.get(.fromRaw(300 - 256)));
+    try t.expectEqual(@as(?u8, null), map.get(.fromRaw(300)));
+    try t.expectEqual(@as(?u8, 44), array.get(.fromRaw(300 - 256)));
+    try t.expectEqual(@as(?u8, null), array.get(.fromRaw(300)));
+    try t.expect(array.keys()[7].eql(.fromRaw(7)));
+
+    var ports: std.array_hash_map.Custom(Port, void, Port.ArrayContext, false) = .empty;
+    defer ports.deinit(t.allocator);
+    try ports.put(t.allocator, try Port.fromRaw(1), {});
+    try t.expect(ports.contains(try Port.fromRaw(1)));
+    try t.expect(!ports.contains(try Port.fromRaw(2)));
+}
+
 test "A3 a NonZero id never steps onto zero and a tag can name the counts its ids are moved by" {
     const one = try Port.fromRaw(1);
     try t.expectError(error.IdUnderflow, one.predecessor());
