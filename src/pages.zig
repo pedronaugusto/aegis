@@ -46,9 +46,9 @@ pub fn release(committed: []u8, reservation_len: usize) void {
 }
 
 /// Commits a reservation's pages past `committed`, its committed start, up to `len`, at most
-/// `reservation_len`: the reservation's first `len` bytes are then committed. On a refusal nothing
-/// changes.
-pub fn commit(committed: []u8, reservation_len: usize, len: usize) error{OutOfMemory}!void {
+/// `reservation_len`, and returns the reservation's first `len` bytes, all committed. On a refusal
+/// nothing changes.
+pub fn commit(committed: []u8, reservation_len: usize, len: usize) error{OutOfMemory}![]u8 {
     if (checked) assert.invariant(committed.len <= len and len <= reservation_len, "a commit grows inside its reservation");
     const fresh = paged(committed.ptr + committed.len, len - committed.len);
     if (builtin.os.tag == .windows) {
@@ -59,6 +59,7 @@ pub fn commit(committed: []u8, reservation_len: usize, len: usize) error{OutOfMe
     } else {
         std.process.protectMemory(fresh, .{ .read = true, .write = true }) catch return error.OutOfMemory;
     }
+    return committed.ptr[0..len];
 }
 
 /// Gives the committed pages of `committed` from `keep` on back: a fresh inaccessible mapping
