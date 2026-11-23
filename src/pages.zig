@@ -46,9 +46,9 @@ pub fn release(committed: []u8, reservation_len: usize) void {
 }
 
 /// Commits a reservation's pages past `committed`, its committed start, up to `len`, at most
-/// `reservation_len`, and returns the reservation's first `len` bytes, all committed. On a refusal
-/// nothing changes.
-pub fn commit(committed: []u8, reservation_len: usize, len: usize) error{OutOfMemory}![]u8 {
+/// `reservation_len`: the reservation's first `len` bytes are then committed, and `grown` gives
+/// them. On a refusal nothing changes.
+pub fn commit(committed: []u8, reservation_len: usize, len: usize) error{OutOfMemory}!void {
     if (checked) assert.invariant(committed.len <= len and len <= reservation_len, "a commit grows inside its reservation");
     const fresh = paged(committed.ptr + committed.len, len - committed.len);
     if (builtin.os.tag == .windows) {
@@ -59,6 +59,13 @@ pub fn commit(committed: []u8, reservation_len: usize, len: usize) error{OutOfMe
     } else {
         std.process.protectMemory(fresh, .{ .read = true, .write = true }) catch return error.OutOfMemory;
     }
+}
+
+/// The reservation's first `len` bytes, once a `commit` up to `len` past `committed`, its committed
+/// start, succeeded. Inline, so a region's growth is the code a hand-written owner compiles to: the
+/// commit's result stays an error alone.
+pub inline fn grown(committed: []u8, len: usize) []u8 {
+    if (checked) assert.invariant(committed.len <= len, "a commit grows its committed start");
     return committed.ptr[0..len];
 }
 

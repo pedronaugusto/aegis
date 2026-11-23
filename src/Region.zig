@@ -324,5 +324,6 @@ fn commitReserved(r: *Region, needed: usize) Error!void {
     const wanted = @max(needed, r.memory.len +| step);
     const next = @min(r.reservation_len, std.mem.alignForward(usize, @min(wanted, std.math.maxInt(usize) - page), page));
     if (builtin.is_test and testing.refuse_commit) return error.OutOfMemory;
-    r.memory = try pages.commit(r.memory, r.reservation_len, next);
+    try pages.commit(r.memory, r.reservation_len, next);
+    r.memory = pages.grown(r.memory, next);
 }
