@@ -4,6 +4,8 @@ All notable changes are documented here, following Keep a Changelog 1.1.0.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-25
+
 ### Breaking
 
 - A unit's parameters that are values are named in snake case, as Zig names a value: `units.Duration().scale` and `units.Instant().scale` (a `units.Unit`) and `units.Instant().clock` (a `std.Io.Clock` tag), where they were `units.Duration().Scale`, `units.Instant().Scale` and `units.Instant().Clock`.
