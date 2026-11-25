@@ -1,5 +1,4 @@
 {
-  "compile_once": true,
   "hardened": true,
   "targets": [
     "x86_64-linux-gnu",
